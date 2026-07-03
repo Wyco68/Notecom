@@ -60,6 +60,9 @@ export async function ensureVaultd() {
   const child = spawn(BIN_PATH, [], {
     cwd: process.cwd(),
     detached: true,
+    // windowsHide stops a console window from flashing up when this is
+    // launched from a GUI context (e.g. /quiz -> open-app.mjs).
+    windowsHide: true,
     stdio: ["ignore", "pipe", "pipe"],
   });
   child.stdout.on("data", (d) => (output += d));

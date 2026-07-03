@@ -81,9 +81,9 @@ When the folder does not exist yet, create the directory and a new `index.json`
 containing just the one entry. When the folder exists, read the current
 `index.json`, append (or update) the entry, and write it back.
 
-## After saving (validate, then auto-open)
-After writing/updating a lesson's `.html`, **before** touching `index.json`
-or opening the browser, validate it against the contract:
+## After saving (validate)
+After writing/updating a lesson's `.html`, **before** touching `index.json`,
+validate it against the contract:
 
 ```
 node scripts/validate-lesson.mjs vault/<folder-slug>/<id>.html
@@ -97,16 +97,10 @@ contract drifted silently before (bare `Concept` headings, duplicate
 noticed until a user did. The validator exists so that never happens
 again without being caught immediately.
 
-Once it passes, update `index.json`, then run:
-
-```
-node scripts/open-app.mjs
-```
-
-It ensures vaultd and `next dev` are both up (reusing whichever is already
-running — never starts a duplicate) and opens the user's default browser
-to the app. Both scripts are build tooling the app already ships with,
-not a code change — running them does not violate the restrictions below.
+Once it passes, update `index.json`. That is the final step — do **not**
+open a browser or start the web app. The Notes app picks up the new lesson
+on its own: it refreshes when its window regains focus, and there's a
+refresh button next to the theme toggle for an immediate reload.
 
 ## Restrictions (strict)
 - Never modify application code (`app/`, `components/`, `lib/`, `tools/`).

@@ -47,6 +47,7 @@ async function ensureNextDev() {
   spawn("npm", ["run", "dev"], {
     shell: process.platform === "win32",
     detached: true,
+    windowsHide: true,
     stdio: "ignore",
   }).unref();
 
@@ -63,7 +64,8 @@ function openBrowser(url) {
       : process.platform === "darwin"
       ? ["open", [url]]
       : ["xdg-open", [url]];
-  spawn(cmd[0], cmd[1], { detached: true, stdio: "ignore" }).unref();
+  // windowsHide keeps the `cmd /c start` helper window from flashing up.
+  spawn(cmd[0], cmd[1], { detached: true, windowsHide: true, stdio: "ignore" }).unref();
 }
 
 async function main() {

@@ -532,7 +532,10 @@ func handleTree(w http.ResponseWriter, r *http.Request) {
 		}
 		idx, err := loadIndexData(de.Name())
 		if err != nil {
-			continue
+			// A folder on disk is real even if its index.json is unreadable at
+			// this instant (e.g. a concurrent writer mid-save). Show it empty
+			// rather than making the whole folder vanish from the sidebar.
+			idx = indexData{Lessons: []lessonEntry{}, Quizzes: []quizEntry{}}
 		}
 		sort.Slice(idx.Lessons, func(i, j int) bool { return idx.Lessons[i].Seq < idx.Lessons[j].Seq })
 		sort.Slice(idx.Quizzes, func(i, j int) bool { return idx.Quizzes[i].Seq < idx.Quizzes[j].Seq })

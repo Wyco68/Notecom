@@ -90,7 +90,7 @@ keep the `<h1>` and every existing `Q<n>.` block unchanged, add the new
 block(s) after the last one, `POST /quiz` again with the same `id`/`slug`/
 `title`/`seq` and the updated `html`.
 
-## After saving (validate, then track state, then auto-open)
+## After saving (validate, then track state)
 Validate before touching `index.json`:
 
 ```
@@ -101,12 +101,10 @@ Fix and re-run on any violation — never save a quiz that fails validation.
 
 Once it passes: update `index.json`, then write
 `vault/.quiz-state.json` as `{"folder": "<folder-slug>", "id": "<id>"}` so
-the next `/quiz` call with no folder/file named knows to append here, then
-run:
-
-```
-node scripts/open-app.mjs
-```
+the next `/quiz` call with no folder/file named knows to append here. That
+is the final step — do **not** open a browser or start the web app. The
+Notes app picks up the new quiz on its own: it refreshes when its window
+regains focus, and there's a refresh button next to the theme toggle.
 
 ## Restrictions (strict)
 - Never modify application code (`app/`, `components/`, `lib/`, `tools/`).
