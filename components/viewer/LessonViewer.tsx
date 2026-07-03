@@ -13,14 +13,25 @@ export default function LessonViewer({ lesson }: { lesson: LessonRef | null }) {
       setHtml(null);
       return;
     }
+    // Guard against a fast lesson switch: an earlier fetch resolving after a
+    // later one would otherwise leave the wrong lesson on screen.
+    let cancelled = false;
     setHtml(null);
+    const base = lesson.kind === "quiz" ? "/api/quiz" : "/api/lesson";
     fetch(
-      `/api/lesson/${encodeURIComponent(lesson.folder)}/${encodeURIComponent(lesson.id)}`
+      `${base}/${encodeURIComponent(lesson.folder)}/${encodeURIComponent(lesson.id)}`
     )
       .then((r) => r.json())
-      .then((data) =>
-        setHtml(data.html ?? `<p>Error: ${data.error ?? "not found"}</p>`)
-      );
+      .then((data) => {
+        if (!cancelled)
+          setHtml(data.html ?? `<p>Error: ${data.error ?? "not found"}</p>`);
+      })
+      .catch(() => {
+        if (!cancelled) setHtml(`<p>Error: could not load content.</p>`);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [lesson]);
 
   if (!lesson) {
@@ -31,7 +42,7 @@ export default function LessonViewer({ lesson }: { lesson: LessonRef | null }) {
     );
   }
 
-  const key = `${lesson.folder}/${lesson.id}`;
+  const key = `${lesson.kind}/${lesson.folder}/${lesson.id}`;
 
   return (
     <AnimatePresence mode="wait">

@@ -5,17 +5,23 @@ export interface Lesson {
   seq: number;
 }
 
+// Same shape as Lesson — kept as a distinct alias since quizzes are a
+// separate index.json array and separate vaultd namespace.
+export type Quiz = Lesson;
+
 export interface Folder {
   name: string;
   lessons: Lesson[];
+  quizzes: Quiz[];
 }
 
 export interface VaultTree {
   folders: Folder[];
 }
 
-// A selected lesson is identified by its folder + id.
+// A selected lesson or quiz is identified by its folder + id + kind.
 export interface LessonRef {
   folder: string;
   id: string;
+  kind: "lesson" | "quiz";
 }

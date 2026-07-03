@@ -1,184 +1,65 @@
 # Notes
 
-This project is a Claude wrapper for explaining lesson files. You hand it a
-slide deck, PDF, or image of a topic; it rewrites the content into a plain,
-easy-to-read study note — and you read those notes in a clean,
-distraction-free web app.
+Turns slides/PDFs into plain-language study notes, readable in a clean
+desktop app. Works for any subject.
 
-It works for **any subject**. This repo is a template, not tied to one
-course or program.
+## Setup (one time)
 
----
+Works on Windows, macOS, and Linux (build on the machine you'll run it on).
 
-## What this is, in plain terms
+```bash
+npm run install:desktop
+```
 
-There are two separate pieces:
+When it finishes, the `installation/` folder opens with the installer for
+your OS inside — open that file and click through it. **Notes** then lives
+in your Start Menu (Windows), Applications (macOS), or app menu (Linux).
 
-1. **The note-writer.** Claude (an AI), run from a terminal command. You
-   point it at a slide or PDF, and it writes a full lesson note: explains
-   the idea simply, keeps technical terms correct, adds diagrams, examples,
-   and common-mistake warnings.
-2. **The reader app.** A website you run on your own computer. It only
-   shows notes that already exist. It cannot write or change notes itself —
-   it's a bookshelf, not an author.
+## Write a note
 
-This split is intentional: the website can never produce wrong or rushed
-content, because it never generates anything. All the "thinking" happens in
-the terminal step, where the note gets reviewed before it's ever saved.
-
----
-
-## Project flow
-
-1. You run a terminal command, pointing Claude at a slide/file and the
-   subject folder it belongs to.
-2. Claude reads the file fully and rewrites it as a lesson note — plain
-   language, correct terminology, examples, diagrams, common mistakes, exam
-   tips.
-3. The note is saved to disk, organized under its subject folder.
-4. You open the reader app in your browser. The new note appears in the
-   sidebar right away, under its subject — click it to read.
-
-There is no "Upload" or "Generate" button inside the website. All note
-creation happens in the terminal step, on purpose, so nothing gets written
-to your notes by accident while you're just reading.
-
----
-
-## How to use it — the two commands
-
-Everything in this repo is driven by typing one of two commands at the
-start of a request to Claude. Pick the wrong one and Claude will refuse and
-point you to the right one — so don't worry about getting it wrong.
-
-### `/lect` — write or update a lesson
-
-Use this when you have a slide/PDF/image and want a note out of it.
-
-1. Open this repo in **Claude Desktop** or the **Claude VS Code extension**.
-2. Attach/upload your slide file to the chat.
-3. Type `/lect` followed by **only** the folder name, or `folder/filename`
-   — nothing else. No extra instructions, no description:
+1. Open this repo in Claude Desktop or the Claude VS Code extension.
+2. Attach your slide/PDF.
+3. Type:
    ```
    /lect Wireless Network
    ```
-   or, naming the file explicitly:
+   (folder name only, or `folder/filename` to set the title yourself)
+4. Claude writes the note, saves it, opens the reader.
+
+## Read your notes
+
+Open **Notes** from your Start Menu / Applications / app menu. No terminal,
+no browser.
+
+## Make a quiz
+
+1. Paste a Markdown file of questions, or just paste one question, e.g.:
    ```
-   /lect Wireless Network/Switch and Basic Configuration
+   /quiz Wireless Network — what's the difference between TDMA and FDMA?
    ```
-4. Claude converts the file, writes the lesson, validates it, saves it to
-   `vault/`, and **opens the reader app in your browser automatically** —
-   you don't need to start anything yourself for this path.
+2. Claude reasons through it, writes the answer, saves it next to your
+   notes. Say `/quiz` again with no folder/title to keep adding questions
+   to the same quiz.
 
-![Claude Code /lect request](docs/images/claude-code-lect.png)
+## Change the app itself
 
-### `/feat` — change the app itself
+Type a request starting with `/feat`, e.g.:
+```
+/feat add a delete button next to each lesson
+```
 
-Use this when you want to change the website's UI, fix a bug, or touch any
-code under `app/`, `components/`, `lib/`, or `tools/vaultd/`.
+**Rule:** lesson content → `/lect`. Quiz content → `/quiz`. App/code →
+`/feat`. Never mix two of these in one request.
 
-1. Same chat, in the same repo.
-2. Type a request starting with `/feat`, e.g.:
-   ```
-   /feat add a delete button next to each lesson in the sidebar
-   ```
-3. Claude edits the application code only — it will never touch your saved
-   lessons under this command.
-
-![Reader app web page](docs/images/web-app-vault.png)
-
-**Rule of thumb:** lesson content → `/lect`. Anything about the app/website
-itself → `/feat`. Never both in the same request.
-
----
-
-## Reading your notes without `/lect`
-
-`/lect` opens the reader for you automatically after writing a note. To open
-the reader on its own — to re-read existing notes without writing a new
-one — install the desktop app (recommended) or fall back to the browser.
-
-### Desktop app — install once, then double-click
-
-A real native window. No browser tab, no terminal left running.
-
-**1. Install it (one time):**
+## Updating after pulling changes
 
 ```bash
-npm install
-npm run build:desktop
+npm run install:desktop
 ```
 
-This takes a few minutes the first time. When it finishes, the installer
-is at:
-
-```
-desktop/target/release/bundle/nsis/Notes_<version>_x64-setup.exe
-```
-
-(an `.msi` is also built alongside it, in `bundle/msi/`, if you'd rather
-use that). Run that installer — it adds **Notes** to your Start Menu like
-any other app.
-
-**2. Run it:** open **Notes** from the Start Menu (or wherever you put a
-shortcut). That's it — no terminal, no browser, no localhost. A short
-splash screen appears while it starts, then the reader opens.
-
-To uninstall later: Settings → Apps → **Notes** → Uninstall, same as any
-Windows app.
-
-Building again after pulling app updates: re-run `npm run build:desktop`
-and re-run the new installer — it replaces the old install in place.
-
-### Browser fallback (advanced)
-
-For headless setups or quick debugging, without installing anything:
-
-```bash
-./tools/vaultd/vaultd.exe   # filesystem helper, default :4321
-npm run dev                 # http://localhost:3000 -> /vault
-```
-
-Run each in its own terminal, then open `http://localhost:3000/vault` in
-your browser.
-
-See [docs/desktop.md](docs/desktop.md) for the technical detail behind the
-desktop app (how it starts vaultd/Next, where it stores your vault, dev
-mode with hot reload via `npm run dev:desktop`).
+Re-installs in place.
 
 ---
 
-## Technical usage
-
-For setup, running the app, and architecture details, see
-[SPECIFICATION.md](SPECIFICATION.md).
-
-Quick summary for the technically inclined:
-
-- **Reader app** — Next.js (TypeScript), runs locally with `npm run dev`.
-- **Filesystem helper** — a small Go service (`vaultd`) that does plain
-  file read/write/list, with zero business logic and no AI calls.
-- **Note-writer** — invoked via the [Claude Code](https://claude.com/claude-code)
-  CLI's `/lect` command, billed to your Claude subscription, not a
-  pay-per-API key.
-- **Storage** — each note is an `.html` file plus an `index.json` per
-  folder, under `vault/`.
-
----
-
-## Repo layout
-
-```text
-CLAUDE.md            -- repo rules Claude follows (command gatekeeper)
-SPECIFICATION.md      -- full architecture (Next.js / Go / Claude split)
-flow.md                -- request-by-request data flow (creation/viewing)
-.claude/commands/      -- /lect (lesson writing) and /feat (app dev) commands
-docs/                  -- detailed rules each command loads
-_templates/             -- lesson-template.md, the fixed heading skeleton
-scripts/               -- ensure-vaultd, validate-lesson, open-app, desktop build helpers
-desktop/               -- Tauri shell (native window + startup orchestration)
-app/                   -- Next.js UI + API routes
-lib/vault/             -- naming, sanitizing, vaultd client (TypeScript)
-tools/vaultd/          -- Go filesystem helper (zero business logic)
-vault/                 -- YOUR notes (gitignored, created on first use)
-```
+Details: [SPECIFICATION.md](SPECIFICATION.md) (architecture),
+[docs/desktop.md](docs/desktop.md) (desktop app internals).

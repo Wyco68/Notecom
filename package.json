@@ -11,7 +11,9 @@
     "lint": "next lint",
     "tauri": "tauri",
     "dev:desktop": "tauri dev --config desktop/tauri.conf.json",
-    "build:desktop": "tauri build --config desktop/tauri.conf.json"
+    "build:desktop": "tauri build --config desktop/tauri.conf.json",
+    "postbuild:desktop": "node scripts/install-desktop.mjs",
+    "install:desktop": "npm install && npm run build:desktop"
   },
   "dependencies": {
     "framer-motion": "^11.11.17",

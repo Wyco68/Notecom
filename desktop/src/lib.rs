@@ -101,13 +101,32 @@ mod dev {
             .to_path_buf()
     }
 
+    // npm is `npm.cmd` on Windows (only resolvable through the shell) but a
+    // plain executable on macOS/Linux — so it needs `cmd /C` on Windows and a
+    // direct invocation everywhere else. Keeping this the one place that knows
+    // the difference is what lets `tauri dev` run on all three platforms.
+    #[cfg(windows)]
+    fn npm(args: &[&str]) -> Command {
+        let mut cmd = Command::new("cmd");
+        cmd.arg("/C").arg("npm").args(args);
+        cmd
+    }
+
+    #[cfg(not(windows))]
+    fn npm(args: &[&str]) -> Command {
+        let mut cmd = Command::new("npm");
+        cmd.args(args);
+        cmd
+    }
+
     fn spawn_vaultd(root: &Path, port: u16) -> u32 {
         let vaultd_dir = root.join("tools").join("vaultd");
-        let exe = vaultd_dir.join("vaultd.exe");
+        let exe_name = if cfg!(windows) { "vaultd.exe" } else { "vaultd" };
+        let exe = vaultd_dir.join(exe_name);
         if !exe.exists() {
             let mut build = Command::new("go");
             build
-                .args(["build", "-o", "vaultd.exe", "."])
+                .args(["build", "-o", exe_name, "."])
                 .current_dir(&vaultd_dir);
             hide_window(&mut build);
             build.status().expect("failed to build vaultd");
@@ -121,10 +140,9 @@ mod dev {
     }
 
     fn spawn_next(root: &Path, port: u16, vaultd_url: &str) -> u32 {
-        let mut cmd = Command::new("cmd");
-        cmd.args(["/C", "npm", "run", "dev", "--", "-p", &port.to_string()])
-            .current_dir(root)
-            .env("VAULTD_URL", vaultd_url);
+        let port_arg = port.to_string();
+        let mut cmd = npm(&["run", "dev", "--", "-p", &port_arg]);
+        cmd.current_dir(root).env("VAULTD_URL", vaultd_url);
         hide_window(&mut cmd);
         cmd.spawn().expect("failed to start next dev server").id()
     }

@@ -27,11 +27,16 @@ const CALLOUT_LABELS = ["Key Idea", "Common Mistake", "Exam Tip", "Remember"];
 function checkLesson(html, file) {
   const errors = [];
 
-  for (const m of html.matchAll(/<\/?([a-zA-Z0-9]+)(?:\s[^>]*)?>/g)) {
+  // Scan opening tags only; a closing tag adds nothing (its element already
+  // has an opening tag) and would double-report every violation. Collect into
+  // a Set so a tag used many times is flagged once.
+  const disallowed = new Set();
+  for (const m of html.matchAll(/<([a-zA-Z0-9]+)(?:\s[^>]*)?>/g)) {
     const tag = m[1].toLowerCase();
-    if (!ALLOWED_TAGS.has(tag)) {
-      errors.push(`disallowed tag <${tag}> — not in the html-output-contract allowlist`);
-    }
+    if (!ALLOWED_TAGS.has(tag)) disallowed.add(tag);
+  }
+  for (const tag of disallowed) {
+    errors.push(`disallowed tag <${tag}> — not in the html-output-contract allowlist`);
   }
 
   const h1Count = (html.match(/<h1>/g) ?? []).length;

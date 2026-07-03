@@ -21,6 +21,16 @@ const VARIANTS = {
     bg: "bg-emerald-50 dark:bg-emerald-950/30",
     label: "text-emerald-700 dark:text-emerald-300",
   },
+  Reasoning: {
+    border: "border-purple-300 dark:border-purple-800/60",
+    bg: "bg-purple-50 dark:bg-purple-950/30",
+    label: "text-purple-700 dark:text-purple-300",
+  },
+  Answer: {
+    border: "border-teal-300 dark:border-teal-800/60",
+    bg: "bg-teal-50 dark:bg-teal-950/30",
+    label: "text-teal-700 dark:text-teal-300",
+  },
 } as const;
 
 type CalloutKind = keyof typeof VARIANTS;

@@ -25,3 +25,7 @@ desktop/target/
 desktop/bin/
 desktop/resources/
 desktop/gen/
+
+# Collected installer(s) from the last `npm run build:desktop`
+# (copied here by scripts/install-desktop.mjs) — build output, not source.
+/installation/

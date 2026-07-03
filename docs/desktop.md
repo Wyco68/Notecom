@@ -40,10 +40,18 @@ browser" — it's the app's own native window loading the app's own local
 server, the standard way Tauri/Electron ship a Next.js app that has live
 API routes (no static export is possible with API routes in the mix).
 
+The dev sidecar launch is OS-aware: `npm` is `npm.cmd` on Windows (needs
+`cmd /C`) but a plain executable on macOS/Linux (invoked directly), and the
+locally built vaultd binary is `vaultd.exe` vs `vaultd`. Both differences are
+isolated to the `dev` module so `tauri dev` runs on all three platforms.
+
 On exit, every tracked PID is killed via `taskkill /T /F` (Windows), not
-`Child::kill()` — `npm run dev` runs under `cmd /C`, which fans out into
-npm → node → turbopack workers, and a plain kill only stops the immediate
-`cmd.exe`, leaving that whole tree running.
+`Child::kill()` — on Windows `npm run dev` runs under `cmd /C`, which fans out
+into npm → node → turbopack workers, and a plain kill only stops the immediate
+`cmd.exe`, leaving that whole tree running. On macOS/Linux cleanup is a plain
+`kill -9`, which fully reaps the release sidecars (single processes); a dev
+`npm run dev` on those platforms can still leave a child `next dev` behind on
+quit — a known dev-only limitation, harmless to the shipped release build.
 
 ### Dev vs release
 
@@ -55,7 +63,7 @@ would be more confusing than two complete ones:
 | | Dev (`tauri dev`) | Release (`tauri build`) |
 |---|---|---|
 | vaultd | built from `tools/vaultd/` if missing, run directly | bundled sidecar, resolved via `app.shell().sidecar("vaultd")` |
-| Next | `cmd /C npm run dev -- -p <port>` against the repo | bundled Node sidecar running the standalone `server.js` |
+| Next | `npm run dev -- -p <port>` against the repo (`cmd /C npm` on Windows, `npm` directly elsewhere) | bundled Node sidecar running the standalone `server.js` |
 | Vault location | repo's `vault/` (gitignored, unchanged) | repo's `vault/` (same checkout, resolved from `CARGO_MANIFEST_DIR` baked in at compile time) — same vault `/lect` writes lessons into, single-machine personal tool |
 
 Sidecars are referenced by **basename only** (`sidecar("vaultd")`, not
@@ -78,18 +86,38 @@ subdirectory they were built into.
   1. `go build` vaultd, copy to `desktop/bin/vaultd-<target-triple>.exe`.
   2. `next build` (standalone output), assemble `desktop/resources/frontend/`
      from `.next/standalone` + `.next/static` + `public/`.
-  3. Copy the local Node executable to `desktop/bin/node-<target-triple>.exe`
-     as the second sidecar — `next build --output standalone` still needs a
-     Node runtime to execute `server.js`; there's no way to make Next itself
-     a zero-runtime native binary.
+  3. Copy the local Node executable to `desktop/bin/node-<target-triple>`
+     (`.exe` on Windows) as the second sidecar — `next build --output
+     standalone` still needs a Node runtime to execute `server.js`; there's
+     no way to make Next itself a zero-runtime native binary.
 - **`desktop-target-triple.mjs`** — the `<target-triple>` lookup shared by
-  both scripts above (Tauri's sidecar naming convention).
+  both scripts above (Tauri's sidecar naming convention). Covers Windows x64,
+  macOS arm64/x64, and Linux x64/arm64.
+- **`install-desktop.mjs`** (`postbuild:desktop`) — after `tauri build`,
+  copies the platform's installer artifact(s) out of
+  `desktop/target/release/bundle/**` into `installation/` at the repo root
+  and opens that folder. Knows each OS's bundle subdir (`nsis`/`msi`, `dmg`,
+  `appimage`/`deb`/`rpm`). It reveals the folder rather than auto-running the
+  installer, so a `.dmg` mount or `.deb` permission prompt never fires
+  unattended from a build.
+
+`prepare-desktop-resources.mjs` and `ensure-desktop-sidecars.mjs` are already
+OS-agnostic (they switch the `.exe` suffix off `process.platform` and shell
+out to `go`/`npx`/`node` from `PATH`), so no per-OS branches live in them.
 
 ## Install & run
 
 Prerequisites (one-time, machine setup): Node 20+, Go 1.21+, Rust
-(`rustup`) + platform C/C++ build tools (MSVC Build Tools on Windows —
-WebView2 ships with Win11 already).
+(`rustup`) + the platform's C/C++ build tools and webview:
+
+| OS | Build tools | Webview |
+|---|---|---|
+| Windows | MSVC Build Tools | WebView2 (ships with Win11) |
+| macOS | Xcode Command Line Tools (`xcode-select --install`) | WKWebView (built in) |
+| Linux | `build-essential`, `libwebkit2gtk-4.1-dev`, `libssl-dev`, `libgtk-3-dev`, `librsvg2-dev` (Debian/Ubuntu names) | WebKitGTK |
+
+Tauri builds are **not** cross-compiled — run the build on the OS you want
+an installer for (a Mac produces the Mac installer, etc.).
 
 **Build the installer:**
 
@@ -99,18 +127,26 @@ npm run build:desktop
 ```
 
 Runs `prepare-desktop-resources.mjs` (Go build, `next build --output
-standalone`, copies a Node sidecar) then `cargo tauri build`. Output:
+standalone`, copies a Node sidecar) then `cargo tauri build`, then
+`install-desktop.mjs` copies the finished installer into `installation/`
+at the repo root and opens that folder. `bundle.targets: "all"` in
+[tauri.conf.json](../desktop/tauri.conf.json) makes each OS emit its native
+formats:
 
 ```
-desktop/target/release/bundle/nsis/Notes_<version>_x64-setup.exe   -- run this
-desktop/target/release/bundle/msi/Notes_<version>_x64_en-US.msi    -- or this
+installation/Notes_<version>_x64-setup.exe   Windows (NSIS)  -- run this
+installation/Notes_<version>_x64_en-US.msi    Windows (MSI)   -- or this
+installation/Notes_<version>_x64.dmg          macOS
+installation/Notes_<version>_amd64.AppImage    Linux (portable)
+installation/Notes_<version>_amd64.deb         Linux (Debian/Ubuntu)
 ```
 
-Running the installer adds **Notes** to the Start Menu like any normal
-Windows app; from then on it's just double-clicking the app, no terminal.
-Re-running `npm run build:desktop` + the new installer after a source
-change replaces the install in place. Uninstall via Settings → Apps, same
-as any app.
+`installation/` is emptied on each build so it only ever holds the latest
+artifacts (it's gitignored — build output, not source). Running the
+installer registers **Notes** with the OS like any native app (Start Menu
+on Windows, Applications on macOS, the app menu on Linux); after that it's
+just launching the app, no terminal. Re-running `npm run build:desktop` +
+the new installer after a source change replaces the install in place.
 
 **Develop with hot reload** (skips the installer, runs straight from source):
 

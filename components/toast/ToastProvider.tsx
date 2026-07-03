@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
 
 type ToastKind = "success" | "error";
 
@@ -30,10 +30,13 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     }, 4000);
   }, []);
 
-  const api: ToastApi = {
-    success: (message) => push("success", message),
-    error: (message) => push("error", message),
-  };
+  const api = useMemo<ToastApi>(
+    () => ({
+      success: (message) => push("success", message),
+      error: (message) => push("error", message),
+    }),
+    [push]
+  );
 
   return (
     <ToastContext.Provider value={api}>
