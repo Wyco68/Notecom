@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server";
 import { listTree } from "@/lib/vault/helper";
+import { triggerReindex } from "@/lib/search/indexd";
 
 export async function GET() {
+  // Tree fetches happen exactly when vault content may have changed (page
+  // load, window focus, manual refresh) — cheapest possible hook to keep
+  // the search index current. Hash-based scan, near-free when unchanged.
+  triggerReindex();
   try {
     const tree = await listTree();
     return NextResponse.json(tree);

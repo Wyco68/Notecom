@@ -2,9 +2,11 @@
 # Each user's own subjects/lessons live here, generated locally by savelesson.
 /vault/
 
-# Built binary — built locally at setup time (see README), not committed.
+# Built binaries — built locally at setup time (see README), not committed.
 tools/vaultd/vaultd.exe
 tools/vaultd/vaultd
+tools/indexd/indexd.exe
+tools/indexd/indexd
 
 # Local Claude subscription credential (encrypted) — never committed.
 /.claude-token.enc

@@ -116,10 +116,34 @@ FileTreeNode (hover → trash icon)
 
 ---
 
-## 5. Who does what
+## 5. Searching notes (browser → Next.js → indexd)
+
+```
+Sidebar search box (AppShell)
+  │  debounced fetch GET /api/search?q=...
+  ▼
+app/api/search/route.ts
+  │  search() → indexd GET /search?q=...
+  ▼
+indexd
+  │  FTS5 keyword ranks + (if Ollama up) vector cosine ranks
+  │  reciprocal-rank fusion → top chunks with metadata
+  ▼
+SearchResults renders heading/lesson/summary per hit
+  │  click → onSelect(LessonRef) → LessonViewer loads the document
+```
+
+Index freshness: every `GET /api/tree` (page load, window focus, refresh
+button) fire-and-forgets `POST /reindex` to indexd; the scan is hash-based
+and skips unchanged files. indexd also scans at startup.
+
+---
+
+## 6. Who does what
 
 | Layer | Files | Responsibility |
 |---|---|---|
 | **Claude Code** | `/lect` command | Content creation: generate HTML, write vault/ files, update index.json |
-| **Next.js** | `app/api/*`, `lib/vault/*`, `components/*` | Read and manage: tree, load lesson, delete/rename folder and lesson |
+| **Next.js** | `app/api/*`, `lib/vault/*`, `lib/search/*`, `components/*` | Read and manage: tree, load lesson, delete/rename folder and lesson; proxy search |
 | **vaultd** | `tools/vaultd/main.go` | Pure filesystem I/O over HTTP. Zero naming logic, zero content logic |
+| **indexd** | `tools/indexd/*.go` | Chunking, embeddings (via Ollama), hybrid search over `vault/.index/index.db` |

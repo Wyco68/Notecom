@@ -47,6 +47,18 @@ DeleteFolder()
 It receives fully-resolved names and paths and performs raw filesystem I/O.
 It contains no slugify logic, no sequence-number generation, no content logic.
 
+### 2.3 Go search service (`indexd`) — retrieval only
+
+A second Go service (`tools/indexd/`, default `127.0.0.1:4322`) that makes
+the vault searchable (the RAG backend): chunks lesson HTML by educational
+sections, embeds chunks via local Ollama when available, and serves hybrid
+search (SQLite FTS5 + vector cosine, RRF-merged). Its entire state is one
+derived SQLite file, `vault/.index/index.db` — safe to delete, rebuilt by a
+reindex. Without Ollama it runs in keyword-only mode. It never generates
+content and never calls Claude. See
+[docs/architecture.md](docs/architecture.md) and
+[docs/api-contract.md](docs/api-contract.md).
+
 ---
 
 ## 3. Claude Code — content creation (outside the app)
@@ -203,6 +215,7 @@ full endpoint list.
 | Diagrams | `mermaid` | Client-side SVG from `div.mermaid` blocks |
 | Animation | `framer-motion` | Fade/slide on lesson switch |
 | Filesystem helper | Go HTTP service (`vaultd`) | Folder/lesson CRUD + tree listing |
+| Search/RAG | Go HTTP service (`indexd`) + SQLite (FTS5 + vector BLOBs) | Section chunking, hybrid retrieval; Ollama embeddings when present |
 | Notes storage | `.html` + `index.json` under `vault/` | Source of truth; gitignored |
 | Desktop shell | Tauri (Rust) | Native window, startup orchestration, splash screen, packaging |
 
@@ -239,8 +252,13 @@ window:
 ```bash
 cd tools/vaultd && go build -o vaultd.exe . && cd ../..   # macOS/Linux: vaultd (no .exe)
 ./tools/vaultd/vaultd.exe   # filesystem helper, default :4321
+node scripts/ensure-indexd.mjs   # search service, default :4322 (builds on first run)
 npm run dev                 # http://localhost:3000 -> /vault
 ```
+
+Semantic search (optional): install [Ollama](https://ollama.com) and run
+`ollama pull nomic-embed-text`. Without it, search runs in keyword (FTS5)
+mode; with it, indexd embeds automatically on the next scan.
 
 Writing a note happens separately, via Claude Code in a terminal, using the
 `/lect` command (see [CLAUDE.md](CLAUDE.md)) — not through the website.
@@ -249,7 +267,8 @@ Writing a note happens separately, via Claude Code in a terminal, using the
 
 ## 10. Out of scope
 
-- No database (filesystem via Go helper is the store).
+- No database as source of truth (filesystem via Go helper is the store;
+  indexd's SQLite file is derived search data only, safe to delete).
 - No deployment/hosting beyond local dev.
 - No multi-tenancy.
 - No user authentication of any kind.

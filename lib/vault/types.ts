@@ -25,8 +25,13 @@ export interface VaultTree {
 }
 
 // A selected lesson or quiz is identified by its folder + id + kind.
+// heading/headingIndex are set when the selection came from a search hit:
+// the viewer scrolls to the headingIndex-th occurrence of that heading
+// (headings like "How it Works" repeat within a lesson).
 export interface LessonRef {
   folder: string;
   id: string;
   kind: "lesson" | "quiz" | "assignment";
+  heading?: string;
+  headingIndex?: number;
 }

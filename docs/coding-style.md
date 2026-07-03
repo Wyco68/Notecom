@@ -27,6 +27,14 @@ match them, don't introduce a second style.
   filesystem. Any new endpoint that takes a name/id from the request must
   do the same.
 
+## Go (`tools/indexd`)
+- Separate module. Exactly two direct deps, each earning its place:
+  `modernc.org/sqlite` (pure-Go driver — no CGO, so Windows builds don't
+  need a C toolchain) and `golang.org/x/net/html` (real HTML parsing for
+  the chunker). Don't add more; in particular no vector-DB client and no
+  HTTP framework.
+- Same `safeName()` rule as vaultd for every folder/id from a request.
+
 ## Comments
 - Default to no comments. Add one only when the *why* isn't obvious from
   the code — a non-obvious constraint, a workaround, a security boundary.
