@@ -5,12 +5,14 @@ import type { Folder, LessonRef } from "@/lib/vault/types";
 import ConfirmModal from "../modals/ConfirmModal";
 import TrashIcon from "../icons/TrashIcon";
 import QuizIcon from "../icons/QuizIcon";
+import AssignmentIcon from "../icons/AssignmentIcon";
 import { useToast } from "../toast/ToastProvider";
 
 type PendingDelete =
   | { kind: "folder" }
   | { kind: "lesson"; id: string; title: string }
-  | { kind: "quiz"; id: string; title: string };
+  | { kind: "quiz"; id: string; title: string }
+  | { kind: "assignment"; id: string; title: string };
 
 export default function FileTreeNode({
   folder,
@@ -32,6 +34,7 @@ export default function FileTreeNode({
   // binary that predates quizzes) instead of throwing on `.length`/`.map`.
   const lessons = folder.lessons ?? [];
   const quizzes = folder.quizzes ?? [];
+  const assignments = folder.assignments ?? [];
 
   async function confirmDelete() {
     if (!pending) return;
@@ -44,15 +47,18 @@ export default function FileTreeNode({
         if (!res.ok) throw new Error("failed");
         toast.success(`Deleted folder "${folder.name.replace(/-/g, " ")}".`);
       } else {
-        const base = pending.kind === "quiz" ? "/api/quiz" : "/api/lesson";
+        const base =
+          pending.kind === "quiz"
+            ? "/api/quiz"
+            : pending.kind === "assignment"
+            ? "/api/assignment"
+            : "/api/lesson";
         const res = await fetch(
           `${base}/${encodeURIComponent(folder.name)}/${encodeURIComponent(pending.id)}`,
           { method: "DELETE" }
         );
         if (!res.ok) throw new Error("failed");
-        toast.success(
-          `Deleted ${pending.kind === "quiz" ? "quiz" : "lesson"} "${pending.title}".`
-        );
+        toast.success(`Deleted ${pending.kind} "${pending.title}".`);
       }
       onChanged();
     } catch {
@@ -163,6 +169,44 @@ export default function FileTreeNode({
               </div>
             );
           })}
+
+          {assignments.length > 0 && (
+            <p className="px-2 pt-2 pb-1 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-500">
+              Assignments
+            </p>
+          )}
+          {assignments.map((assignment) => {
+            const isActive =
+              selected?.folder === folder.name &&
+              selected?.id === assignment.id &&
+              selected?.kind === "assignment";
+            return (
+              <div key={assignment.id} className="group flex items-center">
+                <button
+                  onClick={() => onSelect({ folder: folder.name, id: assignment.id, kind: "assignment" })}
+                  className={`flex flex-1 items-center gap-1.5 truncate rounded px-2 py-1 text-left text-sm ${
+                    isActive
+                      ? "bg-blue-600/10 text-blue-700 dark:bg-blue-600/20 dark:text-blue-300"
+                      : "text-gray-700 hover:bg-black/5 dark:text-gray-300 dark:hover:bg-white/5"
+                  }`}
+                  title={assignment.title}
+                >
+                  <AssignmentIcon className="h-3.5 w-3.5 shrink-0 text-gray-400" />
+                  <span className="truncate">{assignment.title}</span>
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setPending({ kind: "assignment", id: assignment.id, title: assignment.title });
+                  }}
+                  title="Delete assignment"
+                  className="mr-1 hidden h-5 w-5 shrink-0 items-center justify-center rounded text-gray-500 hover:bg-red-500/10 hover:text-red-400 group-hover:flex"
+                >
+                  <TrashIcon className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            );
+          })}
         </div>
       )}
 
@@ -173,6 +217,8 @@ export default function FileTreeNode({
               ? "Delete folder"
               : pending.kind === "quiz"
               ? "Delete quiz"
+              : pending.kind === "assignment"
+              ? "Delete assignment"
               : "Delete lesson"
           }
           message={

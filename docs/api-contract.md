@@ -7,7 +7,7 @@ Loaded by `/feat` only. Source of truth is the route files themselves
 
 | Route | Method | Body | Response |
 |---|---|---|---|
-| `/api/tree` | GET | — | `{ folders: [{ name, lessons: [{id,slug,title,seq}], quizzes: [{id,slug,title,seq}] }] }` |
+| `/api/tree` | GET | — | `{ folders: [{ name, lessons: [{id,slug,title,seq}], quizzes: [...], assignments: [...] }] }` |
 | `/api/folders` | POST | `{ name }` | `{ ok, folder }` — app slugifies `name` before calling vaultd |
 | `/api/folders/[name]` | DELETE | — | `{ ok }` |
 | `/api/lesson/[folder]/[id]` | GET | — | `{ html, title }` |
@@ -16,12 +16,16 @@ Loaded by `/feat` only. Source of truth is the route files themselves
 | `/api/quiz/[folder]/[id]` | GET | — | `{ html, title }` |
 | `/api/quiz/[folder]/[id]` | DELETE | — | `{ ok }` |
 | `/api/quiz/[folder]/[id]` | POST | `{ newTitle }` | `{ ok }` (rename) |
+| `/api/assignment/[folder]/[id]` | GET | — | `{ html, title }` |
+| `/api/assignment/[folder]/[id]` | DELETE | — | `{ ok }` |
+| `/api/assignment/[folder]/[id]` | POST | `{ newTitle }` | `{ ok }` (rename) |
 
 Error shape is always `{ error: string }` with a non-2xx status.
 
-There are no auth routes. There is no lesson- or quiz-generation route.
-Content creation happens via Claude Code (`/lect` for lessons, `/quiz` for
-quizzes), not the web app.
+There are no auth routes. There is no lesson-, quiz-, or assignment-
+generation route. Content creation happens via Claude Code (`/lect` for
+lessons, `/quiz` for quizzes, `/assignment` for assignment journals), not
+the web app.
 
 ## vaultd (Go helper, default `127.0.0.1:4321`)
 
@@ -37,15 +41,20 @@ quizzes), not the web app.
 | `/quiz/{folder}/{id}` | GET | — | `{ html, title }` |
 | `/quiz/{folder}/{id}` | DELETE | — | removes the `quiz-{id}.html` file + its index entry |
 | `/quiz/{folder}/{id}/rename` | POST | `{ newTitle }` | index-only update |
-| `/tree` | GET | — | `{ folders: [{ name, lessons: [...], quizzes: [...] }] }` |
+| `/assignment` | POST | `{ folder, id, slug, title, seq, html }` | writes `assignment-{id}.html`, upserts `index.json`'s `assignments` array — used by Claude Code |
+| `/assignment/{folder}/{id}` | GET | — | `{ html, title }` |
+| `/assignment/{folder}/{id}` | DELETE | — | removes the `assignment-{id}.html` file + its index entry |
+| `/assignment/{folder}/{id}/rename` | POST | `{ newTitle }` | index-only update |
+| `/tree` | GET | — | `{ folders: [{ name, lessons: [...], quizzes: [...], assignments: [...] }] }` |
 
-`index.json` holds `{ "lessons": [...], "quizzes": [...] }`. Quiz files
-share a folder with lesson files but never collide: quiz filenames on disk
-carry a `quiz-` prefix, and quiz `id`/`seq` sequencing is independent of
-the lessons in the same folder. Older folders whose `index.json` is still
-a bare array (lessons only, pre-quiz format) are read transparently by
-vaultd and upgraded to the `{lessons,quizzes}` shape the next time
-anything in that folder is saved.
+`index.json` holds `{ "lessons": [...], "quizzes": [...], "assignments":
+[...] }`. Quiz and assignment files share a folder with lesson files but
+never collide: quiz filenames carry a `quiz-` prefix and assignment
+filenames an `assignment-` prefix on disk, and each of the three arrays has
+its own independent `id`/`seq` sequencing. Older folders whose `index.json`
+is still a bare array (lessons only, pre-quiz format) are read transparently
+by vaultd and upgraded to the `{lessons,quizzes,assignments}` shape the next
+time anything in that folder is saved.
 
 Every name/id arriving at vaultd is already fully resolved by the caller.
 `lib/vault/helper.ts` is the only TypeScript caller of these endpoints;

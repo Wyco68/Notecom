@@ -17,7 +17,12 @@ export default function LessonViewer({ lesson }: { lesson: LessonRef | null }) {
     // later one would otherwise leave the wrong lesson on screen.
     let cancelled = false;
     setHtml(null);
-    const base = lesson.kind === "quiz" ? "/api/quiz" : "/api/lesson";
+    const base =
+      lesson.kind === "quiz"
+        ? "/api/quiz"
+        : lesson.kind === "assignment"
+        ? "/api/assignment"
+        : "/api/lesson";
     fetch(
       `${base}/${encodeURIComponent(lesson.folder)}/${encodeURIComponent(lesson.id)}`
     )

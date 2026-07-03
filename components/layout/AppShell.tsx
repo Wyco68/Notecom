@@ -62,7 +62,7 @@ export default function AppShell() {
             <button
               onClick={handleRefresh}
               disabled={refreshing}
-              title="Refresh — pick up newly added lessons and quizzes"
+              title="Refresh — pick up newly added lessons, quizzes, and assignments"
               className="flex h-7 w-7 items-center justify-center rounded text-gray-500 hover:bg-black/5 disabled:opacity-50 dark:text-gray-400 dark:hover:bg-white/10"
             >
               <RefreshIcon className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />

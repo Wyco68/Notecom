@@ -93,15 +93,26 @@ no custom classes other than `class="mermaid"`.
 ```
 vault/
   <folder-slug>/
-    index.json              -- ordered lesson index for this folder
-    01-topic-slug.html      -- one lesson's generated HTML
+    index.json                    -- ordered lesson/quiz/assignment index
+    01-topic-slug.html            -- one lesson's generated HTML
     02-another-topic.html
+    quiz-01-topic-quiz.html       -- one quiz's generated HTML
+    assignment-01-task.html       -- one assignment journal's HTML
 ```
 
 `index.json` shape:
 ```json
-[{ "id": "01-topic-slug", "slug": "topic-slug", "title": "Topic", "seq": 1 }]
+{
+  "lessons": [{ "id": "01-topic-slug", "slug": "topic-slug", "title": "Topic", "seq": 1 }],
+  "quizzes": [],
+  "assignments": []
+}
 ```
+
+Quiz files (`quiz-` prefix) and assignment journals (`assignment-` prefix)
+share the folder with lessons but never collide, and each array sequences
+its `id`/`seq` independently. A legacy bare-array `index.json` (lessons
+only) is read transparently and upgraded on the next save.
 
 - `id` = `<seq padded to 2 digits>-<slug>`, e.g. `"01-introduction"`
 - `slug` = lowercased, non-alphanumerics collapsed to `-`, leading/trailing `-` trimmed
@@ -168,11 +179,14 @@ Runs on `localhost:4321`. Next.js API routes call it via `fetch` through
 | `GET` | `/lesson/:folder/:id` | — | `{ html, title }` |
 | `DELETE` | `/lesson/:folder/:id` | — | `{ ok }` |
 | `POST` | `/lesson/:folder/:id/rename` | `{ newTitle }` | `{ ok }` |
-| `GET` | `/tree` | — | `{ folders: [{ name, lessons: [...] }] }` |
+| `GET`/`DELETE`/`POST …/rename` | `/quiz/:folder/:id[…]` | — / `{ newTitle }` | mirrors `/lesson` for quizzes |
+| `GET`/`DELETE`/`POST …/rename` | `/assignment/:folder/:id[…]` | — / `{ newTitle }` | mirrors `/lesson` for assignment journals |
+| `GET` | `/tree` | — | `{ folders: [{ name, lessons: [...], quizzes: [...], assignments: [...] }] }` |
 
-Note: `POST /lesson` (save) is still implemented in vaultd and is used by
-Claude Code (`/lect`) when it chooses to route through vaultd instead of
-writing files directly.
+Note: `POST /lesson`, `POST /quiz`, and `POST /assignment` (save) are
+implemented in vaultd and used by Claude Code (`/lect`, `/quiz`,
+`/assignment`). See [docs/api-contract.md](docs/api-contract.md) for the
+full endpoint list.
 
 ---
 

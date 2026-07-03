@@ -15,6 +15,7 @@ export interface TreeFolder {
   name: string;
   lessons: LessonEntry[];
   quizzes: LessonEntry[];
+  assignments: LessonEntry[];
 }
 
 async function call(path: string, init?: RequestInit): Promise<any> {
@@ -82,6 +83,30 @@ export function renameQuiz(
 ): Promise<{ ok: boolean }> {
   return call(
     `/quiz/${encodeURIComponent(folder)}/${encodeURIComponent(id)}/rename`,
+    { method: "POST", body: JSON.stringify({ newTitle }) }
+  );
+}
+
+export function loadAssignment(
+  folder: string,
+  id: string
+): Promise<{ html: string; title: string }> {
+  return call(`/assignment/${encodeURIComponent(folder)}/${encodeURIComponent(id)}`);
+}
+
+export function deleteAssignment(folder: string, id: string): Promise<{ ok: boolean }> {
+  return call(`/assignment/${encodeURIComponent(folder)}/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
+}
+
+export function renameAssignment(
+  folder: string,
+  id: string,
+  newTitle: string
+): Promise<{ ok: boolean }> {
+  return call(
+    `/assignment/${encodeURIComponent(folder)}/${encodeURIComponent(id)}/rename`,
     { method: "POST", body: JSON.stringify({ newTitle }) }
   );
 }
