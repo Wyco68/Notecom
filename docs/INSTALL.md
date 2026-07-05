@@ -44,6 +44,11 @@ are easy to back up:
 | macOS | `~/Library/Application Support/com.universitynotes.notes/vault` |
 | Linux | `~/.local/share/com.universitynotes.notes/vault` |
 
+If you only downloaded the installer, this starts **empty** — that's
+expected, since notes are created through Claude Code, not the installer.
+See [GETTING_STARTED.md](GETTING_STARTED.md) to set that up and write your
+first note.
+
 ## 4. Optional: turn on the AI features
 
 The app **reads** your notes with zero setup. Two extra features need free

@@ -3,6 +3,12 @@
 Turns slides/PDFs into plain-language study notes, readable in a clean
 desktop app. Works for any subject.
 
+New to Claude Code, or setting this up to actively write notes (not just
+read someone else's)? Start with
+**[docs/GETTING_STARTED.md](docs/GETTING_STARTED.md)** — it covers
+installing Claude Code, the file-conversion tool, and writing your first
+note end to end.
+
 ## Install (no build tools)
 
 Download the installer for your OS from the **Releases** page and open it —
@@ -42,6 +48,13 @@ and attaches them to a GitHub Release — see [docs/INSTALL.md](docs/INSTALL.md)
 
 Open **Notes** from your Start Menu / Applications / app menu. No terminal,
 no browser.
+
+**Actively writing notes?** Use `npm run dev:desktop` (or `npm run dev` in a
+browser) instead of the installed app while you work — it reads the same
+`vault/` folder Claude Code just wrote into. The installed app keeps its own
+separate copy (so a downloaded installer works without a checkout at all)
+and only picks up your checkout's notes once, the first time it ever runs on
+your machine — see [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md#6-see-it-in-the-app).
 
 ## Make a quiz
 

@@ -181,13 +181,32 @@ mod dev {
 // from the installed app's resources. The vault lives in the per-user OS
 // data dir (app_data_dir -> %APPDATA%/<id> on Windows, ~/Library/Application
 // Support/<id> on macOS, ~/.local/share/<id> on Linux) so an installed copy
-// works on any machine — not the build machine's checkout. (Dev still uses
-// the repo's vault/, below, which is where /lect writes lessons.)
+// works on a real stranger's machine, which has no repo checkout at all.
 #[cfg(not(debug_assertions))]
 mod release {
     use super::*;
-    use std::path::PathBuf;
+    use std::path::{Path, PathBuf};
     use tauri_plugin_shell::ShellExt;
+
+    fn is_empty_dir(dir: &Path) -> bool {
+        std::fs::read_dir(dir)
+            .map(|mut it| it.next().is_none())
+            .unwrap_or(true)
+    }
+
+    fn copy_dir_all(src: &Path, dst: &Path) -> std::io::Result<()> {
+        std::fs::create_dir_all(dst)?;
+        for entry in std::fs::read_dir(src)? {
+            let entry = entry?;
+            let dst_path = dst.join(entry.file_name());
+            if entry.file_type()?.is_dir() {
+                copy_dir_all(&entry.path(), &dst_path)?;
+            } else {
+                std::fs::copy(entry.path(), &dst_path)?;
+            }
+        }
+        Ok(())
+    }
 
     fn vault_dir(app: &AppHandle) -> PathBuf {
         let dir = app
@@ -196,6 +215,26 @@ mod release {
             .expect("no app data dir")
             .join("vault");
         std::fs::create_dir_all(&dir).expect("failed to create vault dir");
+
+        // Convenience for testing a *locally* built release (`npm run
+        // build:desktop`) on the same machine that has the source checkout:
+        // if the fresh per-user vault is still empty and CARGO_MANIFEST_DIR
+        // (baked in at compile time) resolves to a real, non-empty checkout
+        // vault/, seed from it once so testing your own build doesn't look
+        // emptied out. For an installer built by CI and downloaded by an
+        // actual stranger, that baked path is the CI runner's ephemeral
+        // checkout and never exists on their disk — this silently does
+        // nothing and the vault starts empty, which is correct there.
+        if is_empty_dir(&dir) {
+            let checkout_vault = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .parent()
+                .expect("desktop/ has a parent directory")
+                .join("vault");
+            if checkout_vault.exists() && !is_empty_dir(&checkout_vault) {
+                let _ = copy_dir_all(&checkout_vault, &dir);
+            }
+        }
+
         dir
     }
 

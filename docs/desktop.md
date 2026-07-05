@@ -73,14 +73,27 @@ would be more confusing than two complete ones:
 | vaultd | built from `tools/vaultd/` if missing, run directly | bundled sidecar, resolved via `app.shell().sidecar("vaultd")` |
 | indexd | built from `tools/indexd/` if missing, run directly | bundled sidecar, `app.shell().sidecar("indexd")` |
 | Next | `npm run dev -- -p <port>` against the repo (`cmd /C npm` on Windows, `npm` directly elsewhere) | bundled Node sidecar running the standalone `server.js` |
-| Vault location | repo's `vault/` (gitignored, where `/lect` writes lessons) | **per-user OS data dir** via `app.path().app_data_dir()` → `<data>/com.universitynotes.notes/vault` (`%APPDATA%` / `~/Library/Application Support` / `~/.local/share`) — so an installed copy works on any machine, not just the build machine's checkout |
+| Vault location | repo's `vault/` (`CARGO_MANIFEST_DIR`'s parent) — where `/lect` writes | **per-user OS data dir**, `app.path().app_data_dir()/vault` (`%APPDATA%` / `~/Library/Application Support` / `~/.local/share`) |
 
-The release vault moved to a per-user data dir so the installers are
-distributable (an installed app on someone else's computer has no
-`.../university-notes/vault`). Dev still uses the repo `vault/` because a dev
-build always runs from its own source tree and shares the vault `/lect`
-writes into. Both Go services just honor `VAULT_ROOT`, so lib.rs sets it and
-neither service has a per-OS path branch.
+They deliberately differ, because "dev" and "release" answer different
+questions. Dev *is* the checkout — content only ever gets created by running
+`/lect`/`/quiz`/`/assignment` against this repo, so dev always reads the
+checkout's own `vault/`. Release is what a downloaded installer runs as on
+someone else's machine, which has no checkout at all — it needs its own
+writable, per-user location that exists regardless of where (or whether) the
+source ever got cloned.
+
+**First-run seed, local builds only:** if the release vault is empty *and*
+`CARGO_MANIFEST_DIR` (baked in at compile time) resolves to a real, non-empty
+checkout `vault/`, `vault_dir()` in [lib.rs](../desktop/src/lib.rs) copies it
+in once. This exists purely so testing your own `npm run build:desktop`
+locally doesn't look emptied out — you have real content in the checkout,
+and the seed makes the two match. It's a no-op for anyone else: an installer
+built by CI has `CARGO_MANIFEST_DIR` pointing at the GitHub Actions runner's
+ephemeral checkout, which never exists on a downloader's disk, so their app
+just starts with a genuinely empty vault, exactly as it should for someone
+who hasn't run `/lect` yet — see
+[GETTING_STARTED.md](GETTING_STARTED.md).
 
 Sidecars are referenced by **basename only** (`sidecar("vaultd")`, not
 `sidecar("bin/vaultd")`) — Tauri flattens `bundle.externalBin` entries to
