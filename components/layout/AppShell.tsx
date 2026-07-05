@@ -6,16 +6,34 @@ import FileTree from "../sidebar/FileTree";
 import SearchResults from "../sidebar/SearchResults";
 import LessonViewer from "../viewer/LessonViewer";
 import NewFolderModal from "../modals/NewFolderModal";
+import GenerateModal from "../modals/GenerateModal";
+import ChatPanel from "../chat/ChatPanel";
 import ThemeToggle from "../theme/ThemeToggle";
 import RefreshIcon from "../icons/RefreshIcon";
 import SearchIcon from "../icons/SearchIcon";
+import ChatIcon from "../icons/ChatIcon";
+import UploadIcon from "../icons/UploadIcon";
 
 export default function AppShell() {
   const [folders, setFolders] = useState<Folder[] | null>(null);
   const [selected, setSelected] = useState<LessonRef | null>(null);
   const [showNewFolder, setShowNewFolder] = useState(false);
+  const [showGenerate, setShowGenerate] = useState(false);
+  const [showChat, setShowChat] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [query, setQuery] = useState("");
+
+  const currentTitle = (() => {
+    if (!selected || !folders) return null;
+    const f = folders.find((f) => f.name === selected.folder);
+    const list =
+      selected.kind === "quiz"
+        ? f?.quizzes
+        : selected.kind === "assignment"
+        ? f?.assignments
+        : f?.lessons;
+    return list?.find((l) => l.id === selected.id)?.title ?? null;
+  })();
 
   const refreshTree = useCallback(async () => {
     const res = await fetch("/api/tree", { cache: "no-store" });
@@ -62,6 +80,13 @@ export default function AppShell() {
             Notes
           </span>
           <div className="flex items-center gap-1">
+            <button
+              onClick={() => setShowGenerate(true)}
+              title="Generate a lesson or quiz from a file (runs local Claude Code)"
+              className="flex h-7 w-7 items-center justify-center rounded text-gray-500 hover:bg-black/5 dark:text-gray-400 dark:hover:bg-white/10"
+            >
+              <UploadIcon className="h-4 w-4" />
+            </button>
             <button
               onClick={handleRefresh}
               disabled={refreshing}
@@ -124,14 +149,38 @@ export default function AppShell() {
         </div>
       </aside>
 
-      <main className="flex-1 overflow-y-auto bg-white dark:bg-[#0d1117]">
+      <main className="relative flex-1 overflow-y-auto bg-white dark:bg-[#0d1117]">
         <LessonViewer lesson={selected} />
       </main>
+
+      <button
+        onClick={() => setShowChat(true)}
+        title="Ask My Notes — chat over your lessons (local model)"
+        className="fixed right-5 top-3 z-40 flex h-8 w-8 items-center justify-center rounded-full border border-black/10 bg-white text-gray-500 shadow-sm hover:bg-black/5 hover:text-blue-600 dark:border-white/10 dark:bg-[#161b22] dark:text-gray-400 dark:hover:bg-white/10 dark:hover:text-blue-400"
+      >
+        <ChatIcon className="h-4 w-4" />
+      </button>
+
+      {showChat && (
+        <ChatPanel
+          current={selected}
+          currentTitle={currentTitle}
+          onClose={() => setShowChat(false)}
+        />
+      )}
 
       {showNewFolder && (
         <NewFolderModal
           onClose={() => setShowNewFolder(false)}
           onCreated={refreshTree}
+        />
+      )}
+
+      {showGenerate && (
+        <GenerateModal
+          folders={folders ?? []}
+          onClose={() => setShowGenerate(false)}
+          onGenerated={refreshTree}
         />
       )}
     </div>

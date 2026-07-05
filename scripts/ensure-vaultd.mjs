@@ -70,6 +70,11 @@ export async function ensureVaultd() {
   child.unref();
 
   const up = await waitUntilUp(5000);
+  // The piped stdout/stderr keep this script's event loop alive even after
+  // unref() — without destroying them, a caller like `npm run predev`
+  // never exits and Next.js never starts.
+  child.stdout.destroy();
+  child.stderr.destroy();
   if (!up) {
     const detail = output.trim();
     const hint = /address already in use|bind:/i.test(detail)

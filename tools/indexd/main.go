@@ -25,6 +25,7 @@
 //	GET    /search?q&folder&kind&limit&html=1
 //	GET    /related/{folder}/{id}?kind&limit
 //	GET    /topics?q&limit
+//	POST   /chat                         grounded chat over the vault (SSE)
 //	GET    /status
 package main
 
@@ -72,6 +73,7 @@ func main() {
 	mux.HandleFunc("/search", s.handleSearch)
 	mux.HandleFunc("/related/", s.handleRelated)
 	mux.HandleFunc("/topics", s.handleTopics)
+	mux.HandleFunc("/chat", s.handleChat)
 	mux.HandleFunc("/status", s.handleStatus)
 
 	// Startup scan so a fresh DB (or lessons written while indexd was down)

@@ -10,9 +10,10 @@ export default function QuizIcon({ className }: { className?: string }) {
       className={className}
       aria-hidden="true"
     >
-      <circle cx="12" cy="12" r="9" />
-      <path d="M9.5 9.5a2.5 2.5 0 0 1 4.9.75c0 1.75-2.4 2-2.4 3.5" />
-      <line x1="12" y1="17" x2="12.01" y2="17" />
+      <rect x="4" y="3" width="16" height="18" rx="2" />
+      <line x1="8" y1="8" x2="16" y2="8" />
+      <line x1="8" y1="12" x2="13" y2="12" />
+      <path d="M8 16.5l1.5 1.5 3-3" />
     </svg>
   );
 }

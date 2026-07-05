@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { LessonRef } from "@/lib/vault/types";
+import SpinnerIcon from "../icons/SpinnerIcon";
 
 interface Result {
   folder: string;
@@ -80,7 +81,11 @@ export default function SearchResults({
   }, [query]);
 
   if (state.status === "loading") {
-    return <p className="px-2 py-2 text-sm text-gray-500">Searching...</p>;
+    return (
+      <div className="flex justify-center py-6">
+        <SpinnerIcon className="h-5 w-5 text-gray-400" />
+      </div>
+    );
   }
 
   if (state.status === "offline") {
@@ -93,7 +98,11 @@ export default function SearchResults({
   }
 
   if (state.results.length === 0) {
-    return <p className="px-2 py-2 text-sm text-gray-500">No matches.</p>;
+    return (
+      <p className="px-2 py-2 text-sm text-gray-500">
+        Nothing in your notes matches &quot;{query}&quot;.
+      </p>
+    );
   }
 
   return (

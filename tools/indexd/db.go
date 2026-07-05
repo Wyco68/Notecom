@@ -264,7 +264,13 @@ type hit struct {
 
 // ftsQuery turns free text into a safe FTS5 MATCH expression: each word
 // double-quoted (so FTS operators in user input can't break the query),
-// OR-joined, ranked by bm25.
+// AND-joined (FTS5's default for space-separated barewords) — every word
+// must appear in the chunk. This is deliberately strict: an OR match lets
+// a single shared filler word ("how", "to") pull in dozens of unrelated
+// chunks once the query has more than a couple of words, since the
+// candidate cap is reached by sheer volume rather than relevance. Recall
+// for paraphrased/loosely-worded questions comes from the vector leg
+// (embeddings), not from loosening this to OR.
 func ftsQuery(q string) string {
 	fields := strings.FieldsFunc(q, func(r rune) bool {
 		return !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9')
@@ -273,11 +279,20 @@ func ftsQuery(q string) string {
 	for _, f := range fields {
 		terms = append(terms, `"`+f+`"`)
 	}
-	return strings.Join(terms, " OR ")
+	return strings.Join(terms, " ")
 }
 
 func (d *database) keywordSearch(q, folder, kind string, limit int) ([]hit, error) {
-	match := ftsQuery(q)
+	return d.keywordSearchDoc(q, folder, kind, "", limit)
+}
+
+// keywordSearchDoc additionally narrows to one document id when docID is
+// non-empty — used by chat's current-document-first retrieval.
+func (d *database) keywordSearchDoc(q, folder, kind, docID string, limit int) ([]hit, error) {
+	return d.ftsMatch(ftsQuery(q), folder, kind, docID, limit)
+}
+
+func (d *database) ftsMatch(match, folder, kind, docID string, limit int) ([]hit, error) {
 	if match == "" {
 		return nil, nil
 	}
@@ -289,8 +304,9 @@ func (d *database) keywordSearch(q, folder, kind string, limit int) ([]hit, erro
 		  WHERE chunks_fts MATCH ?
 		    AND (? = '' OR dc.folder = ?)
 		    AND (? = '' OR dc.kind = ?)
+		    AND (? = '' OR dc.id = ?)
 		  ORDER BY rank LIMIT ?`,
-		match, folder, folder, kind, kind, limit)
+		match, folder, folder, kind, kind, docID, docID, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -309,13 +325,18 @@ func (d *database) keywordSearch(q, folder, kind string, limit int) ([]hit, erro
 // vectorSearch brute-forces cosine over stored embeddings. qv must be
 // normalized.
 func (d *database) vectorSearch(qv []float32, folder, kind string, limit int) ([]hit, error) {
+	return d.vectorSearchDoc(qv, folder, kind, "", limit)
+}
+
+func (d *database) vectorSearchDoc(qv []float32, folder, kind, docID string, limit int) ([]hit, error) {
 	rows, err := d.sql.Query(
 		`SELECT c.chunk_id, c.embedding
 		   FROM chunks c JOIN documents dc ON dc.doc_id = c.doc_id
 		  WHERE c.embedding IS NOT NULL
 		    AND (? = '' OR dc.folder = ?)
-		    AND (? = '' OR dc.kind = ?)`,
-		folder, folder, kind, kind)
+		    AND (? = '' OR dc.kind = ?)
+		    AND (? = '' OR dc.id = ?)`,
+		folder, folder, kind, kind, docID, docID)
 	if err != nil {
 		return nil, err
 	}

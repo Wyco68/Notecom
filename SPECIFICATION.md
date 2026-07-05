@@ -28,8 +28,20 @@ business logic and isn't a third layer in the sense below.
 - Rendering lessons (HTML parsed into React via `HtmlRenderer`)
 - Mermaid diagram rendering, syntax highlighting
 
-The Next.js app **never** generates lesson content. It **never** calls Claude.
-It **never** contains AI-generation logic.
+The Next.js app **contains no generation logic of its own**. Two narrow,
+deliberate delegations exist (added 2026-07):
+
+- **Ask My Notes** — a chat panel proxied to indexd's `/chat`, which answers
+  from retrieved chunks via a *local Ollama model*. No Claude involved, no
+  data leaves the machine, context is capped at a handful of sections.
+- **Generate from file** — an upload modal that spawns the *local Claude
+  Code CLI* headlessly (`lib/generate/runner.ts`) to run the same `/lect` /
+  `/quiz` commands used in a terminal, on the user's existing subscription.
+  The app supplies the file path and shows the log; every generation rule
+  still lives in the command files, not the app.
+
+The app still never calls the Anthropic API directly, stores no API key,
+and never writes vault content itself.
 
 ### 2.2 Go helper (`vaultd`) — filesystem operations only
 
@@ -155,7 +167,9 @@ Folder Name
 [Create]
 ```
 
-There is no Upload button. There is no Generate button. There is no auth UI.
+There is no auth UI. The header has a Generate button (upload a lecture
+file → local Claude Code CLI runs `/lect` or `/quiz`) and an Ask My Notes
+chat toggle (local Ollama over retrieved sections) — see §2.1.
 
 ---
 
@@ -219,7 +233,8 @@ full endpoint list.
 | Notes storage | `.html` + `index.json` under `vault/` | Source of truth; gitignored |
 | Desktop shell | Tauri (Rust) | Native window, startup orchestration, splash screen, packaging |
 
-No AI SDK. No authentication. No upload handling. No streaming.
+No AI SDK, no Anthropic API key. Chat = Ollama via indexd; generation =
+local Claude Code CLI subprocess. No authentication.
 
 ---
 
@@ -272,4 +287,5 @@ Writing a note happens separately, via Claude Code in a terminal, using the
 - No deployment/hosting beyond local dev.
 - No multi-tenancy.
 - No user authentication of any kind.
-- No lesson generation inside the application.
+- No generation *logic* inside the application — the app only delegates to
+  the local Claude Code CLI (lessons/quizzes) or local Ollama (chat).

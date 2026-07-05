@@ -10,6 +10,22 @@ import (
 
 const rrfK = 60 // standard reciprocal-rank-fusion constant
 
+// vectorFloor drops semantic "matches" that are only the least-dissimilar
+// vectors in the corpus, not an actual match — cosine similarity is a
+// continuous space, so a brute-force top-k always returns *something*,
+// even for a query about nothing in the vault. Below this, a hit is noise.
+const vectorFloor = 0.55
+
+func filterFloor(hits []hit, floor float64) []hit {
+	out := hits[:0]
+	for _, h := range hits {
+		if h.Score >= floor {
+			out = append(out, h)
+		}
+	}
+	return out
+}
+
 // --- GET /search?q=&folder=&kind=&limit=&html=1 ---
 //
 // Hybrid retrieval: FTS5 keyword ranks and vector cosine ranks are merged
@@ -51,6 +67,7 @@ func (s *server) handleSearch(w http.ResponseWriter, r *http.Request) {
 				writeErr(w, http.StatusInternalServerError, err.Error())
 				return
 			}
+			vec = filterFloor(vec, vectorFloor)
 			mode = "hybrid"
 		} else {
 			log.Printf("search: embed query failed, keyword-only: %v", err)

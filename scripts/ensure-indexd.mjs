@@ -64,6 +64,10 @@ export async function ensureIndexd() {
   child.unref();
 
   const up = await waitUntilUp(5000);
+  // Destroy the pipes or this script never exits (they hold the event
+  // loop open even after unref) — same fix as ensure-vaultd.mjs.
+  child.stdout.destroy();
+  child.stderr.destroy();
   if (!up) {
     const detail = output.trim();
     const hint = /address already in use|bind:/i.test(detail)

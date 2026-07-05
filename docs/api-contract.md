@@ -21,6 +21,9 @@ Loaded by `/feat` only. Source of truth is the route files themselves
 | `/api/assignment/[folder]/[id]` | POST | `{ newTitle }` | `{ ok }` (rename) |
 | `/api/search` | GET | `?q&folder&kind&limit` | `{ mode: "hybrid"\|"keyword", results: [chunk hits] }` — proxies indexd |
 | `/api/related/[folder]/[id]` | GET | `?kind` | `{ results: [{folder,id,kind,title,score}] }` — proxies indexd |
+| `/api/chat` | POST | `{ message, history }` | SSE passthrough of indexd `/chat` (sources → deltas → done) |
+| `/api/generate` | POST | multipart `file, folder, kind(lect\|quiz)` | `{ jobId }` — saves upload, spawns local Claude Code CLI |
+| `/api/generate/[id]` | GET | — | SSE job log (`line` events, then `end` with status) |
 
 Error shape is always `{ error: string }` with a non-2xx status.
 
@@ -77,6 +80,7 @@ it directly over HTTP for retrieval. See
 | `/search` | GET | `?q&folder&kind&limit&html=1` | hybrid FTS5+vector, RRF-merged; `html=1` includes chunk HTML |
 | `/related/{folder}/{id}` | GET | `?kind&limit` | related documents by embedding centroid (keyword fallback) |
 | `/topics` | GET | `?q&limit` | matching (topic, document) pairs for a query |
+| `/chat` | POST | `{ message, history }` | grounded chat: retrieves top chunks, streams a local Ollama chat model (`CHAT_MODEL`, default `llama3.2`) as SSE; 503 without Ollama |
 | `/status` | GET | — | `{ documents, chunks, embedded, ollama, model, scanning, lastScan }` |
 
 `kind` is `lesson` (default), `quiz`, or `assignment`. Search result chunk

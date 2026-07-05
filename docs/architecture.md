@@ -19,9 +19,12 @@ Don't move logic across the layers when fixing or extending the app:
   — that's Next.js's job (`lib/vault/slug.ts`).
 - Don't add filesystem writes to a React component or API route directly
   — always through `lib/vault/helper.ts` → `vaultd`.
-- Don't add any AI generation, Claude API calls, or upload-and-generate
-  logic to the Next.js app — content creation belongs to `/lect`
-  (Claude Code), not to the web app.
+- Don't add any AI generation logic or Anthropic API calls to the Next.js
+  app. Two delegations are the sanctioned exception (2026-07): the chat
+  proxy (`/api/chat` → indexd `/chat` → local Ollama) and the generation
+  job runner (`lib/generate/runner.ts` spawns the local Claude Code CLI to
+  run `/lect`/`/quiz`). The app orchestrates; it never implements
+  generation, never embeds, never stores an API key.
 - Don't add business logic to `desktop/` (the Tauri shell). It only
   starts/stops vaultd and Next, shows the splash/main window, and cleans up
   on exit — it has no opinion on vault content, naming, or UI.
