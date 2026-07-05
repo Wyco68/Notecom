@@ -24,14 +24,18 @@ function run(cmd, args, opts = {}) {
   }
 }
 
-function buildVaultdSidecar(triple) {
-  const vaultdDir = path.join(ROOT, "tools", "vaultd");
-  const exeName = process.platform === "win32" ? "vaultd.exe" : "vaultd";
-  run("go", ["build", "-o", exeName, "."], { cwd: vaultdDir });
+// Build one of the Go services (tools/<name>) and copy it to the Tauri
+// sidecar path bin/<name>-<triple>[.exe]. vaultd = filesystem helper,
+// indexd = search/RAG service; both are pure Go, so a host `go build` is
+// all each platform's runner needs.
+function buildGoSidecar(name, triple) {
+  const dir = path.join(ROOT, "tools", name);
+  const exeName = process.platform === "win32" ? `${name}.exe` : name;
+  run("go", ["build", "-o", exeName, "."], { cwd: dir });
 
   mkdirSync(BIN_DIR, { recursive: true });
   const suffix = process.platform === "win32" ? ".exe" : "";
-  copyFileSync(path.join(vaultdDir, exeName), path.join(BIN_DIR, `vaultd-${triple}${suffix}`));
+  copyFileSync(path.join(dir, exeName), path.join(BIN_DIR, `${name}-${triple}${suffix}`));
 }
 
 function buildNextStandalone() {
@@ -53,7 +57,8 @@ function copyNodeSidecar(triple) {
 }
 
 const triple = targetTriple();
-buildVaultdSidecar(triple);
+buildGoSidecar("vaultd", triple);
+buildGoSidecar("indexd", triple);
 buildNextStandalone();
 copyNodeSidecar(triple);
 console.log(`desktop resources prepared for ${triple}`);

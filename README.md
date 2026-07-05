@@ -3,9 +3,18 @@
 Turns slides/PDFs into plain-language study notes, readable in a clean
 desktop app. Works for any subject.
 
-## Setup (one time)
+## Install (no build tools)
 
-Works on Windows, macOS, and Linux (build on the machine you'll run it on).
+Download the installer for your OS from the **Releases** page and open it —
+Windows, macOS, and Linux are all published there. Full step-by-step,
+including the optional AI setup, is in **[docs/INSTALL.md](docs/INSTALL.md)**.
+
+Your notes are stored in a normal per-user folder (survives re-installs), so
+the same installer works on any machine.
+
+### Build it yourself instead (one time)
+
+If you'd rather build from source on your own machine:
 
 ```bash
 npm run install:desktop
@@ -14,6 +23,9 @@ npm run install:desktop
 When it finishes, the `installation/` folder opens with the installer for
 your OS inside — open that file and click through it. **Notes** then lives
 in your Start Menu (Windows), Applications (macOS), or app menu (Linux).
+
+Maintainers: pushing a `v*` git tag builds all three OSes' installers in CI
+and attaches them to a GitHub Release — see [docs/INSTALL.md](docs/INSTALL.md).
 
 ## Write a note
 

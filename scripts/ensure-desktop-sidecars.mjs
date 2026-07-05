@@ -17,7 +17,7 @@ const suffix = process.platform === "win32" ? ".exe" : "";
 const triple = targetTriple();
 
 mkdirSync(BIN_DIR, { recursive: true });
-for (const name of ["vaultd", "node"]) {
+for (const name of ["vaultd", "indexd", "node"]) {
   const file = path.join(BIN_DIR, `${name}-${triple}${suffix}`);
   if (!existsSync(file)) writeFileSync(file, "");
 }

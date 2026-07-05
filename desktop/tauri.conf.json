@@ -26,6 +26,6 @@
       "icons/icon.ico"
     ],
     "resources": ["resources/frontend/**/*"],
-    "externalBin": ["bin/vaultd", "bin/node"]
+    "externalBin": ["bin/vaultd", "bin/indexd", "bin/node"]
   }
 }

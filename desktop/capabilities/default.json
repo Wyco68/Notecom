@@ -10,6 +10,7 @@
       "identifier": "shell:allow-execute",
       "allow": [
         { "name": "vaultd", "sidecar": true },
+        { "name": "indexd", "sidecar": true },
         { "name": "node", "sidecar": true, "args": ["server.js"] }
       ]
     }

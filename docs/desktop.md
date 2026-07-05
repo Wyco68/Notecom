@@ -27,13 +27,21 @@ helper) are unchanged and stay at the repo root — see
 On launch: create a splash window (`assets/splash.html`) immediately, then
 on a background thread:
 
-1. Pick two free ports (bind `127.0.0.1:0`, read back the assigned port).
+1. Pick three free ports (bind `127.0.0.1:0`, read back the assigned port) —
+   one each for vaultd, indexd, and the Next server.
 2. Start vaultd, poll its port until it accepts connections.
-3. Start the Next server, poll its port the same way.
-4. Emit `stage-update` events to the splash window at each step (it listens
+3. Start indexd (search/RAG). It is *not* waited on — the reader works
+   without it and it indexes in the background while the UI loads.
+4. Start the Next server (given `VAULTD_URL` + `INDEXD_URL`), poll its port.
+5. Emit `stage-update` events to the splash window at each step (it listens
    via `window.__TAURI__.event.listen`, enabled by `app.withGlobalTauri`).
-5. Create the main window pointed at `http://127.0.0.1:<port>/vault`, close
+6. Create the main window pointed at `http://127.0.0.1:<port>/vault`, close
    the splash window.
+
+Three sidecars in the release build (`bundle.externalBin`): `vaultd` (files),
+`indexd` (search/RAG), and `node` (runs the Next standalone `server.js`).
+indexd's Ollama dependency is optional — without it, search falls back to
+keyword mode and chat is unavailable, both handled in the app.
 
 The webview navigating to a `127.0.0.1` URL is not "opening localhost in a
 browser" — it's the app's own native window loading the app's own local
@@ -63,8 +71,16 @@ would be more confusing than two complete ones:
 | | Dev (`tauri dev`) | Release (`tauri build`) |
 |---|---|---|
 | vaultd | built from `tools/vaultd/` if missing, run directly | bundled sidecar, resolved via `app.shell().sidecar("vaultd")` |
+| indexd | built from `tools/indexd/` if missing, run directly | bundled sidecar, `app.shell().sidecar("indexd")` |
 | Next | `npm run dev -- -p <port>` against the repo (`cmd /C npm` on Windows, `npm` directly elsewhere) | bundled Node sidecar running the standalone `server.js` |
-| Vault location | repo's `vault/` (gitignored, unchanged) | repo's `vault/` (same checkout, resolved from `CARGO_MANIFEST_DIR` baked in at compile time) — same vault `/lect` writes lessons into, single-machine personal tool |
+| Vault location | repo's `vault/` (gitignored, where `/lect` writes lessons) | **per-user OS data dir** via `app.path().app_data_dir()` → `<data>/com.universitynotes.notes/vault` (`%APPDATA%` / `~/Library/Application Support` / `~/.local/share`) — so an installed copy works on any machine, not just the build machine's checkout |
+
+The release vault moved to a per-user data dir so the installers are
+distributable (an installed app on someone else's computer has no
+`.../university-notes/vault`). Dev still uses the repo `vault/` because a dev
+build always runs from its own source tree and shares the vault `/lect`
+writes into. Both Go services just honor `VAULT_ROOT`, so lib.rs sets it and
+neither service has a per-OS path branch.
 
 Sidecars are referenced by **basename only** (`sidecar("vaultd")`, not
 `sidecar("bin/vaultd")`) — Tauri flattens `bundle.externalBin` entries to
@@ -83,11 +99,12 @@ subdirectory they were built into.
   production build on every run.
 - **`prepare-desktop-resources.mjs`** (`build.beforeBuildCommand`) — the
   real artifact build for `tauri build`:
-  1. `go build` vaultd, copy to `desktop/bin/vaultd-<target-triple>.exe`.
+  1. `go build` vaultd **and** indexd (shared `buildGoSidecar` helper), copy
+     each to `desktop/bin/<name>-<target-triple>[.exe]`.
   2. `next build` (standalone output), assemble `desktop/resources/frontend/`
      from `.next/standalone` + `.next/static` + `public/`.
   3. Copy the local Node executable to `desktop/bin/node-<target-triple>`
-     (`.exe` on Windows) as the second sidecar — `next build --output
+     (`.exe` on Windows) as the Node sidecar — `next build --output
      standalone` still needs a Node runtime to execute `server.js`; there's
      no way to make Next itself a zero-runtime native binary.
 - **`desktop-target-triple.mjs`** — the `<target-triple>` lookup shared by
@@ -164,6 +181,29 @@ build, faster in dev since `next dev` is already warm after the first run.
 npm run dev:desktop     # development: native window, hot reload
 npm run build:desktop   # production: installer under desktop/target/release/bundle
 ```
+
+## Releasing (CI)
+
+Installers for all three OSes are produced by GitHub Actions, not by hand —
+Tauri can't cross-compile, so each installer is built on its own native
+runner.
+
+- **[.github/workflows/release.yml](../.github/workflows/release.yml)** —
+  triggered by pushing a `v*` tag (or manual `workflow_dispatch`). A matrix
+  of `windows-latest`, `macos-latest` (arm64), `macos-13` (Intel), and
+  `ubuntu-22.04` each runs `tauri-action`, which fires `tauri build` (→
+  `prepare-desktop-resources.mjs` builds vaultd + indexd + the Next bundle),
+  then uploads that platform's installer to a **draft** GitHub Release named
+  after the tag. The per-arch mac split matches the single-arch sidecar model
+  (`targetTriple()` resolves to the runner's native arch; Go/Node sidecars are
+  host-arch), so no fat/universal binaries are needed.
+- **[.github/workflows/ci.yml](../.github/workflows/ci.yml)** — every push/PR
+  to `main` runs a fast check (tsc + `go build` for both services). It does
+  **not** build installers; that's release.yml's job.
+
+Maintainer's cut-a-release steps and the end-user download/install guide live
+in [INSTALL.md](INSTALL.md). Docker is intentionally not shipped — a GUI
+desktop app doesn't containerize cleanly (INSTALL.md explains why).
 
 ## Verifying a change here
 
