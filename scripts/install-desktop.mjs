@@ -86,6 +86,6 @@ for (const src of artifacts) {
 
 console.log(`\nInstaller ready in installation/ :`);
 for (const file of copied) console.log(`  ${path.relative(ROOT, file)}`);
-console.log(`\nOpen that file to install Notes.\n`);
+console.log(`\nOpen that file to install LectureLens.\n`);
 
 openFolder(OUT_DIR);

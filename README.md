@@ -1,70 +1,58 @@
-# Notes
+# LectureLens
 
 Turns slides/PDFs into plain-language study notes, readable in a clean
-desktop app. Works for any subject.
+desktop app. Works for any subject. Everything — the app, the note-writing
+commands, the templates, and your notes — lives in this one repo.
 
-New to Claude Code, or setting this up to actively write notes (not just
-read someone else's)? Start with
-**[docs/GETTING_STARTED.md](docs/GETTING_STARTED.md)** — it covers
-installing Claude Code, the file-conversion tool, and writing your first
-note end to end.
-
-## Install (no build tools)
-
-Download the installer for your OS from the **Releases** page and open it —
-Windows, macOS, and Linux are all published there. Full step-by-step,
-including the optional AI setup, is in **[docs/INSTALL.md](docs/INSTALL.md)**.
-
-Your notes are stored in a normal per-user folder (survives re-installs), so
-the same installer works on any machine.
-
-### Build it yourself instead (one time)
-
-If you'd rather build from source on your own machine:
+## Setup
 
 ```bash
-npm run install:desktop
+git clone <this-repo-url>
+cd university-notes
+npm install
+npm run setup
 ```
 
-When it finishes, the `installation/` folder opens with the installer for
-your OS inside — open that file and click through it. **Notes** then lives
-in your Start Menu (Windows), Applications (macOS), or app menu (Linux).
+Then install Claude Code and log in once:
 
-Maintainers: pushing a `v*` git tag builds all three OSes' installers in CI
-and attaches them to a GitHub Release — see [docs/INSTALL.md](docs/INSTALL.md).
+```bash
+npm install -g @anthropic-ai/claude-code
+claude
+```
+
+Full walkthrough (tools, first note, optional AI extras):
+**[docs/GETTING_STARTED.md](docs/GETTING_STARTED.md)**.
 
 ## Write a note
 
-1. Open this repo in Claude Desktop or the Claude VS Code extension.
+1. Open `claude` in this folder (or this repo in Claude Desktop / the VS
+   Code extension).
 2. Attach your slide/PDF.
 3. Type:
    ```
    /lect Wireless Network
    ```
-   (folder name only, or `folder/filename` to set the title yourself)
-4. Claude writes the note, saves it, opens the reader.
+4. Claude writes the note and saves it to `vault/`.
 
 ## Read your notes
 
-Open **Notes** from your Start Menu / Applications / app menu. No terminal,
-no browser.
+```bash
+npm run dev            # browser: http://localhost:3000/vault
+npm run dev:desktop    # native window (needs Rust — docs/desktop.md)
+```
 
-**Actively writing notes?** Use `npm run dev:desktop` (or `npm run dev` in a
-browser) instead of the installed app while you work — it reads the same
-`vault/` folder Claude Code just wrote into. The installed app keeps its own
-separate copy (so a downloaded installer works without a checkout at all)
-and only picks up your checkout's notes once, the first time it ever runs on
-your machine — see [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md#6-see-it-in-the-app).
+Prefer a Start-Menu app with no terminal? `npm run install:desktop` builds a
+native installer for this machine — it reads the same `vault/` as everything
+else.
 
 ## Make a quiz
 
-1. Paste a Markdown file of questions, or just paste one question, e.g.:
-   ```
-   /quiz Wireless Network — what's the difference between TDMA and FDMA?
-   ```
-2. Claude reasons through it, writes the answer, saves it next to your
-   notes. Say `/quiz` again with no folder/title to keep adding questions
-   to the same quiz.
+```
+/quiz Wireless Network — what's the difference between TDMA and FDMA?
+```
+
+Claude reasons through it, saves the answer next to your notes. Repeat
+`/quiz` without a folder to keep appending to the same quiz.
 
 ## Change the app itself
 
@@ -79,12 +67,12 @@ Type a request starting with `/feat`, e.g.:
 ## Updating after pulling changes
 
 ```bash
-npm run install:desktop
+npm run setup          # rebuilds services if needed
+npm run install:desktop   # only if you use the installed desktop app
 ```
-
-Re-installs in place.
 
 ---
 
 Details: [SPECIFICATION.md](SPECIFICATION.md) (architecture),
-[docs/desktop.md](docs/desktop.md) (desktop app internals).
+[docs/desktop.md](docs/desktop.md) (desktop app internals),
+[docs/GETTING_STARTED.md](docs/GETTING_STARTED.md) (full setup).

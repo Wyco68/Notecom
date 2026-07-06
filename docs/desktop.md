@@ -72,27 +72,16 @@ would be more confusing than two complete ones:
 |---|---|---|
 | vaultd | built from `tools/vaultd/` if missing, run directly | bundled sidecar, resolved via `app.shell().sidecar("vaultd")` |
 | indexd | built from `tools/indexd/` if missing, run directly | bundled sidecar, `app.shell().sidecar("indexd")` |
-| Next | `npm run dev -- -p <port>` against the repo (`cmd /C npm` on Windows, `npm` directly elsewhere) | bundled Node sidecar running the standalone `server.js` |
-| Vault location | repo's `vault/` (`CARGO_MANIFEST_DIR`'s parent) — where `/lect` writes | **per-user OS data dir**, `app.path().app_data_dir()/vault` (`%APPDATA%` / `~/Library/Application Support` / `~/.local/share`) |
+| Next | `npm run dev -- -p <port>` against the repo (`cmd /C npm` on Windows, `npm` directly elsewhere) | bundled Node sidecar running the standalone `server.js`, given `REPO_ROOT` so the in-app Generate button can run the claude CLI from the checkout |
+| Vault location | repo's `vault/` (`CARGO_MANIFEST_DIR`'s parent) | **same** — the checkout's `vault/`, baked in at compile time |
 
-They deliberately differ, because "dev" and "release" answer different
-questions. Dev *is* the checkout — content only ever gets created by running
-`/lect`/`/quiz`/`/assignment` against this repo, so dev always reads the
-checkout's own `vault/`. Release is what a downloaded installer runs as on
-someone else's machine, which has no checkout at all — it needs its own
-writable, per-user location that exists regardless of where (or whether) the
-source ever got cloned.
-
-**First-run seed, local builds only:** if the release vault is empty *and*
-`CARGO_MANIFEST_DIR` (baked in at compile time) resolves to a real, non-empty
-checkout `vault/`, `vault_dir()` in [lib.rs](../desktop/src/lib.rs) copies it
-in once. This exists purely so testing your own `npm run build:desktop`
-locally doesn't look emptied out — you have real content in the checkout,
-and the seed makes the two match. It's a no-op for anyone else: an installer
-built by CI has `CARGO_MANIFEST_DIR` pointing at the GitHub Actions runner's
-ephemeral checkout, which never exists on a downloader's disk, so their app
-just starts with a genuinely empty vault, exactly as it should for someone
-who hasn't run `/lect` yet — see
+One vault, deliberately: this project is checkout-centric. Notes can only be
+created through this repo's command files (`/lect`, `/quiz`, `/assignment`
+in `.claude/commands/`), so every user has the checkout, and the packaged
+app is just a nicer window onto it. A per-user OS data-dir vault was tried
+and removed — it split content between two locations for zero benefit (see
+git history). The installers this produces are therefore **for the machine
+that built them**; distribution is "clone the repo and set up", per
 [GETTING_STARTED.md](GETTING_STARTED.md).
 
 Sidecars are referenced by **basename only** (`sidecar("vaultd")`, not
@@ -164,16 +153,16 @@ at the repo root and opens that folder. `bundle.targets: "all"` in
 formats:
 
 ```
-installation/Notes_<version>_x64-setup.exe   Windows (NSIS)  -- run this
-installation/Notes_<version>_x64_en-US.msi    Windows (MSI)   -- or this
-installation/Notes_<version>_x64.dmg          macOS
-installation/Notes_<version>_amd64.AppImage    Linux (portable)
-installation/Notes_<version>_amd64.deb         Linux (Debian/Ubuntu)
+installation/LectureLens_<version>_x64-setup.exe   Windows (NSIS)  -- run this
+installation/LectureLens_<version>_x64_en-US.msi    Windows (MSI)   -- or this
+installation/LectureLens_<version>_x64.dmg          macOS
+installation/LectureLens_<version>_amd64.AppImage    Linux (portable)
+installation/LectureLens_<version>_amd64.deb         Linux (Debian/Ubuntu)
 ```
 
 `installation/` is emptied on each build so it only ever holds the latest
 artifacts (it's gitignored — build output, not source). Running the
-installer registers **Notes** with the OS like any native app (Start Menu
+installer registers **LectureLens** with the OS like any native app (Start Menu
 on Windows, Applications on macOS, the app menu on Linux); after that it's
 just launching the app, no terminal. Re-running `npm run build:desktop` +
 the new installer after a source change replaces the install in place.
@@ -195,28 +184,16 @@ npm run dev:desktop     # development: native window, hot reload
 npm run build:desktop   # production: installer under desktop/target/release/bundle
 ```
 
-## Releasing (CI)
+## CI
 
-Installers for all three OSes are produced by GitHub Actions, not by hand —
-Tauri can't cross-compile, so each installer is built on its own native
-runner.
-
-- **[.github/workflows/release.yml](../.github/workflows/release.yml)** —
-  triggered by pushing a `v*` tag (or manual `workflow_dispatch`). A matrix
-  of `windows-latest`, `macos-latest` (arm64), `macos-13` (Intel), and
-  `ubuntu-22.04` each runs `tauri-action`, which fires `tauri build` (→
-  `prepare-desktop-resources.mjs` builds vaultd + indexd + the Next bundle),
-  then uploads that platform's installer to a **draft** GitHub Release named
-  after the tag. The per-arch mac split matches the single-arch sidecar model
-  (`targetTriple()` resolves to the runner's native arch; Go/Node sidecars are
-  host-arch), so no fat/universal binaries are needed.
-- **[.github/workflows/ci.yml](../.github/workflows/ci.yml)** — every push/PR
-  to `main` runs a fast check (tsc + `go build` for both services). It does
-  **not** build installers; that's release.yml's job.
-
-Maintainer's cut-a-release steps and the end-user download/install guide live
-in [INSTALL.md](INSTALL.md). Docker is intentionally not shipped — a GUI
-desktop app doesn't containerize cleanly (INSTALL.md explains why).
+**[.github/workflows/ci.yml](../.github/workflows/ci.yml)** — every push/PR
+to `main` runs a fast check (tsc + `go build` for both services), so a
+change that breaks the build is caught early. There is deliberately **no**
+installer-publishing pipeline: installers bake in the building checkout's
+path (see the vault table above), so a CI-built installer would point at a
+runner's ephemeral checkout and be useless. Users clone and set up instead
+([GETTING_STARTED.md](GETTING_STARTED.md)); each machine builds its own
+installer with `npm run install:desktop` if wanted.
 
 ## Verifying a change here
 

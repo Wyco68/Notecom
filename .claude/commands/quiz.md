@@ -103,7 +103,7 @@ Once it passes: update `index.json`, then write
 `vault/.quiz-state.json` as `{"folder": "<folder-slug>", "id": "<id>"}` so
 the next `/quiz` call with no folder/file named knows to append here. That
 is the final step — do **not** open a browser or start the web app. The
-Notes app picks up the new quiz on its own: it refreshes when its window
+LectureLens app picks up the new quiz on its own: it refreshes when its window
 regains focus, and there's a refresh button next to the theme toggle.
 
 ## Restrictions (strict)

@@ -84,5 +84,5 @@ end. To append progress:
 3. `POST /assignment` again with the **same** `id`/`slug`/`title`/`seq` and
    the updated `html`.
 
-The Notes app picks up changes on its own (it refreshes on window focus and
+The LectureLens app picks up changes on its own (it refreshes on window focus and
 has a manual refresh button) — do not open a browser or start the web app.

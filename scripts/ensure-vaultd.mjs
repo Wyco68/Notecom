@@ -1,8 +1,7 @@
 // Makes sure vaultd is up. vaultd is a separate process from Next.js (see
 // docs/architecture.md) and doesn't restart on its own — without this,
 // every API route silently 502s until someone notices and starts it by
-// hand. Exported so other scripts (open-app.mjs) can reuse the same check
-// instead of duplicating it.
+// hand. Runs as `predev`/`prestart` alongside ensure-indexd.mjs.
 
 import { spawn } from "child_process";
 import { existsSync } from "fs";
@@ -61,7 +60,7 @@ export async function ensureVaultd() {
     cwd: process.cwd(),
     detached: true,
     // windowsHide stops a console window from flashing up when this is
-    // launched from a GUI context (e.g. /quiz -> open-app.mjs).
+    // launched from a GUI context.
     windowsHide: true,
     stdio: ["ignore", "pipe", "pipe"],
   });

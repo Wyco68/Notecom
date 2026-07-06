@@ -1,128 +1,109 @@
-# Getting started with Claude Code (for new contributors)
+# Getting started
 
-This project's notes are written by **Claude Code**, not by the app itself
-(see [SPECIFICATION.md](../SPECIFICATION.md)). This guide sets up Claude
-Code from nothing and walks through generating your first note. It assumes
-no prior Claude Code experience.
+Everything lives in this repo: the app, the `/lect` `/quiz` `/assignment`
+commands, the teaching templates, and your notes (`vault/`). Setup is:
+clone, install, run one setup command, log in to Claude once.
 
-If you only want to *read* notes someone else already generated, you don't
-need any of this — see [INSTALL.md](INSTALL.md) instead.
-
-## 1. Install prerequisites
+## 1. Install the base tools
 
 | Tool | Why | Install |
 |---|---|---|
-| **Node.js 20+** | runs the web app | [nodejs.org](https://nodejs.org) |
+| **Node.js 20+** | runs the app | [nodejs.org](https://nodejs.org) |
 | **Go 1.21+** | builds the two backend services | [go.dev/dl](https://go.dev/dl) |
-| **Python 3 + pip** | runs the file-conversion tool `/lect` needs | [python.org](https://python.org) (usually already on macOS/Linux) |
+| **Python 3 + pip** | file conversion for `/lect` | [python.org](https://python.org) (often preinstalled on macOS/Linux) |
 | **Git** | clone the repo | [git-scm.com](https://git-scm.com) |
 
-Rust and the Tauri build tools are only needed if you're building the
-desktop *installer* yourself — see [desktop.md](desktop.md). You don't need
-them just to write notes.
-
-## 2. Install Claude Code
-
-```bash
-npm install -g @anthropic-ai/claude-code
-```
-
-Then sign in once:
-
-```bash
-claude
-```
-
-This opens a browser to log in with your Claude account (Pro, Max, or a
-Console API key all work). Once it says you're logged in, close it — you
-won't need the interactive `claude` command directly, the project's `/lect`
-etc. commands drive it for you.
-
-## 3. Install the file-conversion tool
-
-`/lect` reads slides/PDFs/images by converting them to Markdown first, via a
-small tool called `markitdown-mcp`:
-
-```bash
-pip install markitdown-mcp
-```
-
-The project's [.mcp.json](../.mcp.json) already tells Claude Code to use it
-— nothing else to configure.
-
-## 4. Clone the project and install dependencies
+## 2. Clone and set up
 
 ```bash
 git clone <this-repo-url>
 cd university-notes
 npm install
+npm run setup
 ```
 
-This is now **your** checkout — your notes will live in `vault/` inside it,
-and it's the one place Claude Code and the app both look.
+`npm run setup` checks every tool, installs the file-conversion helper
+(`markitdown-mcp`), builds both backend services, and prints exactly what's
+left to do by hand. Re-run it any time — it's a checklist, not a one-shot.
 
-## 5. Write your first note
+## 3. Install and log in to Claude Code (once)
 
-Open a terminal in the project folder and start Claude Code:
+```bash
+npm install -g @anthropic-ai/claude-code
+claude
+```
+
+`claude` opens a browser to sign in with your Claude account (Pro/Max
+subscription or Console API key). After that, this project's commands drive
+it for you.
+
+## 4. Write your first note
+
+From the project folder:
 
 ```bash
 claude
 ```
 
-Attach a slide deck or PDF to the conversation (drag the file in, or use
-your editor's attach button), then type:
+Attach a slide deck or PDF (drag it into the conversation), then type:
 
 ```
 /lect Wireless Network
 ```
 
-("Wireless Network" is the subject folder — reuse it for more lessons on the
-same subject, or use a new name to start a new one.) Claude converts the
-file, writes a plain-language lesson, and saves it under `vault/`.
+("Wireless Network" is the subject folder — reuse the same name to add more
+lessons to that subject.) Claude converts the file, writes a plain-language
+lesson, and saves it under `vault/`.
 
-## 6. See it in the app
-
-While you're actively writing notes, run:
+## 5. Read your notes
 
 ```bash
-npm run dev:desktop
+npm run dev
 ```
 
-This opens the app pointed at your checkout's `vault/` — the exact folder
-`/lect` just wrote into — so new notes appear the moment you generate them.
-(`npm run dev` + a browser at `http://localhost:3000/vault` works the same
-way, without the native window.)
+Open `http://localhost:3000/vault`. Or, for a native desktop window instead
+of a browser tab:
 
-**Heads up about the installed app** (`npm run build:desktop` or a
-downloaded installer): it stores notes in a separate per-user folder, not
-your checkout's `vault/` (see [desktop.md](desktop.md) for why — installers
-need to work on machines with no checkout at all). It copies your checkout's
-notes in automatically **the first time** it runs on your machine, but after
-that the two folders are independent — new notes from `/lect` won't appear
-in the installed app until you rebuild/reinstall it. If you're actively
-generating notes, use `npm run dev:desktop` above as your daily driver; treat
-the installed app as the "finished, hand-it-to-someone" version.
+```bash
+npm run dev:desktop        # needs Rust — see docs/desktop.md
+```
 
-## 7. Optional: quizzes, assignments, chat, search
+Both read the same `vault/` folder `/lect` writes into — new notes show up
+as soon as they're generated (there's a refresh button next to the theme
+toggle). There is **one** vault: this checkout's. Every way of running the
+app uses it.
 
-- `/quiz <Subject>` — turn a question or a Markdown quiz file into a quiz
-  saved next to your lessons.
-- `/assignment` — clone and work through a university programming
-  assignment, with a permanent learning-journal note generated alongside it.
-- **Ask My Notes** (chat bubble, top-right of the reader) and **semantic
-  search** run entirely on your machine via [Ollama](https://ollama.com) —
-  see [INSTALL.md](INSTALL.md#4-optional-turn-on-the-ai-features) to turn
-  them on. Neither is required to read or write notes.
+## 6. Optional extras
+
+- **Ask My Notes chat + semantic search** — install
+  [Ollama](https://ollama.com), then:
+  ```bash
+  ollama pull llama3.2
+  ollama pull nomic-embed-text
+  ```
+  Chat and smarter search switch on automatically. Everything runs locally;
+  nothing leaves your machine. Without Ollama, keyword search still works
+  and the chat button tells you what's missing.
+- **`/quiz <Subject>`** — turn questions into a saved quiz.
+- **`/assignment`** — work through a university programming assignment with
+  a permanent learning journal saved next to your notes.
+- **Generate button in the app** — same as `/lect`/`/quiz`, but from an
+  upload dialog inside the reader. Uses your local Claude Code login.
+- **Installable desktop build** — `npm run install:desktop` produces a
+  native installer for *this machine* so you can launch LectureLens from the
+  Start Menu / Applications without a terminal. It still reads this
+  checkout's `vault/`. See [desktop.md](desktop.md).
 
 ## Troubleshooting
 
-- **`claude: command not found`** — re-open your terminal after installing
-  (PATH needs a refresh), or check `npm root -g` is on your PATH.
-- **"markitdown isn't connected"** message from `/lect` — `markitdown-mcp`
-  isn't installed or Claude Code needs a restart to pick up `.mcp.json`;
-  re-run `pip install markitdown-mcp` and start a fresh `claude` session.
-- **App shows no notes** — check you're looking in the right vault. Running
-  `npm run dev:desktop` or `npm run dev`? You're seeing the checkout's
-  `vault/` — confirm `/lect` actually wrote there (check the folder exists).
-  Running the *installed* app? It only gets your checkout's notes on its
-  first-ever launch on this machine — see step 6 above.
+- **`claude: command not found`** — reopen your terminal after the global
+  npm install, or check `npm root -g` is on PATH.
+- **`/lect` says markitdown isn't connected** — `pip install markitdown-mcp`
+  (or re-run `npm run setup`), then start a fresh `claude` session.
+- **App shows no notes** — confirm `vault/<Subject>/` folders exist in this
+  checkout; if you have several checkouts, make sure you're running the app
+  from the one `/lect` wrote into. All run modes read this checkout's
+  `vault/` — there is no second notes location.
+- **Search/chat offline message** — `npm run dev` starts both backend
+  services automatically; if one died, re-run `npm run dev` (or
+  `node scripts/ensure-vaultd.mjs` / `node scripts/ensure-indexd.mjs`).

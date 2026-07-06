@@ -68,7 +68,7 @@ fn finish_launch(app: &AppHandle, next_port: u16) {
     app.run_on_main_thread(move || {
         let parsed = url.parse().expect("invalid app url");
         WebviewWindowBuilder::new(&app_for_main, "main", WebviewUrl::External(parsed))
-            .title("Notes")
+            .title("LectureLens")
             .inner_size(1280.0, 800.0)
             .min_inner_size(960.0, 600.0)
             .build()
@@ -178,63 +178,29 @@ mod dev {
 }
 
 // Release: vaultd, indexd, and a bundled Node runtime are sidecars resolved
-// from the installed app's resources. The vault lives in the per-user OS
-// data dir (app_data_dir -> %APPDATA%/<id> on Windows, ~/Library/Application
-// Support/<id> on macOS, ~/.local/share/<id> on Linux) so an installed copy
-// works on a real stranger's machine, which has no repo checkout at all.
+// from the installed app's resources. The vault is the repo checkout's
+// vault/ — the same folder dev mode and Claude Code (/lect, /quiz,
+// /assignment) use. This app is checkout-centric by design: content can
+// only ever be created through the repo's command files, so every user has
+// the repo cloned, and the packaged app is just a nicer window onto that
+// same checkout. (CARGO_MANIFEST_DIR is baked at compile time — always
+// this checkout, because you build the app from it.)
 #[cfg(not(debug_assertions))]
 mod release {
     use super::*;
-    use std::path::{Path, PathBuf};
+    use std::path::PathBuf;
     use tauri_plugin_shell::ShellExt;
 
-    fn is_empty_dir(dir: &Path) -> bool {
-        std::fs::read_dir(dir)
-            .map(|mut it| it.next().is_none())
-            .unwrap_or(true)
+    fn repo_root() -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .expect("desktop/ has a parent directory")
+            .to_path_buf()
     }
 
-    fn copy_dir_all(src: &Path, dst: &Path) -> std::io::Result<()> {
-        std::fs::create_dir_all(dst)?;
-        for entry in std::fs::read_dir(src)? {
-            let entry = entry?;
-            let dst_path = dst.join(entry.file_name());
-            if entry.file_type()?.is_dir() {
-                copy_dir_all(&entry.path(), &dst_path)?;
-            } else {
-                std::fs::copy(entry.path(), &dst_path)?;
-            }
-        }
-        Ok(())
-    }
-
-    fn vault_dir(app: &AppHandle) -> PathBuf {
-        let dir = app
-            .path()
-            .app_data_dir()
-            .expect("no app data dir")
-            .join("vault");
+    fn vault_dir(_app: &AppHandle) -> PathBuf {
+        let dir = repo_root().join("vault");
         std::fs::create_dir_all(&dir).expect("failed to create vault dir");
-
-        // Convenience for testing a *locally* built release (`npm run
-        // build:desktop`) on the same machine that has the source checkout:
-        // if the fresh per-user vault is still empty and CARGO_MANIFEST_DIR
-        // (baked in at compile time) resolves to a real, non-empty checkout
-        // vault/, seed from it once so testing your own build doesn't look
-        // emptied out. For an installer built by CI and downloaded by an
-        // actual stranger, that baked path is the CI runner's ephemeral
-        // checkout and never exists on their disk — this silently does
-        // nothing and the vault starts empty, which is correct there.
-        if is_empty_dir(&dir) {
-            let checkout_vault = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-                .parent()
-                .expect("desktop/ has a parent directory")
-                .join("vault");
-            if checkout_vault.exists() && !is_empty_dir(&checkout_vault) {
-                let _ = copy_dir_all(&checkout_vault, &dir);
-            }
-        }
-
         dir
     }
 
@@ -279,6 +245,10 @@ mod release {
             .env("PORT", port.to_string())
             .env("VAULTD_URL", vaultd_url.to_string())
             .env("INDEXD_URL", indexd_url.to_string())
+            // Generate (lib/generate/runner.ts) must run the claude CLI from
+            // the checkout, where .claude/commands/ lives — the standalone
+            // server's own cwd is the installed resources dir.
+            .env("REPO_ROOT", repo_root().to_string_lossy().to_string())
             .spawn()
             .expect("failed to start next standalone server");
         child.pid()
@@ -326,7 +296,7 @@ pub fn run() {
         .manage(ManagedChildren(Mutex::new(Vec::new())))
         .setup(|app| {
             WebviewWindowBuilder::new(app, "splash", WebviewUrl::App("splash.html".into()))
-                .title("Notes")
+                .title("LectureLens")
                 .inner_size(420.0, 260.0)
                 .resizable(false)
                 .decorations(false)

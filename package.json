@@ -1,11 +1,12 @@
 {
-  "name": "university-notes-web",
+  "name": "lecturelens-web",
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "predev": "node scripts/ensure-vaultd.mjs",
+    "setup": "node scripts/setup.mjs",
+    "predev": "node scripts/ensure-vaultd.mjs && node scripts/ensure-indexd.mjs",
     "dev": "next dev --turbopack",
-    "prestart": "node scripts/ensure-vaultd.mjs",
+    "prestart": "node scripts/ensure-vaultd.mjs && node scripts/ensure-indexd.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",

@@ -77,7 +77,7 @@ export default function AppShell() {
       <aside className="flex w-72 flex-col border-r border-black/10 bg-gray-50 dark:border-white/10 dark:bg-[#0a0e14]">
         <div className="flex items-center justify-between border-b border-black/10 px-3 py-3 dark:border-white/10">
           <span className="text-sm font-semibold text-gray-900 dark:text-gray-200">
-            Notes
+            LectureLens
           </span>
           <div className="flex items-center gap-1">
             <button

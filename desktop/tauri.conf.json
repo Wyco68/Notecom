@@ -1,8 +1,8 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
-  "productName": "Notes",
+  "productName": "LectureLens",
   "version": "0.1.0",
-  "identifier": "com.universitynotes.notes",
+  "identifier": "com.universitynotes.lecturelens",
   "build": {
     "frontendDist": "assets",
     "beforeDevCommand": "node scripts/ensure-desktop-sidecars.mjs",

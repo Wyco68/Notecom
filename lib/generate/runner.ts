@@ -10,6 +10,8 @@
 
 import { spawn, type ChildProcess } from "child_process";
 import { randomUUID } from "crypto";
+import { existsSync } from "fs";
+import path from "path";
 
 export interface Job {
   id: string;
@@ -48,6 +50,25 @@ export function startJob(
   };
   jobs.set(job.id, job);
 
+  // /lect and /quiz only exist as this repo's command files — Claude Code
+  // expands them from .claude/commands/ in its working directory, so the
+  // CLI must run from the checkout. In dev that's process.cwd(); in the
+  // packaged app the standalone server's cwd is the installed resources
+  // dir, and the Tauri shell passes the checkout as REPO_ROOT instead.
+  // Without the command file, claude "succeeds" with a confused one-turn
+  // reply and no generated file — fail fast and say why.
+  const repoRoot = process.env.REPO_ROOT || process.cwd();
+  const commandFile = path.join(repoRoot, ".claude", "commands", `${kind}.md`);
+  if (!existsSync(commandFile)) {
+    job.log.push(
+      `Generate needs the project checkout: /${kind} is defined by .claude/commands/${kind}.md, ` +
+        `which doesn't exist at ${repoRoot}.`,
+      "Check the app was set up per docs/GETTING_STARTED.md (clone + npm run setup), or use /lect directly in Claude Code."
+    );
+    job.status = "error";
+    return job;
+  }
+
   // The prompt must satisfy three hard constraints at once:
   // 1. It must be the -p ARGUMENT, not stdin — the CLI only expands custom
   //    slash commands "in the prompt string"; a piped prompt left /lect
@@ -73,11 +94,17 @@ export function startJob(
   const child = spawn(
     bin,
     ["-p", promptArg, "--output-format", "stream-json", "--verbose", "--dangerously-skip-permissions"],
-    { cwd: process.cwd(), shell: useShell, stdio: ["ignore", "pipe", "pipe"] }
+    { cwd: repoRoot, shell: useShell, stdio: ["ignore", "pipe", "pipe"] }
   );
   job.log.push(`Job: /${kind} → ${folder} (${safeOriginal})`);
 
   let buf = "";
+  // Success requires claude's own final `result` event, not just exit code
+  // 0 — a run that never engaged (bad prompt expansion, wrong cwd, CLI
+  // printing plain text instead of stream-json) exits 0 without one, and
+  // that must surface as a failure, not a false "finished".
+  let sawResult = false;
+  let resultFailed = false;
   // eslint-disable-next-line no-control-regex
   const stripAnsi = (s: string) => s.replace(/\x1b\[[0-9;]*m/g, "");
   const onLine = (line: string) => {
@@ -99,6 +126,8 @@ export function startJob(
           }
         }
       } else if (ev.type === "result") {
+        sawResult = true;
+        resultFailed = !!ev.is_error;
         // the result event carries authoritative totals — overwrite
         if (ev.usage) {
           job.tokens.input = ev.usage.input_tokens ?? job.tokens.input;
@@ -134,8 +163,19 @@ export function startJob(
   });
   child.on("close", (code) => {
     if (job.status === "running") {
-      job.status = code === 0 ? "done" : "error";
-      if (code !== 0) job.log.push(`claude exited with code ${code}`);
+      if (code === 0 && sawResult && !resultFailed) {
+        job.status = "done";
+      } else {
+        job.status = "error";
+        if (code !== 0) {
+          job.log.push(`claude exited with code ${code}`);
+        } else if (!sawResult) {
+          job.log.push(
+            "claude exited without completing the command — no result was produced, so nothing was generated. " +
+              "The output above shows what it did instead."
+          );
+        }
+      }
     }
     job.child = undefined;
   });
