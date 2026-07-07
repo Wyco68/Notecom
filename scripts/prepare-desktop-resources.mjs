@@ -39,6 +39,11 @@ function buildGoSidecar(name, triple) {
 }
 
 function buildNextStandalone() {
+  // Wipe .next first. `next dev --turbopack` (our dev script) leaves
+  // turbopack chunks in .next; a following production `next build` uses
+  // webpack and chokes on them ("Cannot find module .../[turbopack]_runtime.js").
+  // A clean tree makes the build deterministic no matter what ran before.
+  rmSync(path.join(ROOT, ".next"), { recursive: true, force: true });
   run("npx", ["next", "build"], { cwd: ROOT });
 
   rmSync(RESOURCES_DIR, { recursive: true, force: true });

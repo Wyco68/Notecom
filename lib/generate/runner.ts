@@ -78,13 +78,25 @@ export function startJob(
   //    escaping, so an unquoted multi-word prompt splits into separate
   //    argv words. `%` and `"` are stripped because cmd.exe expands/breaks
   //    them even inside quotes.
+  // The Generate dialog only offers folders that already exist (its
+  // dropdown is the sidebar tree), so `folder` is always a real vault
+  // directory name. State that explicitly: vault/ is gitignored, and Claude
+  // Code's Glob/search tools skip gitignored paths, so /lect's "list
+  // existing folders" step finds nothing and would create a lowercase
+  // duplicate (e.g. wireless-network beside Wireless-Network). Pinning the
+  // exact existing folder + its absolute path sidesteps that discovery.
   const safeOriginal = originalName.replace(/["%\r\n]/g, "");
+  const noun = kind === "quiz" ? "quiz" : "lesson";
+  const vaultPath = path.join(repoRoot, "vault", folder);
   const prompt =
     `/${kind} ${folder}. ` +
+    `The destination folder already exists at ${vaultPath} — save the ${noun} into that exact existing folder. ` +
+    `Do not list vault folders, do not create a new folder, and do not lowercase or re-slugify the name; use "${folder}" verbatim as the folder. ` +
     `The uploaded lecture file is saved at ${filePath} (original name: ${safeOriginal}); ` +
-    `read it from that path and convert it with the markitdown tool, then continue the command workflow normally.`;
+    `read it from that path and convert it with the markitdown tool, then continue the command workflow.`;
 
   const bin = process.env.CLAUDE_BIN || "claude";
+  const model = process.env.GENERATE_MODEL || "sonnet";
   const useShell = process.platform === "win32"; // the CLI is a .cmd shim on Windows
   const promptArg = useShell ? `"${prompt}"` : prompt;
   // --dangerously-skip-permissions: the prompt is a fixed template built
@@ -93,10 +105,10 @@ export function startJob(
   // prompts would just hang the headless run.
   const child = spawn(
     bin,
-    ["-p", promptArg, "--output-format", "stream-json", "--verbose", "--dangerously-skip-permissions"],
+    ["-p", promptArg, "--model", model, "--output-format", "stream-json", "--verbose", "--dangerously-skip-permissions"],
     { cwd: repoRoot, shell: useShell, stdio: ["ignore", "pipe", "pipe"] }
   );
-  job.log.push(`Job: /${kind} → ${folder} (${safeOriginal})`);
+  job.log.push(`Job: /${kind} → ${folder} (${safeOriginal}) · model ${model}`);
 
   let buf = "";
   // Success requires claude's own final `result` event, not just exit code
