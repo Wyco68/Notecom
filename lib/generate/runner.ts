@@ -93,7 +93,15 @@ export function startJob(
     `The destination folder already exists at ${vaultPath} — save the ${noun} into that exact existing folder. ` +
     `Do not list vault folders, do not create a new folder, and do not lowercase or re-slugify the name; use "${folder}" verbatim as the folder. ` +
     `The uploaded lecture file is saved at ${filePath} (original name: ${safeOriginal}); ` +
-    `read it from that path and convert it with the markitdown tool, then continue the command workflow.`;
+    `read it from that path and convert it with the markitdown tool, then continue the command workflow. ` +
+    // The /${kind} docs are the single source of truth for structure and
+    // style — reading other lessons' HTML to imitate them wastes tokens and
+    // drifts from the template. (Reading the folder's index.json for the
+    // next seq number is still fine — that's not lesson content.)
+    `Follow the /${kind} command's own template and output contract for structure and style; do not open other existing ${noun} HTML files to copy their style. ` +
+    // Keep the job log tidy: the closing summary the model would otherwise
+    // write is the "long output after work is done" the user doesn't want.
+    `When the ${noun} is saved, reply with only a single short confirmation line — do not summarize the ${noun} or recap the steps you took.`;
 
   const bin = process.env.CLAUDE_BIN || "claude";
   const model = process.env.GENERATE_MODEL || "sonnet";
@@ -185,6 +193,17 @@ export function startJob(
           job.log.push(
             "claude exited without completing the command — no result was produced, so nothing was generated. " +
               "The output above shows what it did instead."
+          );
+        }
+        // Classify the failure so the user knows whether to just retry.
+        const text = job.log.join("\n").toLowerCase();
+        if (/rate.?limit|usage limit|quota|out of|credit|insufficient|max.*tokens|token budget|429/.test(text)) {
+          job.log.push(
+            "→ This looks like a Claude usage/rate limit. Wait a bit (or check your plan's limits), then click Generate again."
+          );
+        } else if (/connection closed|api error|overloaded|econnreset|etimedout|network|socket hang up|502|503|529/.test(text)) {
+          job.log.push(
+            "→ This looks like a transient Claude API/network drop, not a problem with your file. Nothing was saved — click Generate again to retry."
           );
         }
       }

@@ -6,7 +6,7 @@
 //
 // Cross-platform: NSIS/MSI on Windows, DMG on macOS, AppImage/deb/rpm on Linux.
 
-import { existsSync, readdirSync, mkdirSync, copyFileSync, rmSync } from "fs";
+import { existsSync, readdirSync, mkdirSync, copyFileSync, rmSync, readFileSync } from "fs";
 import { spawn } from "child_process";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -14,6 +14,15 @@ import { fileURLToPath } from "url";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const BUNDLE_DIR = path.join(ROOT, "desktop", "target", "release", "bundle");
 const OUT_DIR = path.join(ROOT, "installation");
+
+// Tauri names installers `<productName>_<version>_...`. A rename (e.g.
+// Notes -> LectureLens) leaves the old-named bundles behind in the target
+// tree; without filtering they'd be copied in beside the new ones. Collect
+// only the current product's artifacts so `installation/` never carries a
+// stale name.
+const PRODUCT_NAME = JSON.parse(
+  readFileSync(path.join(ROOT, "desktop", "tauri.conf.json"), "utf8")
+).productName;
 
 // Per-platform: which bundle subdirs hold the end-user installer, and which
 // file extensions count as "the thing you run to install". Ordered by
@@ -39,7 +48,9 @@ function collectArtifacts() {
     const abs = path.join(BUNDLE_DIR, dir);
     if (!existsSync(abs)) continue;
     for (const file of readdirSync(abs)) {
-      if (exts.some((e) => file.toLowerCase().endsWith(e))) {
+      const matchesExt = exts.some((e) => file.toLowerCase().endsWith(e));
+      const matchesProduct = file.startsWith(`${PRODUCT_NAME}_`);
+      if (matchesExt && matchesProduct) {
         found.push(path.join(abs, file));
       }
     }

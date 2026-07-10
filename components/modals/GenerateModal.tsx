@@ -23,6 +23,10 @@ export default function GenerateModal({
   const [log, setLog] = useState<string[]>([]);
   const [tokens, setTokens] = useState({ input: 0, output: 0 });
   const [elapsed, setElapsed] = useState(0);
+  // ms timestamp of the last streamed log line — lets the UI show "still
+  // working" during the long silent gaps while Claude writes a lesson, so a
+  // live-but-quiet run doesn't look frozen.
+  const [lastActivity, setLastActivity] = useState(0);
   const jobRef = useRef<string | null>(null);
   const logRef = useRef<HTMLDivElement | null>(null);
   const toast = useToast();
@@ -62,6 +66,7 @@ export default function GenerateModal({
     setLog([]);
     setTokens({ input: 0, output: 0 });
     setElapsed(0);
+    setLastActivity(Date.now());
     try {
       const form = new FormData();
       form.set("file", file);
@@ -90,7 +95,10 @@ export default function GenerateModal({
           const dataLine = /^data: (.*)$/m.exec(raw)?.[1];
           if (!event || !dataLine) continue;
           const payload = JSON.parse(dataLine);
-          if (event === "line") setLog((l) => [...l, payload.line]);
+          if (event === "line") {
+            setLog((l) => [...l, payload.line]);
+            setLastActivity(Date.now());
+          }
           if (event === "tokens") setTokens(payload);
           if (event === "end") {
             status = payload.status;
@@ -123,6 +131,11 @@ export default function GenerateModal({
       : phase === "aborted"
       ? "^C aborted"
       : "✗ failed";
+
+  // Seconds since the last log line (re-derived each second via the elapsed
+  // ticker). A lesson write is one long quiet step, so surface the wait
+  // rather than let the panel look hung.
+  const idleSec = running && lastActivity ? Math.floor((Date.now() - lastActivity) / 1000) : 0;
 
   return (
     <Modal title="Generate from file" onClose={running ? () => {} : onClose}>
@@ -192,21 +205,48 @@ export default function GenerateModal({
             className="mb-3 h-56 overflow-y-auto rounded border border-black/20 bg-[#0a0e14] p-2.5 font-mono text-xs leading-relaxed text-emerald-400 dark:border-white/10"
           >
             {log.map((l, i) => (
-              <div key={i}>{l}</div>
+              // Cap any single line so a stray verbose block can't turn the
+              // log into a wall of text (the model's closing summary is also
+              // discouraged in the prompt).
+              <div key={i}>{l.length > 500 ? l.slice(0, 500) + " …" : l}</div>
             ))}
-            {running && <span className="animate-pulse">▌</span>}
+            {running && (
+              <div className="flex items-center gap-1 pt-1 text-emerald-400">
+                <span>generating</span>
+                <span className="inline-flex gap-0.5">
+                  <span className="animate-pulse [animation-delay:0ms]">.</span>
+                  <span className="animate-pulse [animation-delay:200ms]">.</span>
+                  <span className="animate-pulse [animation-delay:400ms]">.</span>
+                </span>
+                {idleSec >= 5 && (
+                  <span className="text-emerald-600/70">
+                    (still working — {idleSec}s since last step)
+                  </span>
+                )}
+              </div>
+            )}
           </div>
           {running ? (
             <p className="text-center font-mono text-xs text-gray-500">
-              press <span className="text-gray-700 dark:text-gray-300">Ctrl+C</span> to abort
+              writing a lesson can take a few minutes · press{" "}
+              <span className="text-gray-700 dark:text-gray-300">Ctrl+C</span> to abort
             </p>
           ) : (
-            <button
-              onClick={onClose}
-              className="w-full rounded border border-black/10 px-3 py-2 text-sm text-gray-700 hover:bg-black/5 dark:border-white/10 dark:text-gray-300 dark:hover:bg-white/5"
-            >
-              Close
-            </button>
+            <>
+              {phase === "error" && (
+                <p className="mb-2 rounded border border-red-300 bg-red-50 px-3 py-2 text-xs text-red-700 dark:border-red-800/60 dark:bg-red-950/30 dark:text-red-300">
+                  Generation failed — nothing was saved. See the log above for
+                  the reason; if it was a network or usage-limit error, just
+                  press Generate again.
+                </p>
+              )}
+              <button
+                onClick={onClose}
+                className="w-full rounded border border-black/10 px-3 py-2 text-sm text-gray-700 hover:bg-black/5 dark:border-white/10 dark:text-gray-300 dark:hover:bg-white/5"
+              >
+                Close
+              </button>
+            </>
           )}
         </>
       )}
