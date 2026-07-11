@@ -10,6 +10,10 @@ duplicated here — read both before any architecture-affecting change):
   lesson creation (Claude Code → vault/), viewing, folder/lesson management.
 - [docs/desktop.md](desktop.md) — the Tauri shell (`desktop/`): startup
   orchestration, splash screen, dev vs production sidecar layout.
+- [docs/deploy-vercel-gcs.md](deploy-vercel-gcs.md) — the optional read-only
+  Vercel deployment that reads the vault from a private Google Cloud Storage
+  mirror (`VAULT_SOURCE=gcs`) for multi-device viewing. Additive: unset
+  locally, the app is the normal writable vaultd/indexd desktop app.
 
 ## The one rule that must never break
 
@@ -30,6 +34,22 @@ Don't move logic across the layers when fixing or extending the app:
   on exit — it has no opinion on vault content, naming, or UI.
 - Don't add chunking, embedding, or ranking logic to vaultd or to Next.js
   — search/retrieval intelligence lives only in `indexd` (below).
+
+## Read source: vaultd (default) or GCS (`VAULT_SOURCE`)
+
+The Next.js read helpers (`lib/vault/helper.ts`: `listTree`, `loadLesson`,
+`loadQuiz`, `loadAssignment`) branch on `VAULT_SOURCE`:
+- unset / `vaultd` (default) — the local desktop app, reads via the vaultd
+  Go service. Fully writable; indexd powers search + chat.
+- `gcs` — the serverless Vercel deployment, reads a private Google Cloud
+  Storage mirror via `lib/vault/gcs.ts` (no vaultd, no indexd, no Ollama).
+  All writes and chat are blocked in `middleware.ts`; search is served from
+  a prebuilt keyword index (`scripts/build-search-index.mjs` →
+  `vault/.search-index.json`) instead of indexd. Setup:
+  [deploy-vercel-gcs.md](deploy-vercel-gcs.md).
+
+This is read-only and additive — it never adds write or AI-generation logic
+to the app, so the "one rule" above still holds.
 
 ## Search layer: indexd (`tools/indexd/`)
 
