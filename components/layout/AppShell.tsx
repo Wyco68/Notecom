@@ -14,6 +14,15 @@ import SearchIcon from "../icons/SearchIcon";
 import ChatIcon from "../icons/ChatIcon";
 import UploadIcon from "../icons/UploadIcon";
 
+// Which write/interaction affordances the UI exposes. The GCS deployment is
+// read-only by definition (no vaultd, no local model), so VAULT_SOURCE=gcs
+// alone hides the write buttons and chat — no separate READ_ONLY flag needed.
+// NEXT_PUBLIC_READ_ONLY still covers the non-GCS read-only reader box.
+const READ_ONLY_UI =
+  process.env.NEXT_PUBLIC_READ_ONLY === "1" ||
+  process.env.NEXT_PUBLIC_VAULT_SOURCE === "gcs";
+const CHAT_ENABLED = process.env.NEXT_PUBLIC_VAULT_SOURCE !== "gcs";
+
 export default function AppShell() {
   const [folders, setFolders] = useState<Folder[] | null>(null);
   const [selected, setSelected] = useState<LessonRef | null>(null);
@@ -80,7 +89,7 @@ export default function AppShell() {
             LectureLens
           </span>
           <div className="flex items-center gap-1">
-            {process.env.NEXT_PUBLIC_READ_ONLY !== "1" && (
+            {!READ_ONLY_UI && (
               <button
                 onClick={() => setShowGenerate(true)}
                 title="Generate a lesson or quiz from a file (runs local Claude Code)"
@@ -126,7 +135,7 @@ export default function AppShell() {
           <span className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-500">
             {query.trim() ? "Results" : "Subjects"}
           </span>
-          {!query.trim() && process.env.NEXT_PUBLIC_READ_ONLY !== "1" && (
+          {!query.trim() && !READ_ONLY_UI && (
             <button
               onClick={() => setShowNewFolder(true)}
               title="New Folder"
@@ -155,13 +164,15 @@ export default function AppShell() {
         <LessonViewer lesson={selected} />
       </main>
 
-      <button
-        onClick={() => setShowChat(true)}
-        title="Ask My Notes — chat over your lessons (local model)"
-        className="fixed right-5 top-3 z-40 flex h-8 w-8 items-center justify-center rounded-full border border-black/10 bg-white text-gray-500 shadow-sm hover:bg-black/5 hover:text-blue-600 dark:border-white/10 dark:bg-[#161b22] dark:text-gray-400 dark:hover:bg-white/10 dark:hover:text-blue-400"
-      >
-        <ChatIcon className="h-4 w-4" />
-      </button>
+      {CHAT_ENABLED && (
+        <button
+          onClick={() => setShowChat(true)}
+          title="Ask My Notes — chat over your lessons (local model)"
+          className="fixed right-5 top-3 z-40 flex h-8 w-8 items-center justify-center rounded-full border border-black/10 bg-white text-gray-500 shadow-sm hover:bg-black/5 hover:text-blue-600 dark:border-white/10 dark:bg-[#161b22] dark:text-gray-400 dark:hover:bg-white/10 dark:hover:text-blue-400"
+        >
+          <ChatIcon className="h-4 w-4" />
+        </button>
+      )}
 
       {showChat && (
         <ChatPanel
