@@ -7,6 +7,11 @@ export async function GET(
 ) {
   const { folder, id } = await params;
   const kind = req.nextUrl.searchParams.get("kind") ?? "lesson";
+  // "Related" is an indexd (vector-similarity) feature; the GCS deployment
+  // has no indexd, so return an empty set rather than 502.
+  if (process.env.VAULT_SOURCE === "gcs") {
+    return NextResponse.json({ results: [] });
+  }
   try {
     const data = await related(folder, id, kind);
     return NextResponse.json(data);

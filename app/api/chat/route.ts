@@ -6,6 +6,12 @@ const INDEXD_TOKEN = process.env.INDEXD_TOKEN;
 // Streaming passthrough to indexd's SSE chat endpoint — the app adds no
 // AI logic of its own (see SPECIFICATION.md §2.3a).
 export async function POST(req: NextRequest) {
+  // Chat needs a local Ollama model behind indexd — neither exists on the
+  // GCS/serverless deployment. (middleware.ts also blocks this route there;
+  // this is defence in depth.)
+  if (process.env.VAULT_SOURCE === "gcs") {
+    return Response.json({ error: "chat is unavailable on this server" }, { status: 403 });
+  }
   let upstream: Response;
   try {
     upstream = await fetch(`${INDEXD_URL}/chat`, {
