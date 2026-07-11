@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 
 const INDEXD_URL = process.env.INDEXD_URL || "http://127.0.0.1:4322";
+const INDEXD_TOKEN = process.env.INDEXD_TOKEN;
 
 // Streaming passthrough to indexd's SSE chat endpoint — the app adds no
 // AI logic of its own (see SPECIFICATION.md §2.3a).
@@ -9,7 +10,10 @@ export async function POST(req: NextRequest) {
   try {
     upstream = await fetch(`${INDEXD_URL}/chat`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...(INDEXD_TOKEN ? { "X-Auth-Token": INDEXD_TOKEN } : {}),
+      },
       body: JSON.stringify(await req.json()),
       cache: "no-store",
     });

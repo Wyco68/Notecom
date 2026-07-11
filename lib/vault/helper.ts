@@ -3,6 +3,7 @@
 // All persistence flows through here. See SPECIFICATION.md.
 
 const VAULTD_URL = process.env.VAULTD_URL || "http://127.0.0.1:4321";
+const VAULTD_TOKEN = process.env.VAULTD_TOKEN;
 
 export interface LessonEntry {
   id: string;
@@ -21,7 +22,11 @@ export interface TreeFolder {
 async function call(path: string, init?: RequestInit): Promise<any> {
   const res = await fetch(`${VAULTD_URL}${path}`, {
     ...init,
-    headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) },
+    headers: {
+      "Content-Type": "application/json",
+      ...(VAULTD_TOKEN ? { "X-Auth-Token": VAULTD_TOKEN } : {}),
+      ...(init?.headers ?? {}),
+    },
     cache: "no-store",
   });
   const data = await res.json().catch(() => ({}));

@@ -54,6 +54,9 @@ export async function DELETE(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  if (process.env.READ_ONLY === "1") {
+    return Response.json({ error: "generation disabled on this server" }, { status: 403 });
+  }
   const { id } = await params;
   const stopped = stopJob(id);
   if (!stopped) {

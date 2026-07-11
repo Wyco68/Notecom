@@ -10,6 +10,9 @@ const KINDS = new Set(["lect", "quiz"]);
 const SAFE = /^[A-Za-z0-9][A-Za-z0-9-]*$/;
 
 export async function POST(req: NextRequest) {
+  if (process.env.READ_ONLY === "1") {
+    return NextResponse.json({ error: "generation disabled on this server" }, { status: 403 });
+  }
   const form = await req.formData();
   const file = form.get("file");
   const folder = String(form.get("folder") ?? "");

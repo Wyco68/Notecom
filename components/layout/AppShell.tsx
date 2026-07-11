@@ -80,13 +80,15 @@ export default function AppShell() {
             LectureLens
           </span>
           <div className="flex items-center gap-1">
-            <button
-              onClick={() => setShowGenerate(true)}
-              title="Generate a lesson or quiz from a file (runs local Claude Code)"
-              className="flex h-7 w-7 items-center justify-center rounded text-gray-500 hover:bg-black/5 dark:text-gray-400 dark:hover:bg-white/10"
-            >
-              <UploadIcon className="h-4 w-4" />
-            </button>
+            {process.env.NEXT_PUBLIC_READ_ONLY !== "1" && (
+              <button
+                onClick={() => setShowGenerate(true)}
+                title="Generate a lesson or quiz from a file (runs local Claude Code)"
+                className="flex h-7 w-7 items-center justify-center rounded text-gray-500 hover:bg-black/5 dark:text-gray-400 dark:hover:bg-white/10"
+              >
+                <UploadIcon className="h-4 w-4" />
+              </button>
+            )}
             <button
               onClick={handleRefresh}
               disabled={refreshing}
@@ -124,7 +126,7 @@ export default function AppShell() {
           <span className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-500">
             {query.trim() ? "Results" : "Subjects"}
           </span>
-          {!query.trim() && (
+          {!query.trim() && process.env.NEXT_PUBLIC_READ_ONLY !== "1" && (
             <button
               onClick={() => setShowNewFolder(true)}
               title="New Folder"

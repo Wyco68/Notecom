@@ -5,6 +5,7 @@
 // caller of indexd endpoints; don't fetch() indexd from anywhere else.
 
 const INDEXD_URL = process.env.INDEXD_URL || "http://127.0.0.1:4322";
+const INDEXD_TOKEN = process.env.INDEXD_TOKEN;
 
 export interface SearchResult {
   folder: string;
@@ -32,7 +33,11 @@ export interface RelatedResult {
 async function call(path: string, init?: RequestInit): Promise<any> {
   const res = await fetch(`${INDEXD_URL}${path}`, {
     ...init,
-    headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) },
+    headers: {
+      "Content-Type": "application/json",
+      ...(INDEXD_TOKEN ? { "X-Auth-Token": INDEXD_TOKEN } : {}),
+      ...(init?.headers ?? {}),
+    },
     cache: "no-store",
   });
   const data = await res.json().catch(() => ({}));
@@ -68,5 +73,8 @@ export function related(
 // Fire-and-forget: indexd answers 202 immediately and scans in the
 // background; a down indexd is not an error worth surfacing.
 export function triggerReindex(): void {
-  fetch(`${INDEXD_URL}/reindex`, { method: "POST" }).catch(() => {});
+  fetch(`${INDEXD_URL}/reindex`, {
+    method: "POST",
+    headers: INDEXD_TOKEN ? { "X-Auth-Token": INDEXD_TOKEN } : undefined,
+  }).catch(() => {});
 }

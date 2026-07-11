@@ -89,9 +89,27 @@ func main() {
 	mux.HandleFunc("/tree", handleTree)
 
 	log.Printf("vaultd listening on %s (root=%s)", addr, vaultRoot())
-	if err := http.ListenAndServe(addr, mux); err != nil {
+	if err := http.ListenAndServe(addr, authMiddleware(mux)); err != nil {
 		log.Fatal(err)
 	}
+}
+
+// authMiddleware gates every request behind VAULTD_TOKEN when that env var
+// is set — needed once vaultd is reachable over a public tunnel (see
+// docs/desktop.md reader-deployment notes), a no-op for the default
+// localhost-only setup where nothing sets the env var.
+func authMiddleware(next http.Handler) http.Handler {
+	token := os.Getenv("VAULTD_TOKEN")
+	if token == "" {
+		return next
+	}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("X-Auth-Token") != token {
+			writeErr(w, http.StatusUnauthorized, "unauthorized")
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 // vaultRoot resolves the vault directory from VAULT_ROOT, defaulting to ./vault

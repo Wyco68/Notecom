@@ -81,9 +81,25 @@ func main() {
 	go s.scan()
 
 	log.Printf("indexd listening on %s (root=%s, db=%s)", addr, vaultRoot(), dbPath)
-	if err := http.ListenAndServe(addr, mux); err != nil {
+	if err := http.ListenAndServe(addr, authMiddleware(mux)); err != nil {
 		log.Fatal(err)
 	}
+}
+
+// authMiddleware mirrors vaultd's: gates every request behind INDEXD_TOKEN
+// when set, no-op otherwise (default localhost-only setup).
+func authMiddleware(next http.Handler) http.Handler {
+	token := os.Getenv("INDEXD_TOKEN")
+	if token == "" {
+		return next
+	}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("X-Auth-Token") != token {
+			writeErr(w, http.StatusUnauthorized, "unauthorized")
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 func vaultRoot() string {

@@ -1,0 +1,175 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "name": "lecturelens",
+  "version": "0.1.0",
+  "description": "Web-based lesson library: plain-language study notes generated from slides/PDFs by Claude Code, read and managed by a Next.js app in a code-editor-style viewer.",
+  "specVersion": "1.0.0",
+  "purpose": "Notes are written in plain high-school-level language with technically correct terminology (Information Systems & Network Engineering program). Content creation happens entirely outside the web application — Claude Code is the sole author; the Next.js app is the reader/manager.",
+  "principles": [
+    "Two-layer contract: Next.js reads and manages, the Go helper (vaultd) is dumb filesystem I/O.",
+    "Claude Code is the author but is not a layer inside the app.",
+    "No naming/slug/sequence logic in vaultd — that is Next.js's job.",
+    "No filesystem writes from a React component or API route directly — always through lib/vault/helper.ts -> vaultd.",
+    "No AI generation logic or Anthropic API calls in the Next.js app itself; two sanctioned delegations exist (chat proxy, generation job runner).",
+    "No chunking/embedding/ranking logic in vaultd or Next.js — that intelligence lives only in indexd.",
+    "No business logic in the desktop shell (Tauri) — only start/stop orchestration."
+  ],
+  "components": {
+    "webapp": {
+      "role": "UI, routing, API proxying, vault management (create/rename/delete/list)",
+      "path": "app/, components/, lib/",
+      "framework": "Next.js 15 (App Router)",
+      "language": "TypeScript",
+      "storesApiKey": false,
+      "callsAnthropicApiDirectly": false,
+      "delegations": [
+        {
+          "name": "Ask My Notes",
+          "path": "app/api/chat/route.ts",
+          "mechanism": "SSE passthrough to indexd /chat",
+          "backend": "local Ollama chat model",
+          "dataLeavesMachine": false
+        },
+        {
+          "name": "Generate from file",
+          "path": "lib/generate/runner.ts",
+          "mechanism": "spawns local Claude Code CLI headlessly (-p, --output-format stream-json)",
+          "invokes": ["/lect", "/quiz"],
+          "requiresLocalClaudeSubscription": true
+        }
+      ]
+    },
+    "vaultd": {
+      "role": "filesystem CRUD only, zero business logic",
+      "path": "tools/vaultd/main.go",
+      "language": "Go",
+      "defaultAddr": "127.0.0.1:4321",
+      "envAddr": "VAULTD_ADDR",
+      "envRoot": "VAULT_ROOT",
+      "envToken": "VAULTD_TOKEN",
+      "authHeader": "X-Auth-Token",
+      "endpoints": [
+        { "method": "POST", "path": "/folder", "body": "{name}" },
+        { "method": "DELETE", "path": "/folder/{name}" },
+        { "method": "POST", "path": "/lesson", "body": "{folder,id,slug,title,seq,html}", "usedBy": "Claude Code" },
+        { "method": "GET", "path": "/lesson/{folder}/{id}" },
+        { "method": "DELETE", "path": "/lesson/{folder}/{id}" },
+        { "method": "POST", "path": "/lesson/{folder}/{id}/rename", "body": "{newTitle}" },
+        { "method": "POST", "path": "/quiz", "body": "{folder,id,slug,title,seq,html}", "usedBy": "Claude Code" },
+        { "method": "GET", "path": "/quiz/{folder}/{id}" },
+        { "method": "DELETE", "path": "/quiz/{folder}/{id}" },
+        { "method": "POST", "path": "/quiz/{folder}/{id}/rename", "body": "{newTitle}" },
+        { "method": "POST", "path": "/assignment", "body": "{folder,id,slug,title,seq,html}", "usedBy": "Claude Code" },
+        { "method": "GET", "path": "/assignment/{folder}/{id}" },
+        { "method": "DELETE", "path": "/assignment/{folder}/{id}" },
+        { "method": "POST", "path": "/assignment/{folder}/{id}/rename", "body": "{newTitle}" },
+        { "method": "GET", "path": "/tree" }
+      ]
+    },
+    "indexd": {
+      "role": "search/RAG backend only — chunking, embedding, hybrid retrieval",
+      "path": "tools/indexd/",
+      "language": "Go",
+      "defaultAddr": "127.0.0.1:4322",
+      "envAddr": "INDEXD_ADDR",
+      "envRoot": "VAULT_ROOT",
+      "envToken": "INDEXD_TOKEN",
+      "authHeader": "X-Auth-Token",
+      "storage": "vault/.index/index.db (SQLite: metadata + FTS5 + embedding BLOBs, derived/safe to delete)",
+      "embeddingBackend": {
+        "provider": "Ollama",
+        "envUrl": "OLLAMA_URL",
+        "envEmbedModel": "EMBED_MODEL",
+        "defaultEmbedModel": "nomic-embed-text",
+        "envChatModel": "CHAT_MODEL",
+        "defaultChatModel": "llama3.2",
+        "degradesGracefully": true
+      },
+      "endpoints": [
+        { "method": "POST", "path": "/index", "body": "{folder,id,kind}" },
+        { "method": "DELETE", "path": "/index/{folder}/{id}", "query": "?kind=" },
+        { "method": "POST", "path": "/reindex", "response": "202 async" },
+        { "method": "GET", "path": "/search", "query": "?q&folder&kind&limit&html=1" },
+        { "method": "GET", "path": "/related/{folder}/{id}", "query": "?kind&limit" },
+        { "method": "GET", "path": "/topics", "query": "?q&limit" },
+        { "method": "POST", "path": "/chat", "body": "{message,history}", "response": "SSE" },
+        { "method": "GET", "path": "/status" }
+      ]
+    },
+    "desktop": {
+      "role": "Tauri shell: orchestration only, no business logic",
+      "path": "desktop/",
+      "language": "Rust",
+      "sidecars": ["vaultd", "indexd", "node (Next standalone server)"],
+      "vaultLocation": "checkout's vault/, baked in at compile time (single-vault, checkout-centric design)"
+    }
+  },
+  "apiRoutes": [
+    { "path": "/api/tree", "method": "GET", "response": "{folders:[{name,lessons,quizzes,assignments}]}" },
+    { "path": "/api/folders", "method": "POST", "body": "{name}", "readOnlyBlocked": true },
+    { "path": "/api/folders/[name]", "method": "DELETE", "readOnlyBlocked": true },
+    { "path": "/api/lesson/[folder]/[id]", "methods": ["GET", "DELETE", "POST"], "readOnlyBlocked": ["DELETE", "POST"] },
+    { "path": "/api/quiz/[folder]/[id]", "methods": ["GET", "DELETE", "POST"], "readOnlyBlocked": ["DELETE", "POST"] },
+    { "path": "/api/assignment/[folder]/[id]", "methods": ["GET", "DELETE", "POST"], "readOnlyBlocked": ["DELETE", "POST"] },
+    { "path": "/api/search", "method": "GET", "proxiesTo": "indexd" },
+    { "path": "/api/related/[folder]/[id]", "method": "GET", "proxiesTo": "indexd" },
+    { "path": "/api/chat", "method": "POST", "proxiesTo": "indexd", "readOnlyExempt": true },
+    { "path": "/api/generate", "method": "POST", "spawns": "claude CLI", "readOnlyBlocked": true },
+    { "path": "/api/generate/[id]", "methods": ["GET", "DELETE"], "readOnlyBlocked": ["DELETE"] }
+  ],
+  "storageModel": {
+    "root": "vault/",
+    "layout": [
+      "<folder-slug>/index.json",
+      "<folder-slug>/<seq>-<slug>.html (lesson)",
+      "<folder-slug>/quiz-<seq>-<slug>.html (quiz)",
+      "<folder-slug>/assignment-<seq>-<slug>.html (assignment journal)",
+      "vault/.index/index.db (derived search index, indexd-owned)"
+    ],
+    "gitignored": true,
+    "sourceOfTruth": "filesystem, no database"
+  },
+  "commands": {
+    "/lect": { "purpose": "lesson generation and maintenance", "authoredBy": "Claude Code", "docs": ".claude/commands/lect.md" },
+    "/quiz": { "purpose": "quiz creation and maintenance", "authoredBy": "Claude Code", "docs": ".claude/commands/quiz.md" },
+    "/feat": { "purpose": "application development only", "docs": ".claude/commands/feat.md" },
+    "/assignment": { "purpose": "university programming assignments + learning journal", "docs": ".claude/commands/assignment.md" }
+  },
+  "deploymentModes": {
+    "local-desktop": {
+      "description": "Tauri native window, single machine, single vault",
+      "command": "npm run dev:desktop | npm run build:desktop"
+    },
+    "local-browser": {
+      "description": "plain Next.js dev/prod server on the writer machine, full read/write + generation",
+      "command": "npm run dev | npm run build && npm run start"
+    },
+    "remote-reader": {
+      "description": "read-only instance for other devices (iPad/laptop); generation and folder/lesson mutation disabled at middleware.ts, gated by READ_ONLY/NEXT_PUBLIC_READ_ONLY",
+      "requires": ["vaultd/indexd reachable from the reader instance (shared filesystem sync or a tunnel + VAULTD_TOKEN/INDEXD_TOKEN)"],
+      "command": "READ_ONLY=1 NEXT_PUBLIC_READ_ONLY=1 npm run build && npm run start",
+      "recommendedTunnel": "Cloudflare Tunnel (free) + Cloudflare Access in front of vaultd/indexd public hostnames",
+      "cannotRunRemotely": ["/api/generate (requires local claude CLI + subscription auth on the writer machine only)"]
+    }
+  },
+  "techStack": {
+    "framework": "Next.js 15 (App Router)",
+    "language": "TypeScript (strict)",
+    "ui": "React 18, Tailwind CSS, @tailwindcss/typography",
+    "rendering": "HtmlRenderer (DOMParser walk, no dangerouslySetInnerHTML)",
+    "codeHighlighting": "highlight.js",
+    "diagrams": "mermaid",
+    "animation": "framer-motion",
+    "filesystemHelper": "Go HTTP service (vaultd)",
+    "searchRag": "Go HTTP service (indexd) + SQLite (FTS5 + vector BLOBs)",
+    "desktopShell": "Tauri (Rust)",
+    "auth": "none for the app itself; optional shared-secret header (X-Auth-Token) between Next.js and vaultd/indexd when exposed remotely"
+  },
+  "outOfScope": [
+    "No database as source of truth",
+    "No multi-tenancy",
+    "No user authentication of any kind",
+    "No AI generation logic inside the application itself",
+    "No hosting/deployment pipeline beyond what's documented in README.md"
+  ]
+}
