@@ -1,6 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: "standalone",
+  // @google-cloud/storage (GCS deployment only) uses dynamic requires the
+  // bundler can't trace — keep it external so it's require()d at runtime.
+  serverExternalPackages: ["@google-cloud/storage"],
   experimental: {
     optimizePackageImports: ["framer-motion"],
   },
