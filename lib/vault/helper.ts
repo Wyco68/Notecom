@@ -5,6 +5,13 @@
 const VAULTD_URL = process.env.VAULTD_URL || "http://127.0.0.1:4321";
 const VAULTD_TOKEN = process.env.VAULTD_TOKEN;
 
+// "vaultd" (default, local desktop) or "gcs" (read-only Vercel deployment
+// backed by a Google Cloud Storage mirror — see lib/vault/gcs.ts and
+// docs/deploy-vercel-gcs.md). Only the read helpers branch on this; the
+// write helpers are vaultd-only and never run under gcs (middleware.ts
+// 403s every mutating request in that deployment).
+const VAULT_SOURCE = process.env.VAULT_SOURCE || "vaultd";
+
 export interface LessonEntry {
   id: string;
   slug: string;
@@ -48,6 +55,7 @@ export function loadLesson(
   folder: string,
   id: string
 ): Promise<{ html: string; title: string }> {
+  if (VAULT_SOURCE === "gcs") return import("./gcs").then((m) => m.gcsLoadDoc(folder, id));
   return call(`/lesson/${encodeURIComponent(folder)}/${encodeURIComponent(id)}`);
 }
 
@@ -72,6 +80,7 @@ export function loadQuiz(
   folder: string,
   id: string
 ): Promise<{ html: string; title: string }> {
+  if (VAULT_SOURCE === "gcs") return import("./gcs").then((m) => m.gcsLoadDoc(folder, id));
   return call(`/quiz/${encodeURIComponent(folder)}/${encodeURIComponent(id)}`);
 }
 
@@ -96,6 +105,7 @@ export function loadAssignment(
   folder: string,
   id: string
 ): Promise<{ html: string; title: string }> {
+  if (VAULT_SOURCE === "gcs") return import("./gcs").then((m) => m.gcsLoadDoc(folder, id));
   return call(`/assignment/${encodeURIComponent(folder)}/${encodeURIComponent(id)}`);
 }
 
@@ -117,5 +127,6 @@ export function renameAssignment(
 }
 
 export function listTree(): Promise<{ folders: TreeFolder[] }> {
+  if (VAULT_SOURCE === "gcs") return import("./gcs").then((m) => m.gcsListTree());
   return call("/tree");
 }
