@@ -10,6 +10,11 @@ export async function GET(req: NextRequest) {
   const kind = req.nextUrl.searchParams.get("kind") ?? undefined;
   const limit = Number(req.nextUrl.searchParams.get("limit")) || undefined;
   try {
+    // GCS deployment has no indexd — serve from the prebuilt keyword index.
+    if (process.env.VAULT_SOURCE === "gcs") {
+      const { gcsSearch } = await import("@/lib/vault/gcs");
+      return NextResponse.json(await gcsSearch(q, limit));
+    }
     const data = await search({ q, folder, kind, limit });
     return NextResponse.json(data);
   } catch (err: any) {
