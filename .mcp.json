@@ -3,6 +3,10 @@
     "markitdown": {
       "command": "markitdown-mcp",
       "args": []
+    },
+    "supabase": {
+      "type": "http",
+      "url": "https://mcp.supabase.com/mcp"
     }
   }
 }
