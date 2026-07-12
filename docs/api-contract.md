@@ -19,7 +19,7 @@ Loaded by `/feat` only. Source of truth is the route files themselves
 | `/api/assignment/[folder]/[id]` | GET | — | `{ html, title }` |
 | `/api/assignment/[folder]/[id]` | DELETE | — | `{ ok }` |
 | `/api/assignment/[folder]/[id]` | POST | `{ newTitle }` | `{ ok }` (rename) |
-| `/api/search` | GET | `?q&folder&kind&limit` | `{ mode: "hybrid"\|"keyword", results: [chunk hits] }` — proxies indexd |
+| `/api/search` | GET | `?q&folder&kind&limit` | `{ mode: "hybrid"\|"keyword", results: [chunk hits] }` — proxies indexd; on remote deployments (`VAULT_SOURCE=gcs`/`worker`) serves the prebuilt keyword index instead |
 | `/api/related/[folder]/[id]` | GET | `?kind` | `{ results: [{folder,id,kind,title,score}] }` — proxies indexd |
 | `/api/chat` | POST | `{ message, history }` | SSE passthrough of indexd `/chat` (sources → deltas → done) |
 | `/api/generate` | POST | multipart `file, folder, kind(lect\|quiz)` | `{ jobId }` — saves upload, spawns local Claude Code CLI |
@@ -91,3 +91,24 @@ to scroll to the matched section. Embeddings come from a local Ollama server
 (`OLLAMA_URL`, model `EMBED_MODEL`, default `nomic-embed-text`); without
 Ollama, `/search` serves `mode: "keyword"` (FTS5-only) and embeddings
 backfill on a later scan.
+
+## content-api (Cloudflare Worker, `workers/content-api`)
+
+Serves a Workers KV mirror of the private GitHub `lecture-content` repo to
+the `VAULT_SOURCE=worker` Vercel deployment. Every endpoint requires
+`Authorization: Bearer <API_TOKEN>` except `/webhook`, which is instead
+verified by its `X-Hub-Signature-256` HMAC (the `WEBHOOK_SECRET` secret).
+`lib/vault/worker.ts` is the only TypeScript caller. Setup:
+[deploy-cloudflare-github.md](deploy-cloudflare-github.md).
+
+| Endpoint | Method | Body/params | Notes |
+|---|---|---|---|
+| `/tree` | GET | — | `{ folders: [{ name, lessons, quizzes, assignments }] }` — prebuilt at sync time |
+| `/doc/{folder}/{id}` | GET | — | `{ html, title }` |
+| `/search` | GET | `?q&limit` | `{ mode: "keyword", results: [...] }` — same scoring as the gcs mode (title +5, heading +3, body occurrence count); results cached in-Worker for 60s |
+| `/status` | GET | — | `{ ok, commitSha, syncedAt, docCount }` |
+| `/sync` | POST | — | forces a re-sync from GitHub, answers 202 |
+| `/webhook` | POST | GitHub push payload | HMAC-verified; ignores non-push events and other branches; syncs async, answers 200 immediately |
+
+Error shape is `{ error: string }` with a non-2xx status, matching the
+Next.js routes.

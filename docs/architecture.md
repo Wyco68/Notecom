@@ -14,6 +14,11 @@ duplicated here — read both before any architecture-affecting change):
   Vercel deployment that reads the vault from a private Google Cloud Storage
   mirror (`VAULT_SOURCE=gcs`) for multi-device viewing. Additive: unset
   locally, the app is the normal writable vaultd/indexd desktop app.
+- [docs/deploy-cloudflare-github.md](deploy-cloudflare-github.md) — the
+  second read-only deployment channel: the vault is pushed to a private
+  GitHub repo, mirrored into Workers KV by a Cloudflare Worker
+  (`workers/content-api/`), and read by Vercel (`VAULT_SOURCE=worker`).
+  Same additive, read-only rules as the GCS channel.
 
 ## The one rule that must never break
 
@@ -35,7 +40,7 @@ Don't move logic across the layers when fixing or extending the app:
 - Don't add chunking, embedding, or ranking logic to vaultd or to Next.js
   — search/retrieval intelligence lives only in `indexd` (below).
 
-## Read source: vaultd (default) or GCS (`VAULT_SOURCE`)
+## Read source: vaultd (default), GCS, or Worker (`VAULT_SOURCE`)
 
 The Next.js read helpers (`lib/vault/helper.ts`: `listTree`, `loadLesson`,
 `loadQuiz`, `loadAssignment`) branch on `VAULT_SOURCE`:
@@ -47,6 +52,12 @@ The Next.js read helpers (`lib/vault/helper.ts`: `listTree`, `loadLesson`,
   a prebuilt keyword index (`scripts/build-search-index.mjs` →
   `vault/.search-index.json`) instead of indexd. Setup:
   [deploy-vercel-gcs.md](deploy-vercel-gcs.md).
+- `worker` — the same serverless Vercel deployment, but reads the
+  content-api Cloudflare Worker (`workers/content-api/`), which mirrors the
+  private GitHub `lecture-content` repo into Workers KV, webhook-driven.
+  Writes and chat are blocked exactly as in `gcs`; search is served by the
+  Worker from the same prebuilt keyword index. Setup:
+  [deploy-cloudflare-github.md](deploy-cloudflare-github.md).
 
 This is read-only and additive — it never adds write or AI-generation logic
 to the app, so the "one rule" above still holds.
