@@ -184,6 +184,14 @@ export function startJob(
   child.on("close", (code) => {
     if (job.status === "running") {
       if (code === 0 && sawResult && !resultFailed) {
+        // Lesson saved. If the content-sync channel is configured, publish to
+        // the cloud reader before finishing so the deployment follows the
+        // desktop automatically (docs/deploy-cloudflare-github.md). A sync
+        // failure never fails the lesson — it was already written to vault/.
+        if (existsSync(path.join(repoRoot, ".content-git"))) {
+          job.child = startContentSync(job, repoRoot);
+          return; // startContentSync flips the job to "done" when it finishes
+        }
         job.status = "done";
       } else {
         job.status = "error";
@@ -213,6 +221,46 @@ export function startJob(
 
   job.child = child;
   return job;
+}
+
+// After a lesson is generated, push vault/ to the content repo so the hosted
+// reader updates (scripts/sync-content.mjs → GitHub → Worker). Only invoked
+// when .content-git/ exists, so pure-local users never trigger it. Streams
+// its output into the same job log and marks the job done when it finishes;
+// a sync failure is logged but the lesson still counts as done.
+function startContentSync(job: Job, repoRoot: string): ChildProcess {
+  job.log.push("→ syncing to cloud reader…");
+  const syncScript = path.join(repoRoot, "scripts", "sync-content.mjs");
+  const child = spawn(process.execPath, [syncScript], {
+    cwd: repoRoot,
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  // eslint-disable-next-line no-control-regex
+  const stripAnsi = (s: string) => s.replace(/\x1b\[[0-9;]*m/g, "");
+  const onData = (d: Buffer) => {
+    for (const line of stripAnsi(d.toString()).split(/\r?\n/)) {
+      if (line.trim()) job.log.push(line.trim());
+    }
+  };
+  child.stdout?.on("data", onData);
+  child.stderr?.on("data", onData);
+  const finish = (msg?: string) => {
+    if (msg) job.log.push(msg);
+    // Don't override an abort (Ctrl+C) that fired mid-sync.
+    if (job.status === "running") job.status = "done";
+    job.child = undefined;
+  };
+  child.on("error", (err) =>
+    finish(`cloud sync failed to start: ${err.message} — run "npm run sync:content" manually.`)
+  );
+  child.on("close", (code) =>
+    finish(
+      code === 0
+        ? "✓ synced to cloud reader."
+        : `cloud sync exited with code ${code} — the lesson was saved; run "npm run sync:content" to publish it.`
+    )
+  );
+  return child;
 }
 
 // stopJob force-kills a running job (the UI's Ctrl+C). shell:true means
