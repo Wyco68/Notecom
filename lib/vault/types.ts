@@ -22,6 +22,10 @@ export interface Folder {
 
 export interface VaultTree {
   folders: Folder[];
+  // Runtime deployment flags from /api/tree (absent on older responses):
+  // readOnly hides write controls, remote additionally disables chat.
+  readOnly?: boolean;
+  remote?: boolean;
 }
 
 // A selected lesson or quiz is identified by its folder + id + kind.

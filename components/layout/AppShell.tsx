@@ -14,14 +14,16 @@ import SearchIcon from "../icons/SearchIcon";
 import ChatIcon from "../icons/ChatIcon";
 import UploadIcon from "../icons/UploadIcon";
 
-// Which write/interaction affordances the UI exposes. The GCS deployment is
-// read-only by definition (no vaultd, no local model), so VAULT_SOURCE=gcs
-// alone hides the write buttons and chat — no separate READ_ONLY flag needed.
-// NEXT_PUBLIC_READ_ONLY still covers the non-GCS read-only reader box.
-const READ_ONLY_UI =
-  process.env.NEXT_PUBLIC_READ_ONLY === "1" ||
-  process.env.NEXT_PUBLIC_VAULT_SOURCE === "gcs";
-const CHAT_ENABLED = process.env.NEXT_PUBLIC_VAULT_SOURCE !== "gcs";
+// Which write/interaction affordances the UI exposes. The remote deployments
+// (gcs, worker) are read-only by definition (no vaultd, no local model), so
+// the VAULT_SOURCE flag alone hides the write buttons and chat — no separate
+// READ_ONLY flag needed. NEXT_PUBLIC_READ_ONLY still covers the non-remote
+// read-only reader box.
+const REMOTE_VAULT =
+  process.env.NEXT_PUBLIC_VAULT_SOURCE === "gcs" ||
+  process.env.NEXT_PUBLIC_VAULT_SOURCE === "worker";
+const READ_ONLY_UI = process.env.NEXT_PUBLIC_READ_ONLY === "1" || REMOTE_VAULT;
+const CHAT_ENABLED = !REMOTE_VAULT;
 
 export default function AppShell() {
   const [folders, setFolders] = useState<Folder[] | null>(null);
@@ -31,6 +33,11 @@ export default function AppShell() {
   const [showChat, setShowChat] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [query, setQuery] = useState("");
+  // Seed from the build-time env (fast path), then trust the runtime flags
+  // /api/tree returns — so the deployed reader hides controls even if the
+  // client build was missing NEXT_PUBLIC_VAULT_SOURCE.
+  const [readOnly, setReadOnly] = useState(READ_ONLY_UI);
+  const [chatDisabled, setChatDisabled] = useState(!CHAT_ENABLED);
 
   const currentTitle = (() => {
     if (!selected || !folders) return null;
@@ -48,6 +55,8 @@ export default function AppShell() {
     const res = await fetch("/api/tree", { cache: "no-store" });
     const data: VaultTree = await res.json();
     setFolders(data.folders ?? []);
+    if (typeof data.readOnly === "boolean") setReadOnly(data.readOnly);
+    if (typeof data.remote === "boolean") setChatDisabled(data.remote);
   }, []);
 
   const handleRefresh = useCallback(async () => {
@@ -89,7 +98,7 @@ export default function AppShell() {
             LectureLens
           </span>
           <div className="flex items-center gap-1">
-            {!READ_ONLY_UI && (
+            {!readOnly && (
               <button
                 onClick={() => setShowGenerate(true)}
                 title="Generate a lesson or quiz from a file (runs local Claude Code)"
@@ -135,7 +144,7 @@ export default function AppShell() {
           <span className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-500">
             {query.trim() ? "Results" : "Subjects"}
           </span>
-          {!query.trim() && !READ_ONLY_UI && (
+          {!query.trim() && !readOnly && (
             <button
               onClick={() => setShowNewFolder(true)}
               title="New Folder"
@@ -164,7 +173,7 @@ export default function AppShell() {
         <LessonViewer lesson={selected} />
       </main>
 
-      {CHAT_ENABLED && (
+      {!chatDisabled && (
         <button
           onClick={() => setShowChat(true)}
           title="Ask My Notes — chat over your lessons (local model)"
