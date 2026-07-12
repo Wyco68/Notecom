@@ -12,6 +12,7 @@
     "lint": "next lint",
     "tauri": "tauri",
     "build:search-index": "node scripts/build-search-index.mjs",
+    "sync:content": "node scripts/sync-content.mjs",
     "dev:desktop": "tauri dev --config desktop/tauri.conf.json",
     "build:desktop": "tauri build --config desktop/tauri.conf.json",
     "postbuild:desktop": "node scripts/install-desktop.mjs",
