@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { Folder, LessonRef } from "@/lib/vault/types";
 import ConfirmModal from "../modals/ConfirmModal";
 import TrashIcon from "../icons/TrashIcon";
@@ -25,10 +25,19 @@ export default function FileTreeNode({
   onSelect: (ref: LessonRef) => void;
   onChanged: () => void;
 }) {
-  const [open, setOpen] = useState(true);
+  // Folders start collapsed so a vault with many files reads as a tidy index
+  // — click a folder to reveal its files.
+  const [open, setOpen] = useState(false);
   const [pending, setPending] = useState<PendingDelete | null>(null);
   const [busy, setBusy] = useState(false);
   const toast = useToast();
+
+  // Auto-open the folder that holds the current selection, so choosing a
+  // lesson (or a search hit) reveals it in the tree even when collapsed.
+  const containsSelected = selected?.folder === folder.name;
+  useEffect(() => {
+    if (containsSelected) setOpen(true);
+  }, [containsSelected]);
 
   // Tolerate a tree response that omits either array (e.g. an older vaultd
   // binary that predates quizzes) instead of throwing on `.length`/`.map`.
