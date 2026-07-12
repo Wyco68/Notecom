@@ -5,12 +5,20 @@
 const VAULTD_URL = process.env.VAULTD_URL || "http://127.0.0.1:4321";
 const VAULTD_TOKEN = process.env.VAULTD_TOKEN;
 
-// "vaultd" (default, local desktop) or "gcs" (read-only Vercel deployment
-// backed by a Google Cloud Storage mirror — see lib/vault/gcs.ts and
-// docs/deploy-vercel-gcs.md). Only the read helpers branch on this; the
-// write helpers are vaultd-only and never run under gcs (middleware.ts
-// 403s every mutating request in that deployment).
+// "vaultd" (default, local desktop), "gcs" (read-only Vercel deployment
+// backed by a Google Cloud Storage mirror — lib/vault/gcs.ts,
+// docs/deploy-vercel-gcs.md) or "worker" (read-only Vercel deployment
+// backed by the content-api Cloudflare Worker — lib/vault/worker.ts,
+// docs/deploy-cloudflare-github.md). Only the read helpers branch on this;
+// the write helpers are vaultd-only and never run remotely (middleware.ts
+// 403s every mutating request in those deployments).
 const VAULT_SOURCE = process.env.VAULT_SOURCE || "vaultd";
+
+// True on the serverless read-only deployments (gcs/worker): no vaultd, no
+// indexd, no Ollama — routes use this to skip reindexing, related and chat.
+export function isRemoteVault(): boolean {
+  return VAULT_SOURCE === "gcs" || VAULT_SOURCE === "worker";
+}
 
 export interface LessonEntry {
   id: string;
@@ -56,6 +64,7 @@ export function loadLesson(
   id: string
 ): Promise<{ html: string; title: string }> {
   if (VAULT_SOURCE === "gcs") return import("./gcs").then((m) => m.gcsLoadDoc(folder, id));
+  if (VAULT_SOURCE === "worker") return import("./worker").then((m) => m.workerLoadDoc(folder, id));
   return call(`/lesson/${encodeURIComponent(folder)}/${encodeURIComponent(id)}`);
 }
 
@@ -81,6 +90,7 @@ export function loadQuiz(
   id: string
 ): Promise<{ html: string; title: string }> {
   if (VAULT_SOURCE === "gcs") return import("./gcs").then((m) => m.gcsLoadDoc(folder, id));
+  if (VAULT_SOURCE === "worker") return import("./worker").then((m) => m.workerLoadDoc(folder, id));
   return call(`/quiz/${encodeURIComponent(folder)}/${encodeURIComponent(id)}`);
 }
 
@@ -106,6 +116,7 @@ export function loadAssignment(
   id: string
 ): Promise<{ html: string; title: string }> {
   if (VAULT_SOURCE === "gcs") return import("./gcs").then((m) => m.gcsLoadDoc(folder, id));
+  if (VAULT_SOURCE === "worker") return import("./worker").then((m) => m.workerLoadDoc(folder, id));
   return call(`/assignment/${encodeURIComponent(folder)}/${encodeURIComponent(id)}`);
 }
 
@@ -128,5 +139,6 @@ export function renameAssignment(
 
 export function listTree(): Promise<{ folders: TreeFolder[] }> {
   if (VAULT_SOURCE === "gcs") return import("./gcs").then((m) => m.gcsListTree());
+  if (VAULT_SOURCE === "worker") return import("./worker").then((m) => m.workerListTree());
   return call("/tree");
 }
