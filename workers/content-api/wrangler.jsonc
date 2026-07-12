@@ -1,0 +1,13 @@
+{
+  "name": "content-api",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-07-01",
+  "kv_namespaces": [
+    { "binding": "CONTENT", "id": "3aad8f383f0f49e1b946fc733a8de490" }
+  ],
+  "vars": {
+    "GITHUB_REPO": "Wyco68/lecture-content",
+    "GITHUB_BRANCH": "main"
+  },
+  "observability": { "enabled": true }
+}
