@@ -1,0 +1,12 @@
+# Never upload private content or non-app components to Vercel.
+# The worker/gcs deployments read content remotely; the vault stays local.
+# Paths are root-anchored — a bare "vault" would also match lib/vault/.
+/vault
+/.content-git
+/workers
+/tools
+/desktop
+/installation
+/node_modules
+/.next
+/_templates

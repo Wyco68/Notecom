@@ -21,6 +21,16 @@ tools/indexd/indexd
 /.next/
 .env.local
 
+# Content-repo mirror state (scripts/sync-content.mjs) — local git dir for
+# pushing vault/ to the private lecture-content repo, never committed here.
+/.content-git/
+
+# Cloudflare Worker (workers/content-api) local artifacts
+workers/content-api/node_modules/
+workers/content-api/.wrangler/
+workers/content-api/.dev.vars
+workers/content-api/.secrets.local
+
 # Desktop shell — Rust build output and generated sidecar/resource artifacts
 # (see scripts/ensure-desktop-sidecars.mjs, scripts/prepare-desktop-resources.mjs)
 desktop/target/
@@ -31,3 +41,5 @@ desktop/gen/
 # Collected installer(s) from the last `npm run build:desktop`
 # (copied here by scripts/install-desktop.mjs) — build output, not source.
 /installation/
+.vercel
+.env*
