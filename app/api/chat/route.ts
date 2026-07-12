@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { isRemoteVault } from "@/lib/vault/helper";
 
 const INDEXD_URL = process.env.INDEXD_URL || "http://127.0.0.1:4322";
 const INDEXD_TOKEN = process.env.INDEXD_TOKEN;
@@ -7,9 +8,9 @@ const INDEXD_TOKEN = process.env.INDEXD_TOKEN;
 // AI logic of its own (see SPECIFICATION.md §2.3a).
 export async function POST(req: NextRequest) {
   // Chat needs a local Ollama model behind indexd — neither exists on the
-  // GCS/serverless deployment. (middleware.ts also blocks this route there;
+  // serverless deployments. (middleware.ts also blocks this route there;
   // this is defence in depth.)
-  if (process.env.VAULT_SOURCE === "gcs") {
+  if (isRemoteVault()) {
     return Response.json({ error: "chat is unavailable on this server" }, { status: 403 });
   }
   let upstream: Response;

@@ -89,9 +89,12 @@ export default function SearchResults({
   }
 
   if (state.status === "offline") {
-    // The GCS deployment serves search from a prebuilt index, not indexd, so
-    // the "start indexd" hint would be wrong there.
-    if (process.env.NEXT_PUBLIC_VAULT_SOURCE === "gcs") {
+    // The remote deployments serve search from a prebuilt index, not indexd,
+    // so the "start indexd" hint would be wrong there.
+    if (
+      process.env.NEXT_PUBLIC_VAULT_SOURCE === "gcs" ||
+      process.env.NEXT_PUBLIC_VAULT_SOURCE === "worker"
+    ) {
       return (
         <p className="px-2 py-2 text-sm text-gray-500">
           Search is temporarily unavailable. Try again in a moment.
