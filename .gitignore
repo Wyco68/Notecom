@@ -7,6 +7,8 @@ tools/vaultd/vaultd.exe
 tools/vaultd/vaultd
 tools/indexd/indexd.exe
 tools/indexd/indexd
+tools/stored/stored.exe
+tools/stored/stored
 
 # Local Claude subscription credential (encrypted) — never committed.
 /.claude-token.enc
