@@ -1,22 +1,20 @@
 import { NextResponse } from "next/server";
-import { isRemoteVault, listTree } from "@/lib/vault/helper";
+import { listTree, syncFromVault } from "@/lib/vault/helper";
 import { triggerReindex } from "@/lib/search/indexd";
 
 export async function GET() {
   // Tree fetches happen exactly when vault content may have changed (page
   // load, window focus, manual refresh) — cheapest possible hook to keep
   // the search index current. Hash-based scan, near-free when unchanged.
-  // The remote deployments have no indexd, so there's nothing to reindex.
-  if (!isRemoteVault()) triggerReindex();
-  // Runtime read-only signal so the client hides write/chat controls even if
-  // the build-time NEXT_PUBLIC_VAULT_SOURCE was missing (e.g. a Vercel build
-  // without it). readOnly gates writes; remote also disables chat. Sent on
-  // the error path too, so a momentarily-unreachable backend still can't leak
-  // the write buttons on a read-only deployment.
-  const flags = {
-    readOnly: isRemoteVault() || process.env.READ_ONLY === "1",
-    remote: isRemoteVault(),
-  };
+  triggerReindex();
+  // Ingest Claude-authored vault files into SQLite before listing, so a
+  // just-generated lesson appears in this very response. Best-effort:
+  // stored being briefly down must not take the tree with it.
+  await syncFromVault().catch(() => {});
+  // Runtime read-only signal (READ_ONLY=1 boxes) so the client hides write
+  // controls; sent on the error path too so a momentarily-unreachable
+  // backend can't leak the write buttons.
+  const flags = { readOnly: process.env.READ_ONLY === "1" };
   try {
     const tree = await listTree();
     return NextResponse.json({ ...tree, ...flags });

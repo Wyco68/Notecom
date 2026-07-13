@@ -1,24 +1,11 @@
-// Client for the vaultd Go filesystem service.
+// Client for stored, the Go primary-datastore service (SQLite source of
+// truth). Same wire contract vaultd had, so only this base URL changed when
+// the runtime moved off the filesystem (offline-first migration).
 //
 // All persistence flows through here. See SPECIFICATION.md.
 
-const VAULTD_URL = process.env.VAULTD_URL || "http://127.0.0.1:4321";
-const VAULTD_TOKEN = process.env.VAULTD_TOKEN;
-
-// "vaultd" (default, local desktop), "gcs" (read-only Vercel deployment
-// backed by a Google Cloud Storage mirror — lib/vault/gcs.ts,
-// docs/deploy-vercel-gcs.md) or "worker" (read-only Vercel deployment
-// backed by the content-api Cloudflare Worker — lib/vault/worker.ts,
-// docs/deploy-cloudflare-github.md). Only the read helpers branch on this;
-// the write helpers are vaultd-only and never run remotely (middleware.ts
-// 403s every mutating request in those deployments).
-const VAULT_SOURCE = process.env.VAULT_SOURCE || "vaultd";
-
-// True on the serverless read-only deployments (gcs/worker): no vaultd, no
-// indexd, no Ollama — routes use this to skip reindexing, related and chat.
-export function isRemoteVault(): boolean {
-  return VAULT_SOURCE === "gcs" || VAULT_SOURCE === "worker";
-}
+const STORED_URL = process.env.STORED_URL || "http://127.0.0.1:4323";
+const STORED_TOKEN = process.env.STORED_TOKEN;
 
 export interface LessonEntry {
   id: string;
@@ -35,20 +22,27 @@ export interface TreeFolder {
 }
 
 async function call(path: string, init?: RequestInit): Promise<any> {
-  const res = await fetch(`${VAULTD_URL}${path}`, {
+  const res = await fetch(`${STORED_URL}${path}`, {
     ...init,
     headers: {
       "Content-Type": "application/json",
-      ...(VAULTD_TOKEN ? { "X-Auth-Token": VAULTD_TOKEN } : {}),
+      ...(STORED_TOKEN ? { "X-Auth-Token": STORED_TOKEN } : {}),
       ...(init?.headers ?? {}),
     },
     cache: "no-store",
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    throw new Error(data.error || `vaultd ${res.status}`);
+    throw new Error(data.error || `stored ${res.status}`);
   }
   return data;
+}
+
+// syncFromVault ingests Claude-authored vault files (written via /lect,
+// /quiz, /assignment) into SQLite. Awaited by /api/tree so content generated
+// a moment ago is present in the very tree response that follows it.
+export async function syncFromVault(): Promise<void> {
+  await call("/import", { method: "POST" });
 }
 
 export function createFolder(name: string): Promise<{ ok: boolean }> {
@@ -63,8 +57,6 @@ export function loadLesson(
   folder: string,
   id: string
 ): Promise<{ html: string; title: string }> {
-  if (VAULT_SOURCE === "gcs") return import("./gcs").then((m) => m.gcsLoadDoc(folder, id));
-  if (VAULT_SOURCE === "worker") return import("./worker").then((m) => m.workerLoadDoc(folder, id));
   return call(`/lesson/${encodeURIComponent(folder)}/${encodeURIComponent(id)}`);
 }
 
@@ -89,8 +81,6 @@ export function loadQuiz(
   folder: string,
   id: string
 ): Promise<{ html: string; title: string }> {
-  if (VAULT_SOURCE === "gcs") return import("./gcs").then((m) => m.gcsLoadDoc(folder, id));
-  if (VAULT_SOURCE === "worker") return import("./worker").then((m) => m.workerLoadDoc(folder, id));
   return call(`/quiz/${encodeURIComponent(folder)}/${encodeURIComponent(id)}`);
 }
 
@@ -115,8 +105,6 @@ export function loadAssignment(
   folder: string,
   id: string
 ): Promise<{ html: string; title: string }> {
-  if (VAULT_SOURCE === "gcs") return import("./gcs").then((m) => m.gcsLoadDoc(folder, id));
-  if (VAULT_SOURCE === "worker") return import("./worker").then((m) => m.workerLoadDoc(folder, id));
   return call(`/assignment/${encodeURIComponent(folder)}/${encodeURIComponent(id)}`);
 }
 
@@ -138,7 +126,5 @@ export function renameAssignment(
 }
 
 export function listTree(): Promise<{ folders: TreeFolder[] }> {
-  if (VAULT_SOURCE === "gcs") return import("./gcs").then((m) => m.gcsListTree());
-  if (VAULT_SOURCE === "worker") return import("./worker").then((m) => m.workerListTree());
   return call("/tree");
 }
