@@ -14,16 +14,10 @@ import SearchIcon from "../icons/SearchIcon";
 import ChatIcon from "../icons/ChatIcon";
 import UploadIcon from "../icons/UploadIcon";
 
-// Which write/interaction affordances the UI exposes. The remote deployments
-// (gcs, worker) are read-only by definition (no vaultd, no local model), so
-// the VAULT_SOURCE flag alone hides the write buttons and chat — no separate
-// READ_ONLY flag needed. NEXT_PUBLIC_READ_ONLY still covers the non-remote
-// read-only reader box.
-const REMOTE_VAULT =
-  process.env.NEXT_PUBLIC_VAULT_SOURCE === "gcs" ||
-  process.env.NEXT_PUBLIC_VAULT_SOURCE === "worker";
-const READ_ONLY_UI = process.env.NEXT_PUBLIC_READ_ONLY === "1" || REMOTE_VAULT;
-const CHAT_ENABLED = !REMOTE_VAULT;
+// Which write affordances the UI exposes: NEXT_PUBLIC_READ_ONLY covers a
+// read-only reader box; the runtime readOnly flag from /api/tree covers a
+// build where the env var was missing.
+const READ_ONLY_UI = process.env.NEXT_PUBLIC_READ_ONLY === "1";
 
 export default function AppShell() {
   const [folders, setFolders] = useState<Folder[] | null>(null);
@@ -33,11 +27,10 @@ export default function AppShell() {
   const [showChat, setShowChat] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [query, setQuery] = useState("");
-  // Seed from the build-time env (fast path), then trust the runtime flags
-  // /api/tree returns — so the deployed reader hides controls even if the
-  // client build was missing NEXT_PUBLIC_VAULT_SOURCE.
+  // Seed from the build-time env (fast path), then trust the runtime flag
+  // /api/tree returns — so a read-only box hides controls even if the
+  // client build was missing NEXT_PUBLIC_READ_ONLY.
   const [readOnly, setReadOnly] = useState(READ_ONLY_UI);
-  const [chatDisabled, setChatDisabled] = useState(!CHAT_ENABLED);
 
   const currentTitle = (() => {
     if (!selected || !folders) return null;
@@ -56,7 +49,6 @@ export default function AppShell() {
     const data: VaultTree = await res.json();
     setFolders(data.folders ?? []);
     if (typeof data.readOnly === "boolean") setReadOnly(data.readOnly);
-    if (typeof data.remote === "boolean") setChatDisabled(data.remote);
   }, []);
 
   const handleRefresh = useCallback(async () => {
@@ -173,15 +165,13 @@ export default function AppShell() {
         <LessonViewer lesson={selected} />
       </main>
 
-      {!chatDisabled && (
-        <button
-          onClick={() => setShowChat(true)}
-          title="Ask My Notes — chat over your lessons (local model)"
-          className="fixed right-5 top-3 z-40 flex h-8 w-8 items-center justify-center rounded-full border border-black/10 bg-white text-gray-500 shadow-sm hover:bg-black/5 hover:text-blue-600 dark:border-white/10 dark:bg-[#161b22] dark:text-gray-400 dark:hover:bg-white/10 dark:hover:text-blue-400"
-        >
-          <ChatIcon className="h-4 w-4" />
-        </button>
-      )}
+      <button
+        onClick={() => setShowChat(true)}
+        title="Ask My Notes — chat over your lessons (local model)"
+        className="fixed right-5 top-3 z-40 flex h-8 w-8 items-center justify-center rounded-full border border-black/10 bg-white text-gray-500 shadow-sm hover:bg-black/5 hover:text-blue-600 dark:border-white/10 dark:bg-[#161b22] dark:text-gray-400 dark:hover:bg-white/10 dark:hover:text-blue-400"
+      >
+        <ChatIcon className="h-4 w-4" />
+      </button>
 
       {showChat && (
         <ChatPanel
