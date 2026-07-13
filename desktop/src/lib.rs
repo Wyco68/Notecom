@@ -120,9 +120,16 @@ mod dev {
     }
 
     // Build tools/<name> if its binary is missing, then run it against the
-    // repo's vault/. Shared by vaultd (filesystem helper) and indexd
-    // (search/RAG) — identical dev launch shape.
-    fn spawn_go_service(root: &Path, name: &str, addr_env: &str, port: u16) -> u32 {
+    // repo's vault/. Shared by vaultd (filesystem helper), indexd
+    // (search/RAG), and stored (primary SQLite datastore) — identical dev
+    // launch shape; per-service extras arrive via `extra` env pairs.
+    fn spawn_go_service(
+        root: &Path,
+        name: &str,
+        addr_env: &str,
+        port: u16,
+        extra: &[(&str, String)],
+    ) -> u32 {
         let dir = root.join("tools").join(name);
         let exe_name = if cfg!(windows) {
             format!("{name}.exe")
@@ -140,15 +147,18 @@ mod dev {
         cmd.current_dir(root)
             .env(addr_env, format!("127.0.0.1:{port}"))
             .env("VAULT_ROOT", root.join("vault"));
+        for (k, v) in extra {
+            cmd.env(k, v);
+        }
         hide_window(&mut cmd);
         cmd.spawn().expect("failed to start go service").id()
     }
 
-    fn spawn_next(root: &Path, port: u16, vaultd_url: &str, indexd_url: &str) -> u32 {
+    fn spawn_next(root: &Path, port: u16, stored_url: &str, indexd_url: &str) -> u32 {
         let port_arg = port.to_string();
         let mut cmd = npm(&["run", "dev", "--", "-p", &port_arg]);
         cmd.current_dir(root)
-            .env("VAULTD_URL", vaultd_url)
+            .env("STORED_URL", stored_url)
             .env("INDEXD_URL", indexd_url);
         hide_window(&mut cmd);
         cmd.spawn().expect("failed to start next dev server").id()
@@ -158,21 +168,34 @@ mod dev {
         let root = repo_root();
         let vaultd_port = free_port();
         let indexd_port = free_port();
+        let stored_port = free_port();
         let next_port = free_port();
         let vaultd_url = format!("http://127.0.0.1:{vaultd_port}");
         let indexd_url = format!("http://127.0.0.1:{indexd_port}");
+        let stored_url = format!("http://127.0.0.1:{stored_port}");
 
         emit_stage(&app, "Starting backend...");
-        let vaultd_pid = spawn_go_service(&root, "vaultd", "VAULTD_ADDR", vaultd_port);
+        // vaultd first — stored mirrors every DB mutation to vault/ through it.
+        let vaultd_pid = spawn_go_service(&root, "vaultd", "VAULTD_ADDR", vaultd_port, &[]);
         wait_for_port(vaultd_port, Duration::from_secs(15));
-        let indexd_pid = spawn_go_service(&root, "indexd", "INDEXD_ADDR", indexd_port);
+        let indexd_pid = spawn_go_service(&root, "indexd", "INDEXD_ADDR", indexd_port, &[]);
+        // stored is the app's datastore — every read/write goes through it,
+        // so it is waited on like vaultd.
+        let stored_pid = spawn_go_service(
+            &root,
+            "stored",
+            "STORED_ADDR",
+            stored_port,
+            &[("VAULTD_URL", vaultd_url.clone())],
+        );
+        wait_for_port(stored_port, Duration::from_secs(15));
 
         emit_stage(&app, "Loading vault...");
         emit_stage(&app, "Preparing interface...");
-        let next_pid = spawn_next(&root, next_port, &vaultd_url, &indexd_url);
+        let next_pid = spawn_next(&root, next_port, &stored_url, &indexd_url);
         wait_for_port(next_port, Duration::from_secs(60));
 
-        track_pids(&app, &[vaultd_pid, indexd_pid, next_pid]);
+        track_pids(&app, &[vaultd_pid, indexd_pid, stored_pid, next_pid]);
         finish_launch(&app, next_port);
     }
 }
@@ -228,7 +251,21 @@ mod release {
         child.pid()
     }
 
-    fn spawn_next(app: &AppHandle, port: u16, vaultd_url: &str, indexd_url: &str) -> u32 {
+    fn spawn_stored(app: &AppHandle, port: u16, vault_root: &str, vaultd_url: &str) -> u32 {
+        let (_rx, child) = app
+            .shell()
+            .sidecar("stored")
+            .expect("stored sidecar not found")
+            .env("STORED_ADDR", format!("127.0.0.1:{port}"))
+            .env("VAULT_ROOT", vault_root.to_string())
+            // stored mirrors every DB mutation back to vault/ through vaultd.
+            .env("VAULTD_URL", vaultd_url.to_string())
+            .spawn()
+            .expect("failed to start stored sidecar");
+        child.pid()
+    }
+
+    fn spawn_next(app: &AppHandle, port: u16, stored_url: &str, indexd_url: &str) -> u32 {
         let frontend_dir = app
             .path()
             .resource_dir()
@@ -243,7 +280,7 @@ mod release {
             .current_dir(frontend_dir)
             .args(["server.js"])
             .env("PORT", port.to_string())
-            .env("VAULTD_URL", vaultd_url.to_string())
+            .env("STORED_URL", stored_url.to_string())
             .env("INDEXD_URL", indexd_url.to_string())
             // Generate (lib/generate/runner.ts) must run the claude CLI from
             // the checkout, where .claude/commands/ lives — the standalone
@@ -258,11 +295,14 @@ mod release {
         let vault_root = vault_dir(&app).to_string_lossy().to_string();
         let vaultd_port = free_port();
         let indexd_port = free_port();
+        let stored_port = free_port();
         let next_port = free_port();
         let vaultd_url = format!("http://127.0.0.1:{vaultd_port}");
         let indexd_url = format!("http://127.0.0.1:{indexd_port}");
+        let stored_url = format!("http://127.0.0.1:{stored_port}");
 
         emit_stage(&app, "Starting backend...");
+        // vaultd first — stored mirrors every DB mutation to vault/ through it.
         let vaultd_pid = spawn_vaultd(&app, vaultd_port, &vault_root);
         wait_for_port(vaultd_port, Duration::from_secs(15));
 
@@ -270,12 +310,17 @@ mod release {
         // it can index in the background while the UI loads.
         let indexd_pid = spawn_indexd(&app, indexd_port, &vault_root);
 
+        // Primary datastore — every app read/write goes through it, so it is
+        // waited on like vaultd.
+        let stored_pid = spawn_stored(&app, stored_port, &vault_root, &vaultd_url);
+        wait_for_port(stored_port, Duration::from_secs(15));
+
         emit_stage(&app, "Loading vault...");
         emit_stage(&app, "Preparing interface...");
-        let next_pid = spawn_next(&app, next_port, &vaultd_url, &indexd_url);
+        let next_pid = spawn_next(&app, next_port, &stored_url, &indexd_url);
         wait_for_port(next_port, Duration::from_secs(30));
 
-        track_pids(&app, &[vaultd_pid, indexd_pid, next_pid]);
+        track_pids(&app, &[vaultd_pid, indexd_pid, stored_pid, next_pid]);
         finish_launch(&app, next_port);
     }
 }

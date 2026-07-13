@@ -64,6 +64,7 @@ function copyNodeSidecar(triple) {
 const triple = targetTriple();
 buildGoSidecar("vaultd", triple);
 buildGoSidecar("indexd", triple);
+buildGoSidecar("stored", triple);
 buildNextStandalone();
 copyNodeSidecar(triple);
 console.log(`desktop resources prepared for ${triple}`);
