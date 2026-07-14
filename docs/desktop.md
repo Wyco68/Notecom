@@ -27,21 +27,26 @@ helper) are unchanged and stay at the repo root — see
 On launch: create a splash window (`assets/splash.html`) immediately, then
 on a background thread:
 
-1. Pick three free ports (bind `127.0.0.1:0`, read back the assigned port) —
-   one each for vaultd, indexd, and the Next server.
-2. Start vaultd, poll its port until it accepts connections.
+1. Pick four free ports (bind `127.0.0.1:0`, read back the assigned port) —
+   one each for vaultd, indexd, stored, and the Next server.
+2. Start vaultd, poll its port until it accepts connections (stored mirrors
+   DB mutations to disk through it, so it goes first).
 3. Start indexd (search/RAG). It is *not* waited on — the reader works
    without it and it indexes in the background while the UI loads.
-4. Start the Next server (given `VAULTD_URL` + `INDEXD_URL`), poll its port.
-5. Emit `stage-update` events to the splash window at each step (it listens
+4. Start stored (primary SQLite datastore + Supabase sync worker, given
+   `VAULTD_URL`), poll its port — every app read/write goes through it.
+5. Start the Next server (given `STORED_URL` + `INDEXD_URL`), poll its port.
+6. Emit `stage-update` events to the splash window at each step (it listens
    via `window.__TAURI__.event.listen`, enabled by `app.withGlobalTauri`).
-6. Create the main window pointed at `http://127.0.0.1:<port>/vault`, close
+7. Create the main window pointed at `http://127.0.0.1:<port>/vault`, close
    the splash window.
 
-Three sidecars in the release build (`bundle.externalBin`): `vaultd` (files),
-`indexd` (search/RAG), and `node` (runs the Next standalone `server.js`).
-indexd's Ollama dependency is optional — without it, search falls back to
-keyword mode and chat is unavailable, both handled in the app.
+Four sidecars in the release build (`bundle.externalBin`): `vaultd` (files),
+`indexd` (search/RAG), `stored` (SQLite datastore + sync), and `node` (runs
+the Next standalone `server.js`). indexd's Ollama dependency is optional —
+without it, search falls back to keyword mode and chat is unavailable, both
+handled in the app. stored's Supabase credentials are optional the same way
+— without `vault/.data/sync.env` it runs fully local and skips sync.
 
 The webview navigating to a `127.0.0.1` URL is not "opening localhost in a
 browser" — it's the app's own native window loading the app's own local
@@ -101,8 +106,8 @@ subdirectory they were built into.
   production build on every run.
 - **`prepare-desktop-resources.mjs`** (`build.beforeBuildCommand`) — the
   real artifact build for `tauri build`:
-  1. `go build` vaultd **and** indexd (shared `buildGoSidecar` helper), copy
-     each to `desktop/bin/<name>-<target-triple>[.exe]`.
+  1. `go build` vaultd, indexd **and** stored (shared `buildGoSidecar`
+     helper), copy each to `desktop/bin/<name>-<target-triple>[.exe]`.
   2. `next build` (standalone output), assemble `desktop/resources/frontend/`
      from `.next/standalone` + `.next/static` + `public/`.
   3. Copy the local Node executable to `desktop/bin/node-<target-triple>`

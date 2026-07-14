@@ -19,7 +19,7 @@ Loaded by `/feat` only. Source of truth is the route files themselves
 | `/api/assignment/[folder]/[id]` | GET | — | `{ html, title }` |
 | `/api/assignment/[folder]/[id]` | DELETE | — | `{ ok }` |
 | `/api/assignment/[folder]/[id]` | POST | `{ newTitle }` | `{ ok }` (rename) |
-| `/api/search` | GET | `?q&folder&kind&limit` | `{ mode: "hybrid"\|"keyword", results: [chunk hits] }` — proxies indexd; on remote deployments (`VAULT_SOURCE=gcs`/`worker`) serves the prebuilt keyword index instead |
+| `/api/search` | GET | `?q&folder&kind&limit` | `{ mode: "hybrid"\|"keyword", results: [chunk hits] }` — proxies indexd |
 | `/api/related/[folder]/[id]` | GET | `?kind` | `{ results: [{folder,id,kind,title,score}] }` — proxies indexd |
 | `/api/chat` | POST | `{ message, history }` | SSE passthrough of indexd `/chat` (sources → deltas → done) |
 | `/api/generate` | POST | multipart `file, folder, kind(lect\|quiz)` | `{ jobId }` — saves upload, spawns local Claude Code CLI |
@@ -62,8 +62,10 @@ by vaultd and upgraded to the `{lessons,quizzes,assignments}` shape the next
 time anything in that folder is saved.
 
 Every name/id arriving at vaultd is already fully resolved by the caller.
-`lib/vault/helper.ts` is the only TypeScript caller of these endpoints;
-don't `fetch()` vaultd from anywhere else.
+Since the offline-first migration the app no longer calls vaultd — its two
+callers are Claude Code (`/lect`, `/quiz`, `/assignment` save content as
+files) and stored (which replays every DB mutation to disk through these
+endpoints). Don't `fetch()` vaultd from TypeScript.
 
 ## indexd (Go search/RAG service, default `127.0.0.1:4322`)
 
@@ -92,23 +94,30 @@ to scroll to the matched section. Embeddings come from a local Ollama server
 Ollama, `/search` serves `mode: "keyword"` (FTS5-only) and embeddings
 backfill on a later scan.
 
-## content-api (Cloudflare Worker, `workers/content-api`)
+## stored (Go primary datastore + sync service, default `127.0.0.1:4323`)
 
-Serves a Workers KV mirror of the private GitHub `lecture-content` repo to
-the `VAULT_SOURCE=worker` Vercel deployment. Every endpoint requires
-`Authorization: Bearer <API_TOKEN>` except `/webhook`, which is instead
-verified by its `X-Hub-Signature-256` HMAC (the `WEBHOOK_SECRET` secret).
-`lib/vault/worker.ts` is the only TypeScript caller. Setup:
-[deploy-cloudflare-github.md](deploy-cloudflare-github.md).
+Owns the live SQLite database (`<vault>/.data/notes.db`) — the app's source
+of truth — and the background Supabase sync worker. `lib/vault/helper.ts`
+is the only TypeScript caller. The CRUD surface deliberately mirrors
+vaultd's contract 1:1 (same paths, bodies, responses), so it is not
+repeated here; the differences are:
 
 | Endpoint | Method | Body/params | Notes |
 |---|---|---|---|
-| `/tree` | GET | — | `{ folders: [{ name, lessons, quizzes, assignments }] }` — prebuilt at sync time |
-| `/doc/{folder}/{id}` | GET | — | `{ html, title }` |
-| `/search` | GET | `?q&limit` | `{ mode: "keyword", results: [...] }` — same scoring as the gcs mode (title +5, heading +3, body occurrence count); results cached in-Worker for 60s |
-| `/status` | GET | — | `{ ok, commitSha, syncedAt, docCount }` |
-| `/sync` | POST | — | forces a re-sync from GitHub, answers 202 |
-| `/webhook` | POST | GitHub push payload | HMAC-verified; ignores non-push events and other branches; syncs async, answers 200 immediately |
+| `/import` | POST | — | scan `vault/` and upsert anything that differs into SQLite (disk wins); idempotent; never enqueues sync ops. `/api/tree` awaits this so Claude-authored files appear immediately |
+| `/status` | GET | — | `{ ok, folders, queued, last_sync }` |
+
+Behavioral differences from vaultd behind the shared contract: every
+mutation commits atomically with one `sync_queue` row (drained to Supabase
+by the 30s background worker — batched upserts, tombstone deletes,
+Last-Write-Wins by `version` then `updated_at`), and every mutation is
+mirrored back to `vault/` by calling vaultd, keeping the file tree a live
+legacy-format export for indexd and Claude Code.
+
+Sync is enabled by `SUPABASE_URL` + `SUPABASE_SERVICE_KEY` (env or
+`<vault>/.data/sync.env`); absent, stored runs fully local. Remote tables:
+`notes_folders`, `notes_documents` (RLS enabled, zero policies —
+service-role access only; server-trigger `synced_at` is the pull cursor).
 
 Error shape is `{ error: string }` with a non-2xx status, matching the
 Next.js routes.

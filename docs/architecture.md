@@ -10,15 +10,11 @@ duplicated here — read both before any architecture-affecting change):
   lesson creation (Claude Code → vault/), viewing, folder/lesson management.
 - [docs/desktop.md](desktop.md) — the Tauri shell (`desktop/`): startup
   orchestration, splash screen, dev vs production sidecar layout.
-- [docs/deploy-vercel-gcs.md](deploy-vercel-gcs.md) — the optional read-only
-  Vercel deployment that reads the vault from a private Google Cloud Storage
-  mirror (`VAULT_SOURCE=gcs`) for multi-device viewing. Additive: unset
-  locally, the app is the normal writable vaultd/indexd desktop app.
-- [docs/deploy-cloudflare-github.md](deploy-cloudflare-github.md) — the
-  second read-only deployment channel: the vault is pushed to a private
-  GitHub repo, mirrored into Workers KV by a Cloudflare Worker
-  (`workers/content-api/`), and read by Vercel (`VAULT_SOURCE=worker`).
-  Same additive, read-only rules as the GCS channel.
+Multi-device is cross-device sync, not a hosted reader: each machine runs
+the desktop app and the `stored` sidecar reconciles its SQLite database with
+Supabase in the background (see "Primary datastore" below). The former
+read-only cloud reader channels (`VAULT_SOURCE=gcs`/`worker`) were retired
+in favour of this — see git history for their setup docs.
 
 ## The one rule that must never break
 
@@ -26,8 +22,10 @@ Don't move logic across the layers when fixing or extending the app:
 
 - Don't add naming/slug/sequence logic to the Go helper (`tools/vaultd/`)
   — that's Next.js's job (`lib/vault/slug.ts`).
-- Don't add filesystem writes to a React component or API route directly
-  — always through `lib/vault/helper.ts` → `vaultd`.
+- Don't add persistence to a React component or API route directly —
+  always through `lib/vault/helper.ts` → `stored` (which mirrors to the
+  filesystem via `vaultd`). Never fetch Supabase from the app; sync lives
+  only inside `stored`.
 - Don't add any AI generation logic or Anthropic API calls to the Next.js
   app. Two delegations are the sanctioned exception (2026-07): the chat
   proxy (`/api/chat` → indexd `/chat` → local Ollama) and the generation
@@ -40,27 +38,34 @@ Don't move logic across the layers when fixing or extending the app:
 - Don't add chunking, embedding, or ranking logic to vaultd or to Next.js
   — search/retrieval intelligence lives only in `indexd` (below).
 
-## Read source: vaultd (default), GCS, or Worker (`VAULT_SOURCE`)
+## Primary datastore: stored (`tools/stored/`)
 
-The Next.js read helpers (`lib/vault/helper.ts`: `listTree`, `loadLesson`,
-`loadQuiz`, `loadAssignment`) branch on `VAULT_SOURCE`:
-- unset / `vaultd` (default) — the local desktop app, reads via the vaultd
-  Go service. Fully writable; indexd powers search + chat.
-- `gcs` — the serverless Vercel deployment, reads a private Google Cloud
-  Storage mirror via `lib/vault/gcs.ts` (no vaultd, no indexd, no Ollama).
-  All writes and chat are blocked in `middleware.ts`; search is served from
-  a prebuilt keyword index (`scripts/build-search-index.mjs` →
-  `vault/.search-index.json`) instead of indexd. Setup:
-  [deploy-vercel-gcs.md](deploy-vercel-gcs.md).
-- `worker` — the same serverless Vercel deployment, but reads the
-  content-api Cloudflare Worker (`workers/content-api/`), which mirrors the
-  private GitHub `lecture-content` repo into Workers KV, webhook-driven.
-  Writes and chat are blocked exactly as in `gcs`; search is served by the
-  Worker from the same prebuilt keyword index. Setup:
-  [deploy-cloudflare-github.md](deploy-cloudflare-github.md).
+A third Go service (default `127.0.0.1:4323`) that owns the app's live
+SQLite database (`<vault>/.data/notes.db`) and the Supabase sync engine.
+Since the offline-first migration (2026-07) it — not the filesystem — is the
+source of truth while the app runs:
 
-This is read-only and additive — it never adds write or AI-generation logic
-to the app, so the "one rule" above still holds.
+- The Next.js helpers (`lib/vault/helper.ts`) read and write **stored**
+  over the same wire contract vaultd had; only the base URL changed.
+- Every mutation commits atomically with one `sync_queue` row; a background
+  worker inside stored reconciles with Supabase every 30s (batched upserts,
+  tombstone deletes, Last-Write-Wins by `version` with `updated_at`
+  tiebreak, exponential backoff). UI code never uploads anything.
+- After every DB mutation stored **mirrors the change to `vault/` by
+  calling vaultd**, so the legacy file tree stays a live export: indexd
+  keeps indexing files, Claude Code keeps writing files, and a vault import
+  (`POST /import`, awaited by `/api/tree`) ingests Claude-authored files
+  back into SQLite.
+- Supabase credentials live in `<vault>/.data/sync.env`
+  (`SUPABASE_URL`, `SUPABASE_SERVICE_KEY`); without them stored runs fully
+  local and just logs that sync is disabled. The remote `notes_folders` /
+  `notes_documents` tables have RLS enabled with no policies — only the
+  service role (this worker) can touch them.
+
+Endpoints: [api-contract.md](api-contract.md). Division of responsibility:
+vaultd stays dumb filesystem I/O, indexd stays search-only, stored owns
+persistence + sync and holds **no** naming/slug/seq logic — every value it
+stores arrives fully resolved from the app, same rule as vaultd.
 
 ## Search layer: indexd (`tools/indexd/`)
 

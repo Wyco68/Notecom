@@ -1,12 +1,13 @@
-# Data Flow — Next.js + Go (vaultd)
+# Data Flow — Next.js + Go services (stored / vaultd / indexd)
 
 Two separate workflows: **lesson creation** (Claude Code, outside the app) and
-**lesson reading/management** (the Next.js app). They share the `vault/`
-directory as the handoff point.
+**lesson reading/management** (the Next.js app). They meet in `stored`'s
+SQLite database — the source of truth — with `vault/` as the file-format
+bridge between Claude Code and the database.
 
 ---
 
-## 1. Lesson creation (Claude Code → vault/)
+## 1. Lesson creation (Claude Code → vault/ → SQLite)
 
 Claude Code is the only tool that writes lesson content.
 
@@ -19,8 +20,10 @@ Claude Code is the only tool that writes lesson content.
   → Done
 ```
 
-This happens entirely outside the Next.js process. No API route is involved.
-The app picks up the new lesson on the next tree fetch.
+This happens entirely outside the Next.js process. On the next tree fetch
+the app awaits `stored POST /import`, which ingests the new files into
+SQLite (idempotent, disk-wins, never enqueues sync ops); the stored sync
+worker then uploads the new records to Supabase in the background.
 
 **Naming convention (Claude Code must follow):**
 - `<folder>` = kebab-case slug of the subject name, e.g. `computer-networks`
@@ -35,7 +38,7 @@ The app picks up the new lesson on the next tree fetch.
 
 ---
 
-## 2. Viewing a lesson (browser → Next.js → vaultd)
+## 2. Viewing a lesson (browser → Next.js → stored)
 
 ```
 Browser
@@ -45,10 +48,11 @@ AppShell
   │  fetch GET /api/tree
   ▼
 app/api/tree/route.ts
-  │  listTree() → vaultd GET /tree
+  │  await stored POST /import   (ingest Claude-authored files)
+  │  listTree() → stored GET /tree
   ▼
-vaultd
-  │  reads each index.json, returns { folders: [{ name, lessons: [...] }] }
+stored
+  │  reads SQLite, returns { folders: [{ name, lessons: [...] }] }
   ▼
 AppShell renders sidebar with folder/lesson tree
 
@@ -58,10 +62,10 @@ LessonViewer
   │  fetch GET /api/lesson/<folder>/<id>
   ▼
 app/api/lesson/[folder]/[id]/route.ts
-  │  loadLesson() → vaultd GET /lesson/<folder>/<id>
+  │  loadLesson() → stored GET /lesson/<folder>/<id>
   ▼
-vaultd
-  │  reads vault/<folder>/<id>.html, returns { html, title }
+stored
+  │  reads SQLite, returns { html, title }
   ▼
 HtmlRenderer
   │  DOMParser walk → React elements
@@ -73,14 +77,15 @@ Screen
 
 ---
 
-## 3. Folder management (browser → Next.js → vaultd)
+## 3. Folder management (browser → Next.js → stored)
 
 **Create folder:**
 ```
 NewFolderModal
   → POST /api/folders { name }
-  → slugify(name) → POST vaultd /folder { name: slug }
-  → vaultd creates dir + empty index.json
+  → slugify(name) → POST stored /folder { name: slug }
+  → stored: SQLite insert + sync_queue row (one transaction)
+  → stored mirrors to disk via vaultd (dir + empty index.json)
   → sidebar refreshes
 ```
 
@@ -89,34 +94,52 @@ NewFolderModal
 FileTreeNode (hover → trash icon)
   → ConfirmModal
   → DELETE /api/folders/<name>
-  → vaultd DELETE /folder/<name>  (os.RemoveAll)
+  → stored: tombstone folder + its documents + sync_queue rows (one transaction)
+  → stored mirrors to disk via vaultd (os.RemoveAll)
   → sidebar refreshes
 ```
 
 ---
 
-## 4. Lesson management (browser → Next.js → vaultd)
+## 4. Lesson management (browser → Next.js → stored)
 
 **Delete lesson:**
 ```
 FileTreeNode (hover → trash icon)
   → ConfirmModal
   → DELETE /api/lesson/<folder>/<id>
-  → vaultd DELETE /lesson/<folder>/<id>
-  → removes .html + drops entry from index.json
+  → stored: tombstone row + sync_queue row; mirror removes .html + index entry
   → sidebar refreshes
 ```
 
 **Rename lesson:**
 ```
 (rename UI → POST /api/lesson/<folder>/<id> { newTitle })
-  → vaultd POST /lesson/<folder>/<id>/rename { newTitle }
-  → index.json title updated (filename unchanged)
+  → stored: title updated, version bumped, sync_queue row; mirror updates index.json
+  → (filename and id unchanged)
 ```
 
 ---
 
-## 5. Searching notes (browser → Next.js → indexd)
+## 5. Cross-device sync (stored ⇄ Supabase, background)
+
+```
+every 30s / on start / final flush on exit
+  │  pull: rows with synced_at > cursor  → LWW apply → SQLite → disk mirror
+  ▼
+stored sync worker
+  │  push: drain sync_queue → read live rows → batched upserts (tombstones
+  │        included) → remove queue rows (or retry with backoff)
+  ▼
+Supabase (notes_folders / notes_documents — service-role only)
+```
+
+Conflicts: Last-Write-Wins — higher `version` wins, `updated_at` breaks
+ties, equal means same write (ignored). UI code never talks to Supabase.
+
+---
+
+## 6. Searching notes (browser → Next.js → indexd)
 
 ```
 Sidebar search box (AppShell)
@@ -135,15 +158,17 @@ SearchResults renders heading/lesson/summary per hit
 
 Index freshness: every `GET /api/tree` (page load, window focus, refresh
 button) fire-and-forgets `POST /reindex` to indexd; the scan is hash-based
-and skips unchanged files. indexd also scans at startup.
+and skips unchanged files. indexd reads the disk mirror, which stored keeps
+current — so search follows both local edits and pulled remote changes.
 
 ---
 
-## 6. Who does what
+## 7. Who does what
 
 | Layer | Files | Responsibility |
 |---|---|---|
 | **Claude Code** | `/lect` command | Content creation: generate HTML, write vault/ files, update index.json |
-| **Next.js** | `app/api/*`, `lib/vault/*`, `lib/search/*`, `components/*` | Read and manage: tree, load lesson, delete/rename folder and lesson; proxy search |
-| **vaultd** | `tools/vaultd/main.go` | Pure filesystem I/O over HTTP. Zero naming logic, zero content logic |
+| **Next.js** | `app/api/*`, `lib/vault/*`, `lib/search/*`, `components/*` | Read and manage via stored; proxy search; never touches Supabase |
+| **stored** | `tools/stored/*.go` | Source of truth (SQLite), sync queue + Supabase worker, vault import, disk mirror orchestration. Zero naming logic |
+| **vaultd** | `tools/vaultd/main.go` | Pure filesystem I/O over HTTP (Claude Code saves; stored mirrors). Zero naming logic, zero content logic |
 | **indexd** | `tools/indexd/*.go` | Chunking, embeddings (via Ollama), hybrid search over `vault/.index/index.db` |

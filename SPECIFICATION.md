@@ -14,10 +14,11 @@ Claude Code (the CLI) is the author. The Next.js app is the reader.
 
 ## 2. Architecture
 
-Two layers, each with a single non-overlapping responsibility, packaged
-inside a thin desktop shell (Tauri — see [docs/desktop.md](docs/desktop.md)).
-The shell only starts/stops the other two and shows the window; it holds no
-business logic and isn't a third layer in the sense below.
+Independent layers, each with a single non-overlapping responsibility,
+packaged inside a thin desktop shell (Tauri — see
+[docs/desktop.md](docs/desktop.md)). The shell only starts/stops the others
+and shows the window; it holds no business logic and isn't a layer in the
+sense below.
 
 ### 2.1 Next.js application — read and manage
 
@@ -43,23 +44,33 @@ deliberate delegations exist (added 2026-07):
 The app still never calls the Anthropic API directly, stores no API key,
 and never writes vault content itself.
 
-### 2.2 Go helper (`vaultd`) — filesystem operations only
+### 2.2 Go datastore (`stored`) — persistence and sync
 
-A small Go HTTP service exposing exactly six operations:
+The primary datastore service (`tools/stored/`). Owns the live SQLite
+database (`vault/.data/notes.db`) — **the source of truth while the app
+runs** — and the cross-device sync engine:
 
-```
-CreateFolder()
-LoadLesson()
-DeleteLesson()
-RenameLesson()
-ListTree()
-DeleteFolder()
-```
+- The app reads and writes exclusively through stored (same wire contract
+  vaultd had; `lib/vault/helper.ts` is the only TypeScript caller).
+- Every mutation commits atomically with one `sync_queue` row; a background
+  worker reconciles with Supabase every 30 seconds (batched upserts,
+  tombstone deletes, Last-Write-Wins by version). Fully offline-capable:
+  without credentials or network the queue just waits.
+- Every mutation is mirrored to `vault/` by calling vaultd, keeping the
+  file tree a live legacy-format export; `POST /import` ingests
+  Claude-authored files back into SQLite.
 
-It receives fully-resolved names and paths and performs raw filesystem I/O.
-It contains no slugify logic, no sequence-number generation, no content logic.
+Like vaultd it receives fully-resolved values only — no slugify logic, no
+sequence-number generation, no content logic.
 
-### 2.3 Go search service (`indexd`) — retrieval only
+### 2.3 Go helper (`vaultd`) — filesystem operations only
+
+A small Go HTTP service performing raw filesystem I/O on `vault/`. Its two
+callers are Claude Code (saving generated content as files) and stored
+(mirroring DB mutations to disk). It contains no slugify logic, no
+sequence-number generation, no content logic.
+
+### 2.4 Go search service (`indexd`) — retrieval only
 
 A second Go service (`tools/indexd/`, default `127.0.0.1:4322`) that makes
 the vault searchable (the RAG backend): chunks lesson HTML by educational
@@ -113,6 +124,17 @@ no custom classes other than `class="mermaid"`.
 ---
 
 ## 4. Storage model
+
+**SQLite is the source of truth** (`vault/.data/notes.db`, owned by
+stored): `folders` and `documents` tables with device-independent UUID ids,
+per-row `version` + `updated_at` (the sync conflict unit), soft-delete
+tombstones, plus `settings`, `sync_queue` and `sync_state`. The Supabase
+side (`notes_folders`, `notes_documents`) mirrors this shape.
+
+The file tree below is a **continuously-maintained legacy-format mirror**:
+stored replays every DB mutation to it (via vaultd), Claude Code writes new
+content into it, and stored imports those files back into SQLite. It stays
+exactly:
 
 ```
 vault/
@@ -179,11 +201,12 @@ chat toggle (local Ollama over retrieved sections) — see §2.1.
 browser -> GET /vault
    -> AppShell renders sidebar + content pane
    -> Sidebar calls GET /api/tree
-        -> Next.js calls vaultd ListTree()
-        -> returns folders + lessons JSON (from each index.json)
+        -> Next.js awaits stored POST /import (ingest Claude-authored files)
+        -> Next.js calls stored GET /tree (SQLite)
+        -> returns folders + lessons JSON
    -> user clicks a lesson
    -> LessonViewer calls GET /api/lesson/<Folder>/<id>
-        -> Next.js calls vaultd LoadLesson(folder, id)
+        -> Next.js calls stored GET /lesson/... (SQLite)
         -> returns the stored HTML
    -> HtmlRenderer parses HTML into React elements
         (DOMParser walk — no dangerouslySetInnerHTML)
@@ -193,10 +216,13 @@ browser -> GET /vault
 
 ---
 
-## 7. Go helper — interface
+## 7. Service interface (stored / vaultd)
 
-Runs on `localhost:4321`. Next.js API routes call it via `fetch` through
-`lib/vault/helper.ts` only.
+One wire contract, two implementations: **stored** (`localhost:4323`,
+SQLite — what the app calls via `lib/vault/helper.ts`) and **vaultd**
+(`localhost:4321`, filesystem — called by Claude Code and by stored's disk
+mirror). stored adds `POST /import` and a richer `GET /status`; see
+[docs/api-contract.md](docs/api-contract.md).
 
 | Method | Path | Body in | Body out |
 |--------|------|---------|----------|
@@ -228,9 +254,11 @@ full endpoint list.
 | Code highlighting | `highlight.js` (client-side) | Syntax inside `<pre><code>` blocks |
 | Diagrams | `mermaid` | Client-side SVG from `div.mermaid` blocks |
 | Animation | `framer-motion` | Fade/slide on lesson switch |
-| Filesystem helper | Go HTTP service (`vaultd`) | Folder/lesson CRUD + tree listing |
+| Primary datastore | Go HTTP service (`stored`) + SQLite | Source of truth: folder/document CRUD, sync queue, Supabase sync worker |
+| Cloud sync | Supabase Postgres (`notes_*` tables, service-role only) | Cross-device synchronization + backup; never a runtime database |
+| Filesystem helper | Go HTTP service (`vaultd`) | Legacy-format disk mirror + Claude Code's save path |
 | Search/RAG | Go HTTP service (`indexd`) + SQLite (FTS5 + vector BLOBs) | Section chunking, hybrid retrieval; Ollama embeddings when present |
-| Notes storage | `.html` + `index.json` under `vault/` | Source of truth; gitignored |
+| Notes storage | `.html` + `index.json` under `vault/` | Live legacy-format mirror/export; gitignored |
 | Desktop shell | Tauri (Rust) | Native window, startup orchestration, splash screen, packaging |
 
 No AI SDK, no Anthropic API key. Chat = Ollama via indexd; generation =
@@ -261,15 +289,16 @@ npm run dev:desktop     # development: native window, hot reload
 npm run build:desktop   # production: installer under desktop/target/release/bundle
 ```
 
-**Browser-only fallback** — two manually-started processes, no native
-window:
+**Browser-only fallback** — no native window; `predev` auto-builds and
+starts all three Go services (vaultd :4321, indexd :4322, stored :4323):
 
 ```bash
-cd tools/vaultd && go build -o vaultd.exe . && cd ../..   # macOS/Linux: vaultd (no .exe)
-./tools/vaultd/vaultd.exe   # filesystem helper, default :4321
-node scripts/ensure-indexd.mjs   # search service, default :4322 (builds on first run)
 npm run dev                 # http://localhost:3000 -> /vault
 ```
+
+Cross-device sync (optional): put `SUPABASE_URL` and
+`SUPABASE_SERVICE_KEY` in `vault/.data/sync.env`; without them the app is
+fully local.
 
 Semantic search (optional): install [Ollama](https://ollama.com) and run
 `ollama pull nomic-embed-text`. Without it, search runs in keyword (FTS5)
@@ -282,10 +311,13 @@ Writing a note happens separately, via Claude Code in a terminal, using the
 
 ## 10. Out of scope
 
-- No database as source of truth (filesystem via Go helper is the store;
-  indexd's SQLite file is derived search data only, safe to delete).
-- No deployment/hosting beyond local dev.
-- No multi-tenancy.
-- No user authentication of any kind.
+- No hosted/browser reader deployment — multi-device is desktop app +
+  background Supabase sync on each machine (the former GCS/Cloudflare
+  read-only reader channels were retired 2026-07; see git history).
+- No multi-tenancy — one user's notes, one Supabase project; the sync
+  worker authenticates with the service-role key from a local env file.
+- No user authentication UI of any kind.
 - No generation *logic* inside the application — the app only delegates to
   the local Claude Code CLI (lessons/quizzes) or local Ollama (chat).
+- No reading or writing Supabase from the app/UI — sync lives only inside
+  the stored worker; Supabase is never a runtime database.
