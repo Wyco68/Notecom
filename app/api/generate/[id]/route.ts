@@ -32,7 +32,11 @@ export async function GET(
         if (job.status !== "running") {
           controller.enqueue(
             encoder.encode(
-              `event: end\ndata: ${JSON.stringify({ status: job.status, tokens: job.tokens })}\n\n`
+              `event: end\ndata: ${JSON.stringify({
+                status: job.status,
+                tokens: job.tokens,
+                needsAuth: !!job.needsAuth,
+              })}\n\n`
             )
           );
           controller.close();

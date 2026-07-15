@@ -21,6 +21,9 @@ export interface Job {
   log: string[];
   startedAt: number;
   tokens: { input: number; output: number };
+  /** set when the run failed because the CLI has no valid session — the UI
+   *  offers sign-in instead of a bare "try again" */
+  needsAuth?: boolean;
   /** live process handle — undefined once the job has finished */
   child?: ChildProcess;
 }
@@ -200,7 +203,12 @@ export function startJob(
         }
         // Classify the failure so the user knows whether to just retry.
         const text = job.log.join("\n").toLowerCase();
-        if (/rate.?limit|usage limit|quota|out of|credit|insufficient|max.*tokens|token budget|429/.test(text)) {
+        if (/oauth|authenticate|unauthorized|not logged in|log ?in|session expired|401/.test(text)) {
+          job.needsAuth = true;
+          job.log.push(
+            "→ Claude Code isn't signed in (the session expired). Nothing was saved — sign in and generate again."
+          );
+        } else if (/rate.?limit|usage limit|quota|out of|credit|insufficient|max.*tokens|token budget|429/.test(text)) {
           job.log.push(
             "→ This looks like a Claude usage/rate limit. Wait a bit (or check your plan's limits), then click Generate again."
           );
