@@ -11,10 +11,13 @@ export default function GenerateModal({
   folders,
   onClose,
   onGenerated,
+  onSignIn,
 }: {
   folders: Folder[];
   onClose: () => void;
   onGenerated: () => void;
+  /** hand off to the sign-in modal when a run failed for lack of a session */
+  onSignIn: () => void;
 }) {
   const [folder, setFolder] = useState(folders[0]?.name ?? "");
   const [kind, setKind] = useState<"lect" | "quiz">("lect");
@@ -27,6 +30,7 @@ export default function GenerateModal({
   // working" during the long silent gaps while Claude writes a lesson, so a
   // live-but-quiet run doesn't look frozen.
   const [lastActivity, setLastActivity] = useState(0);
+  const [needsAuth, setNeedsAuth] = useState(false);
   const jobRef = useRef<string | null>(null);
   const logRef = useRef<HTMLDivElement | null>(null);
   const toast = useToast();
@@ -67,6 +71,7 @@ export default function GenerateModal({
     setTokens({ input: 0, output: 0 });
     setElapsed(0);
     setLastActivity(Date.now());
+    setNeedsAuth(false);
     try {
       const form = new FormData();
       form.set("file", file);
@@ -103,6 +108,7 @@ export default function GenerateModal({
           if (event === "end") {
             status = payload.status;
             if (payload.tokens) setTokens(payload.tokens);
+            setNeedsAuth(!!payload.needsAuth);
           }
         }
       }
@@ -235,10 +241,18 @@ export default function GenerateModal({
             <>
               {phase === "error" && (
                 <p className="mb-2 rounded border border-red-300 bg-red-50 px-3 py-2 text-xs text-red-700 dark:border-red-800/60 dark:bg-red-950/30 dark:text-red-300">
-                  Generation failed — nothing was saved. See the log above for
-                  the reason; if it was a network or usage-limit error, just
-                  press Generate again.
+                  {needsAuth
+                    ? "Claude Code isn't signed in — nothing was saved. Sign in, then generate again."
+                    : "Generation failed — nothing was saved. See the log above for the reason; if it was a network or usage-limit error, just press Generate again."}
                 </p>
+              )}
+              {needsAuth && (
+                <button
+                  onClick={onSignIn}
+                  className="mb-2 w-full rounded bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-500"
+                >
+                  Sign in to Claude Code
+                </button>
               )}
               <button
                 onClick={onClose}

@@ -7,6 +7,7 @@ import SearchResults from "../sidebar/SearchResults";
 import LessonViewer from "../viewer/LessonViewer";
 import NewFolderModal from "../modals/NewFolderModal";
 import GenerateModal from "../modals/GenerateModal";
+import SignInModal from "../modals/SignInModal";
 import ChatPanel from "../chat/ChatPanel";
 import ThemeToggle from "../theme/ThemeToggle";
 import RefreshIcon from "../icons/RefreshIcon";
@@ -24,6 +25,10 @@ export default function AppShell() {
   const [selected, setSelected] = useState<LessonRef | null>(null);
   const [showNewFolder, setShowNewFolder] = useState(false);
   const [showGenerate, setShowGenerate] = useState(false);
+  const [showSignIn, setShowSignIn] = useState(false);
+  // undefined until the first status check answers — avoids flashing a
+  // "signed out" warning during the initial load.
+  const [signedIn, setSignedIn] = useState<boolean | undefined>(undefined);
   const [showChat, setShowChat] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [query, setQuery] = useState("");
@@ -64,6 +69,23 @@ export default function AppShell() {
     refreshTree();
   }, [refreshTree]);
 
+  // Generating runs the local Claude Code CLI, so a signed-out session is a
+  // dead end the user should see before they upload a file, not after a run
+  // burns a few minutes and fails.
+  const refreshAuth = useCallback(async () => {
+    if (readOnly) return;
+    try {
+      const res = await fetch("/api/auth");
+      setSignedIn(res.ok ? (await res.json()).loggedIn : false);
+    } catch {
+      setSignedIn(false);
+    }
+  }, [readOnly]);
+
+  useEffect(() => {
+    refreshAuth();
+  }, [refreshAuth]);
+
   // Lessons and quizzes are written to the vault by Claude Code (/lect, /quiz)
   // outside this app, so the tree can go stale while the window is in the
   // background. Re-fetch when the user returns to the window (or the tab
@@ -90,15 +112,6 @@ export default function AppShell() {
             LectureLens
           </span>
           <div className="flex items-center gap-1">
-            {!readOnly && (
-              <button
-                onClick={() => setShowGenerate(true)}
-                title="Generate a lesson or quiz from a file (runs local Claude Code)"
-                className="flex h-7 w-7 items-center justify-center rounded text-gray-500 hover:bg-black/5 dark:text-gray-400 dark:hover:bg-white/10"
-              >
-                <UploadIcon className="h-4 w-4" />
-              </button>
-            )}
             <button
               onClick={handleRefresh}
               disabled={refreshing}
@@ -137,13 +150,35 @@ export default function AppShell() {
             {query.trim() ? "Results" : "Subjects"}
           </span>
           {!query.trim() && !readOnly && (
-            <button
-              onClick={() => setShowNewFolder(true)}
-              title="New Folder"
-              className="flex h-5 w-5 items-center justify-center rounded text-gray-600 hover:bg-black/5 dark:text-gray-300 dark:hover:bg-white/10"
-            >
-              +
-            </button>
+            <div className="flex items-center gap-1">
+              {/* Generating needs a Claude Code session, so when there isn't
+                  one the button that starts one takes its place — offering
+                  Generate first would only lead to a run that fails on auth. */}
+              {signedIn === false ? (
+                <button
+                  onClick={() => setShowSignIn(true)}
+                  title="Claude Code is signed out — generating notes needs a session"
+                  className="rounded border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-xs font-medium text-amber-800 hover:bg-amber-100 dark:border-amber-700/60 dark:bg-amber-950/40 dark:text-amber-300 dark:hover:bg-amber-950/70"
+                >
+                  Sign in
+                </button>
+              ) : (
+                <button
+                  onClick={() => setShowGenerate(true)}
+                  title="Generate a lesson or quiz from a file (runs local Claude Code)"
+                  className="flex h-5 w-5 items-center justify-center rounded text-gray-600 hover:bg-black/5 dark:text-gray-300 dark:hover:bg-white/10"
+                >
+                  <UploadIcon className="h-3.5 w-3.5" />
+                </button>
+              )}
+              <button
+                onClick={() => setShowNewFolder(true)}
+                title="New Folder"
+                className="flex h-5 w-5 items-center justify-center rounded text-gray-600 hover:bg-black/5 dark:text-gray-300 dark:hover:bg-white/10"
+              >
+                +
+              </button>
+            </div>
           )}
         </div>
 
@@ -193,6 +228,22 @@ export default function AppShell() {
           folders={folders ?? []}
           onClose={() => setShowGenerate(false)}
           onGenerated={refreshTree}
+          onSignIn={() => {
+            setShowGenerate(false);
+            setShowSignIn(true);
+          }}
+        />
+      )}
+
+      {showSignIn && (
+        <SignInModal
+          onClose={() => {
+            setShowSignIn(false);
+            // The user may have signed in from a terminal meanwhile; re-check
+            // rather than trusting the modal's own outcome.
+            refreshAuth();
+          }}
+          onSignedIn={refreshAuth}
         />
       )}
     </div>
