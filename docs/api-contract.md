@@ -94,6 +94,26 @@ to scroll to the matched section. Embeddings come from a local Ollama server
 Ollama, `/search` serves `mode: "keyword"` (FTS5-only) and embeddings
 backfill on a later scan.
 
+## Claude Code sign-in (`/api/auth`)
+
+Drives the local CLI's own auth so an expired session can be fixed from the
+app instead of a terminal the packaged build doesn't have. `lib/auth/cli.ts`
+shells out to `claude auth status|login|logout`; the app never reads, stores
+or forwards the credential — the CLI keeps it, exactly as from a terminal.
+There is deliberately no API-key field.
+
+| Endpoint | Method | Body/params | Notes |
+|---|---|---|---|
+| `/api/auth` | GET | — | `{ loggedIn, authMethod }` from `claude auth status --json` |
+| `/api/auth` | POST | `{ action: "login", mode }` | starts `claude auth login` (`claudeai` or `console`); one flow at a time |
+| `/api/auth` | POST | `{ action: "code", code }` | forwards a pasted authorization code to the waiting CLI's stdin; never stored |
+| `/api/auth` | POST | `{ action: "logout" }` | clears the CLI's stored credential |
+| `/api/auth` | DELETE | — | cancels the in-flight login |
+| `/api/auth/stream` | GET | — | SSE: `line`, `meta` (OAuth url, awaitingCode), `end` |
+
+Blocked by `READ_ONLY=1` like the generate routes. Success is confirmed by
+re-reading `auth status`, not by the login process's exit code.
+
 ## stored (Go primary datastore + sync service, default `127.0.0.1:4323`)
 
 Owns the live SQLite database (`<vault>/.data/notes.db`) — the app's source
