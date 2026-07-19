@@ -7,19 +7,19 @@
 //
 // Storage layout it maintains:
 //
-//	<root>/<Folder>/index.json          { "lessons": [...], "quizzes": [...], "assignments": [...] }
+//	<root>/<Folder>/index.json          { "lessons": [...], "quizzes": [...] }
 //	<root>/<Folder>/<id>.html           one lesson's generated HTML, written as-is
 //	<root>/<Folder>/quiz-<id>.html      one quiz's generated HTML, written as-is
-//	<root>/<Folder>/assignment-<id>.html one assignment journal's HTML, written as-is
 //
-// The quiz-/assignment- filename prefixes keep those files from colliding
-// with lesson files in the same folder, since lessons, quizzes, and
-// assignments number their <id> sequences independently.
+// The quiz- filename prefix keeps quiz files from colliding with lesson files
+// in the same folder, since lessons and quizzes number their <id> sequences
+// independently.
 //
 // index.json used to be a bare array (lessons only). loadIndexData reads
-// both the old array shape and the new {lessons,quizzes,assignments} object
-// shape; every write goes out in the new shape, so folders migrate the
-// first time anything in them is saved.
+// both the old array shape and the new {lessons,quizzes} object shape; every
+// write goes out in the new shape, so folders migrate the first time anything
+// in them is saved. (An older {lessons,quizzes,assignments} shape is read
+// transparently too — the retired assignments field is simply dropped.)
 //
 // Operations, one HTTP endpoint each:
 //
@@ -33,10 +33,6 @@
 //	GET    /quiz/{folder}/{id}                 LoadQuiz
 //	DELETE /quiz/{folder}/{id}                 DeleteQuiz
 //	POST   /quiz/{folder}/{id}/rename          RenameQuiz
-//	POST   /assignment                         SaveAssignment
-//	GET    /assignment/{folder}/{id}           LoadAssignment
-//	DELETE /assignment/{folder}/{id}           DeleteAssignment
-//	POST   /assignment/{folder}/{id}/rename    RenameAssignment
 //	GET    /tree                               ListTree
 package main
 
@@ -62,13 +58,11 @@ type lessonEntry struct {
 }
 
 type quizEntry = lessonEntry
-type assignmentEntry = lessonEntry
 
 // indexData is the on-disk shape of index.json.
 type indexData struct {
-	Lessons     []lessonEntry     `json:"lessons"`
-	Quizzes     []quizEntry       `json:"quizzes"`
-	Assignments []assignmentEntry `json:"assignments"`
+	Lessons []lessonEntry `json:"lessons"`
+	Quizzes []quizEntry   `json:"quizzes"`
 }
 
 func main() {
@@ -84,8 +78,6 @@ func main() {
 	mux.HandleFunc("/lesson/", handleLessonPath) // /lesson/{folder}/{id}[/rename]
 	mux.HandleFunc("/quiz", handleQuizRoot)      // POST /quiz (save)
 	mux.HandleFunc("/quiz/", handleQuizPath)     // /quiz/{folder}/{id}[/rename]
-	mux.HandleFunc("/assignment", handleAssignmentRoot)  // POST /assignment (save)
-	mux.HandleFunc("/assignment/", handleAssignmentPath) // /assignment/{folder}/{id}[/rename]
 	mux.HandleFunc("/tree", handleTree)
 
 	log.Printf("vaultd listening on %s (root=%s)", addr, vaultRoot())
@@ -156,7 +148,7 @@ func indexPath(folder string) string {
 func loadIndexData(folder string) (indexData, error) {
 	data, err := os.ReadFile(indexPath(folder))
 	if errors.Is(err, os.ErrNotExist) {
-		return indexData{Lessons: []lessonEntry{}, Quizzes: []quizEntry{}, Assignments: []assignmentEntry{}}, nil
+		return indexData{Lessons: []lessonEntry{}, Quizzes: []quizEntry{}}, nil
 	}
 	if err != nil {
 		return indexData{}, err
@@ -169,9 +161,6 @@ func loadIndexData(folder string) (indexData, error) {
 		if idx.Quizzes == nil {
 			idx.Quizzes = []quizEntry{}
 		}
-		if idx.Assignments == nil {
-			idx.Assignments = []assignmentEntry{}
-		}
 		return idx, nil
 	}
 	// Legacy format: index.json was a bare array of lessons.
@@ -179,7 +168,7 @@ func loadIndexData(folder string) (indexData, error) {
 	if err := json.Unmarshal(data, &legacy); err != nil {
 		return indexData{}, err
 	}
-	return indexData{Lessons: legacy, Quizzes: []quizEntry{}, Assignments: []assignmentEntry{}}, nil
+	return indexData{Lessons: legacy, Quizzes: []quizEntry{}}, nil
 }
 
 func saveIndexData(folder string, idx indexData) error {
@@ -189,12 +178,8 @@ func saveIndexData(folder string, idx indexData) error {
 	if idx.Quizzes == nil {
 		idx.Quizzes = []quizEntry{}
 	}
-	if idx.Assignments == nil {
-		idx.Assignments = []assignmentEntry{}
-	}
 	sort.Slice(idx.Lessons, func(i, j int) bool { return idx.Lessons[i].Seq < idx.Lessons[j].Seq })
 	sort.Slice(idx.Quizzes, func(i, j int) bool { return idx.Quizzes[i].Seq < idx.Quizzes[j].Seq })
-	sort.Slice(idx.Assignments, func(i, j int) bool { return idx.Assignments[i].Seq < idx.Assignments[j].Seq })
 	data, err := json.MarshalIndent(idx, "", "  ")
 	if err != nil {
 		return err
@@ -248,7 +233,7 @@ func handleFolder(w http.ResponseWriter, r *http.Request) {
 	}
 	// Seed an empty index if the folder is new.
 	if _, err := os.Stat(indexPath(name)); errors.Is(err, os.ErrNotExist) {
-		if err := saveIndexData(name, indexData{Lessons: []lessonEntry{}, Quizzes: []quizEntry{}, Assignments: []assignmentEntry{}}); err != nil {
+		if err := saveIndexData(name, indexData{Lessons: []lessonEntry{}, Quizzes: []quizEntry{}}); err != nil {
 			writeErr(w, http.StatusInternalServerError, err.Error())
 			return
 		}
@@ -432,94 +417,14 @@ func handleQuizPath(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// --- POST /assignment (SaveAssignment) ---
-
-func handleAssignmentRoot(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		writeErr(w, http.StatusMethodNotAllowed, "use POST")
-		return
-	}
-	var body struct {
-		Folder string `json:"folder"`
-		ID     string `json:"id"`
-		Slug   string `json:"slug"`
-		Title  string `json:"title"`
-		Seq    int    `json:"seq"`
-		HTML   string `json:"html"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		writeErr(w, http.StatusBadRequest, "invalid JSON")
-		return
-	}
-	folder, ok1 := safeName(body.Folder)
-	id, ok2 := safeName(body.ID)
-	if !ok1 || !ok2 {
-		writeErr(w, http.StatusBadRequest, "invalid folder or id")
-		return
-	}
-	dir := filepath.Join(vaultRoot(), folder)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	if err := os.WriteFile(filepath.Join(dir, "assignment-"+id+".html"), []byte(body.HTML), 0o644); err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	idx, err := loadIndexData(folder)
-	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	idx.Assignments = upsertEntry(idx.Assignments, assignmentEntry{ID: id, Slug: body.Slug, Title: body.Title, Seq: body.Seq})
-	if err := saveIndexData(folder, idx); err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
-}
-
-// --- /assignment/{folder}/{id}[/rename] ---
-
-func handleAssignmentPath(w http.ResponseWriter, r *http.Request) {
-	rest := strings.TrimPrefix(r.URL.Path, "/assignment/")
-	parts := strings.Split(rest, "/")
-	if len(parts) < 2 {
-		writeErr(w, http.StatusBadRequest, "expected /assignment/{folder}/{id}")
-		return
-	}
-	folder, ok1 := safeName(parts[0])
-	id, ok2 := safeName(parts[1])
-	if !ok1 || !ok2 {
-		writeErr(w, http.StatusBadRequest, "invalid folder or id")
-		return
-	}
-
-	if len(parts) == 3 && parts[2] == "rename" {
-		renameEntry(w, r, folder, id, "assignment")
-		return
-	}
-
-	switch r.Method {
-	case http.MethodGet:
-		loadContent(w, folder, id, "assignment")
-	case http.MethodDelete:
-		deleteContent(w, folder, id, "assignment")
-	default:
-		writeErr(w, http.StatusMethodNotAllowed, "use GET or DELETE")
-	}
-}
-
-// --- shared lesson/quiz/assignment operations ---
-// kind is "lesson", "quiz", or "assignment"; it picks the on-disk filename
-// prefix and which index.json array to read/write.
+// --- shared lesson/quiz operations ---
+// kind is "lesson" or "quiz"; it picks the on-disk filename prefix and which
+// index.json array to read/write.
 
 func contentFilename(id, kind string) string {
 	switch kind {
 	case "quiz":
 		return "quiz-" + id + ".html"
-	case "assignment":
-		return "assignment-" + id + ".html"
 	default:
 		return id + ".html"
 	}
@@ -538,11 +443,8 @@ func loadContent(w http.ResponseWriter, folder, id, kind string) {
 	title := id
 	if idx, err := loadIndexData(folder); err == nil {
 		entries := idx.Lessons
-		switch kind {
-		case "quiz":
+		if kind == "quiz" {
 			entries = idx.Quizzes
-		case "assignment":
-			entries = idx.Assignments
 		}
 		for _, e := range entries {
 			if e.ID == id {
@@ -564,12 +466,9 @@ func deleteContent(w http.ResponseWriter, folder, id, kind string) {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	switch kind {
-	case "quiz":
+	if kind == "quiz" {
 		idx.Quizzes = removeEntry(idx.Quizzes, id)
-	case "assignment":
-		idx.Assignments = removeEntry(idx.Assignments, id)
-	default:
+	} else {
 		idx.Lessons = removeEntry(idx.Lessons, id)
 	}
 	if err := saveIndexData(folder, idx); err != nil {
@@ -597,11 +496,8 @@ func renameEntry(w http.ResponseWriter, r *http.Request, folder, id, kind string
 		return
 	}
 	entries := idx.Lessons
-	switch kind {
-	case "quiz":
+	if kind == "quiz" {
 		entries = idx.Quizzes
-	case "assignment":
-		entries = idx.Assignments
 	}
 	found := false
 	for i := range entries {
@@ -615,12 +511,9 @@ func renameEntry(w http.ResponseWriter, r *http.Request, folder, id, kind string
 		writeErr(w, http.StatusNotFound, kind+" not found")
 		return
 	}
-	switch kind {
-	case "quiz":
+	if kind == "quiz" {
 		idx.Quizzes = entries
-	case "assignment":
-		idx.Assignments = entries
-	default:
+	} else {
 		idx.Lessons = entries
 	}
 	if err := saveIndexData(folder, idx); err != nil {
@@ -633,10 +526,9 @@ func renameEntry(w http.ResponseWriter, r *http.Request, folder, id, kind string
 // --- GET /tree ---
 
 type treeFolder struct {
-	Name        string            `json:"name"`
-	Lessons     []lessonEntry     `json:"lessons"`
-	Quizzes     []quizEntry       `json:"quizzes"`
-	Assignments []assignmentEntry `json:"assignments"`
+	Name    string        `json:"name"`
+	Lessons []lessonEntry `json:"lessons"`
+	Quizzes []quizEntry   `json:"quizzes"`
 }
 
 func handleTree(w http.ResponseWriter, r *http.Request) {
@@ -664,12 +556,11 @@ func handleTree(w http.ResponseWriter, r *http.Request) {
 			// A folder on disk is real even if its index.json is unreadable at
 			// this instant (e.g. a concurrent writer mid-save). Show it empty
 			// rather than making the whole folder vanish from the sidebar.
-			idx = indexData{Lessons: []lessonEntry{}, Quizzes: []quizEntry{}, Assignments: []assignmentEntry{}}
+			idx = indexData{Lessons: []lessonEntry{}, Quizzes: []quizEntry{}}
 		}
 		sort.Slice(idx.Lessons, func(i, j int) bool { return idx.Lessons[i].Seq < idx.Lessons[j].Seq })
 		sort.Slice(idx.Quizzes, func(i, j int) bool { return idx.Quizzes[i].Seq < idx.Quizzes[j].Seq })
-		sort.Slice(idx.Assignments, func(i, j int) bool { return idx.Assignments[i].Seq < idx.Assignments[j].Seq })
-		folders = append(folders, treeFolder{Name: de.Name(), Lessons: idx.Lessons, Quizzes: idx.Quizzes, Assignments: idx.Assignments})
+		folders = append(folders, treeFolder{Name: de.Name(), Lessons: idx.Lessons, Quizzes: idx.Quizzes})
 	}
 	sort.Slice(folders, func(i, j int) bool { return folders[i].Name < folders[j].Name })
 	writeJSON(w, http.StatusOK, map[string][]treeFolder{"folders": folders})
