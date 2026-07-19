@@ -19,7 +19,7 @@ func (s *server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("/import", s.handleImport)
 	mux.HandleFunc("/folder", s.handleFolder)
 	mux.HandleFunc("/folder/", s.handleFolderPath)
-	for _, kind := range []string{KindLesson, KindQuiz, KindAssignment} {
+	for _, kind := range []string{KindLesson, KindQuiz} {
 		mux.HandleFunc("/"+kind, s.handleSave(kind))
 		mux.HandleFunc("/"+kind+"/", s.handleDocPath(kind))
 	}
@@ -39,10 +39,9 @@ type treeEntry struct {
 }
 
 type treeFolder struct {
-	Name        string      `json:"name"`
-	Lessons     []treeEntry `json:"lessons"`
-	Quizzes     []treeEntry `json:"quizzes"`
-	Assignments []treeEntry `json:"assignments"`
+	Name    string      `json:"name"`
+	Lessons []treeEntry `json:"lessons"`
+	Quizzes []treeEntry `json:"quizzes"`
 }
 
 func (s *server) handleTree(w http.ResponseWriter, r *http.Request) {
@@ -60,7 +59,7 @@ func (s *server) handleTree(w http.ResponseWriter, r *http.Request) {
 	out := make([]treeFolder, 0, len(folders))
 	bySlug := make(map[string]*treeFolder, len(folders))
 	for _, f := range folders {
-		out = append(out, treeFolder{Name: f.Slug, Lessons: []treeEntry{}, Quizzes: []treeEntry{}, Assignments: []treeEntry{}})
+		out = append(out, treeFolder{Name: f.Slug, Lessons: []treeEntry{}, Quizzes: []treeEntry{}})
 		bySlug[f.Slug] = &out[len(out)-1]
 	}
 	for _, d := range docs {
@@ -74,8 +73,6 @@ func (s *server) handleTree(w http.ResponseWriter, r *http.Request) {
 			tf.Lessons = append(tf.Lessons, e)
 		case KindQuiz:
 			tf.Quizzes = append(tf.Quizzes, e)
-		case KindAssignment:
-			tf.Assignments = append(tf.Assignments, e)
 		}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"folders": out})
@@ -125,7 +122,7 @@ func (s *server) handleFolderPath(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
-// --- documents (lesson/quiz/assignment share this, keyed by kind) ---
+// --- documents (lesson/quiz share this, keyed by kind) ---
 
 // handleSave is POST /{kind}: create or update a fully-resolved document.
 // The folder is ensured (idempotent) so an ingest right after generation

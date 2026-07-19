@@ -40,14 +40,14 @@ type importEntry struct {
 }
 
 type importIndex struct {
-	Lessons     []importEntry `json:"lessons"`
-	Quizzes     []importEntry `json:"quizzes"`
-	Assignments []importEntry `json:"assignments"`
+	Lessons []importEntry `json:"lessons"`
+	Quizzes []importEntry `json:"quizzes"`
 }
 
-// parseIndex reads both index.json shapes: the current
-// {lessons,quizzes,assignments} object and the legacy bare array (lessons
-// only) — same tolerance vaultd has.
+// parseIndex reads both index.json shapes: the current {lessons,quizzes}
+// object and the legacy bare array (lessons only) — same tolerance vaultd
+// has. An older {lessons,quizzes,assignments} shape still parses; the retired
+// assignments field is simply ignored.
 func parseIndex(data []byte) (importIndex, error) {
 	var idx importIndex
 	if err := json.Unmarshal(data, &idx); err == nil {
@@ -61,16 +61,12 @@ func parseIndex(data []byte) (importIndex, error) {
 }
 
 // htmlFilename maps a kind + folder-local id to its on-disk filename (the
-// quiz-/assignment- prefixes are vaultd's collision guard).
+// quiz- prefix is vaultd's collision guard).
 func htmlFilename(kind, id string) string {
-	switch kind {
-	case KindQuiz:
+	if kind == KindQuiz {
 		return "quiz-" + id + ".html"
-	case KindAssignment:
-		return "assignment-" + id + ".html"
-	default:
-		return id + ".html"
 	}
+	return id + ".html"
 }
 
 type importStats struct {
@@ -110,7 +106,7 @@ func (s *server) importVault(root string, track bool) (importStats, error) {
 		}
 		st.Folders++
 		for kind, list := range map[string][]importEntry{
-			KindLesson: idx.Lessons, KindQuiz: idx.Quizzes, KindAssignment: idx.Assignments,
+			KindLesson: idx.Lessons, KindQuiz: idx.Quizzes,
 		} {
 			for _, e := range list {
 				if !safeName(e.ID) {

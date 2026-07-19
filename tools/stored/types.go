@@ -1,11 +1,10 @@
 package main
 
-// Kind values for documents. Lessons, quizzes and assignments share a folder
-// but sequence independently — the same three-kind model vaultd stores on disk.
+// Kind values for documents. Lessons and quizzes share a folder but sequence
+// independently — the same model vaultd stores on disk.
 const (
-	KindLesson     = "lesson"
-	KindQuiz       = "quiz"
-	KindAssignment = "assignment"
+	KindLesson = "lesson"
+	KindQuiz   = "quiz"
 )
 
 type Folder struct {

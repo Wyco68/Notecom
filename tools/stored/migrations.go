@@ -8,8 +8,8 @@ package main
 //
 // Design notes that differ from the /feat mega-spec's minimal sketch, kept
 // to avoid removing existing features:
-//   - documents (not "lessons"): this vault has three doc kinds that share a
-//     folder — lesson, quiz, assignment — each with its own seq sequence.
+//   - documents (not "lessons"): this vault has two doc kinds that share a
+//     folder — lesson, quiz — each with its own seq sequence.
 //   - doc_key + seq: the app's URLs, filenames and legacy vault export all
 //     depend on the "NN-slug" folder-local id and 1-based ordering. Dropping
 //     them would break routing and export, so they stay first-class columns.
@@ -47,7 +47,7 @@ CREATE TABLE folders (
 CREATE TABLE documents (
   id         TEXT PRIMARY KEY,
   folder_id  TEXT NOT NULL REFERENCES folders(id) ON DELETE CASCADE,
-  kind       TEXT NOT NULL,            -- lesson | quiz | assignment
+  kind       TEXT NOT NULL,            -- lesson | quiz
   doc_key    TEXT NOT NULL,            -- folder-local id, e.g. "01-intro"
   slug       TEXT NOT NULL,
   title      TEXT NOT NULL,
