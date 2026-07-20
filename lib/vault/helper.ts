@@ -18,7 +18,6 @@ export interface TreeFolder {
   name: string;
   lessons: LessonEntry[];
   quizzes: LessonEntry[];
-  assignments: LessonEntry[];
 }
 
 async function call(path: string, init?: RequestInit): Promise<any> {
@@ -39,8 +38,8 @@ async function call(path: string, init?: RequestInit): Promise<any> {
 }
 
 // syncFromVault ingests Claude-authored vault files (written via /lect,
-// /quiz, /assignment) into SQLite. Awaited by /api/tree so content generated
-// a moment ago is present in the very tree response that follows it.
+// /quiz) into SQLite. Awaited by /api/tree so content generated a moment ago
+// is present in the very tree response that follows it.
 export async function syncFromVault(): Promise<void> {
   await call("/import", { method: "POST" });
 }
@@ -97,30 +96,6 @@ export function renameQuiz(
 ): Promise<{ ok: boolean }> {
   return call(
     `/quiz/${encodeURIComponent(folder)}/${encodeURIComponent(id)}/rename`,
-    { method: "POST", body: JSON.stringify({ newTitle }) }
-  );
-}
-
-export function loadAssignment(
-  folder: string,
-  id: string
-): Promise<{ html: string; title: string }> {
-  return call(`/assignment/${encodeURIComponent(folder)}/${encodeURIComponent(id)}`);
-}
-
-export function deleteAssignment(folder: string, id: string): Promise<{ ok: boolean }> {
-  return call(`/assignment/${encodeURIComponent(folder)}/${encodeURIComponent(id)}`, {
-    method: "DELETE",
-  });
-}
-
-export function renameAssignment(
-  folder: string,
-  id: string,
-  newTitle: string
-): Promise<{ ok: boolean }> {
-  return call(
-    `/assignment/${encodeURIComponent(folder)}/${encodeURIComponent(id)}/rename`,
     { method: "POST", body: JSON.stringify({ newTitle }) }
   );
 }

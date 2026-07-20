@@ -9,15 +9,10 @@ export interface Lesson {
 // separate index.json array and separate vaultd namespace.
 export type Quiz = Lesson;
 
-// Same shape again — assignment learning journals are their own index.json
-// array and vaultd namespace, written by Claude Code's /assignment command.
-export type Assignment = Lesson;
-
 export interface Folder {
   name: string;
   lessons: Lesson[];
   quizzes: Quiz[];
-  assignments: Assignment[];
 }
 
 export interface VaultTree {
@@ -33,7 +28,7 @@ export interface VaultTree {
 export interface LessonRef {
   folder: string;
   id: string;
-  kind: "lesson" | "quiz" | "assignment";
+  kind: "lesson" | "quiz";
   heading?: string;
   headingIndex?: number;
 }

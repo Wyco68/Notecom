@@ -10,7 +10,7 @@ const INDEXD_TOKEN = process.env.INDEXD_TOKEN;
 export interface SearchResult {
   folder: string;
   id: string;
-  kind: "lesson" | "quiz" | "assignment";
+  kind: "lesson" | "quiz";
   title: string;
   topic: string;
   heading: string;
@@ -25,7 +25,7 @@ export interface SearchResult {
 export interface RelatedResult {
   folder: string;
   id: string;
-  kind: "lesson" | "quiz" | "assignment";
+  kind: "lesson" | "quiz";
   title: string;
   score: number;
 }
