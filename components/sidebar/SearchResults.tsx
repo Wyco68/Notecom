@@ -7,7 +7,7 @@ import SpinnerIcon from "../icons/SpinnerIcon";
 interface Result {
   folder: string;
   id: string;
-  kind: "lesson" | "quiz" | "assignment";
+  kind: "lesson" | "quiz";
   title: string;
   topic: string;
   heading: string;

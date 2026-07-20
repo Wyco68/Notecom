@@ -40,12 +40,7 @@ export default function AppShell() {
   const currentTitle = (() => {
     if (!selected || !folders) return null;
     const f = folders.find((f) => f.name === selected.folder);
-    const list =
-      selected.kind === "quiz"
-        ? f?.quizzes
-        : selected.kind === "assignment"
-        ? f?.assignments
-        : f?.lessons;
+    const list = selected.kind === "quiz" ? f?.quizzes : f?.lessons;
     return list?.find((l) => l.id === selected.id)?.title ?? null;
   })();
 
@@ -115,7 +110,7 @@ export default function AppShell() {
             <button
               onClick={handleRefresh}
               disabled={refreshing}
-              title="Refresh — pick up newly added lessons, quizzes, and assignments"
+              title="Refresh — pick up newly added lessons and quizzes"
               className="flex h-7 w-7 items-center justify-center rounded text-gray-500 hover:bg-black/5 disabled:opacity-50 dark:text-gray-400 dark:hover:bg-white/10"
             >
               <RefreshIcon className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
