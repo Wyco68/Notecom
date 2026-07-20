@@ -14,7 +14,7 @@ type database struct {
 	sql *sql.DB
 }
 
-// documents = one row per indexed lesson/quiz/assignment file.
+// documents = one row per indexed lesson/quiz file.
 // chunks = one row per educational section of a document.
 // chunks_fts = standalone FTS5 table sharing rowids with chunks (kept in
 // sync manually — chunks only ever change by whole-document replace, so

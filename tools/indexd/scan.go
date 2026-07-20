@@ -112,11 +112,8 @@ func (s *server) indexDocument(key docKey, src, hash string) error {
 
 func docPath(folder, id, kind string) string {
 	name := id + ".html"
-	switch kind {
-	case "quiz":
+	if kind == "quiz" {
 		name = "quiz-" + id + ".html"
-	case "assignment":
-		name = "assignment-" + id + ".html"
 	}
 	return filepath.Join(vaultRoot(), folder, name)
 }
@@ -140,9 +137,8 @@ func listVault() map[docKey]string {
 			continue
 		}
 		var idx struct {
-			Lessons     []struct{ ID string } `json:"lessons"`
-			Quizzes     []struct{ ID string } `json:"quizzes"`
-			Assignments []struct{ ID string } `json:"assignments"`
+			Lessons []struct{ ID string } `json:"lessons"`
+			Quizzes []struct{ ID string } `json:"quizzes"`
 		}
 		if err := json.Unmarshal(data, &idx); err != nil {
 			// legacy bare-array index.json (lessons only)
@@ -166,9 +162,6 @@ func listVault() map[docKey]string {
 		}
 		for _, q := range idx.Quizzes {
 			add(q.ID, "quiz")
-		}
-		for _, a := range idx.Assignments {
-			add(a.ID, "assignment")
 		}
 	}
 	return out

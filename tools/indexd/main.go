@@ -120,7 +120,7 @@ func safeName(name string) (string, bool) {
 }
 
 func validKind(kind string) bool {
-	return kind == "lesson" || kind == "quiz" || kind == "assignment"
+	return kind == "lesson" || kind == "quiz"
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {
