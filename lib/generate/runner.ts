@@ -101,7 +101,12 @@ export function startJob(
     // style — reading other lessons' HTML to imitate them wastes tokens and
     // drifts from the template. (Reading the folder's index.json for the
     // next seq number is still fine — that's not lesson content.)
-    `Follow the /${kind} command's own template and output contract for structure and style; do not open other existing ${noun} HTML files to copy their style. ` +
+    `Follow the /${kind} command's own template and output contract exactly for structure and style; do not open other existing ${noun} HTML files to copy their style. ` +
+    // Strict generation: the ${noun}'s content is the uploaded file, not the
+    // model's prior knowledge. Grounding it in the source (and failing rather
+    // than fabricating) is what keeps the saved file — which stored persists
+    // to SQLite and syncs to Supabase — faithful to the actual lecture.
+    `Ground every claim strictly in that uploaded source; do not invent, pad, or generalize beyond what it contains. If the file cannot be read or converted, stop and report that instead of fabricating a ${noun}. ` +
     // Keep the job log tidy: the closing summary the model would otherwise
     // write is the "long output after work is done" the user doesn't want.
     `When the ${noun} is saved, reply with only a single short confirmation line — do not summarize the ${noun} or recap the steps you took.`;
