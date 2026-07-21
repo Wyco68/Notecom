@@ -81,8 +81,8 @@ would be more confusing than two complete ones:
 | Vault location | repo's `vault/` (`CARGO_MANIFEST_DIR`'s parent) | **same** — the checkout's `vault/`, baked in at compile time |
 
 One vault, deliberately: this project is checkout-centric. Notes can only be
-created through this repo's command files (`/lect`, `/quiz`, `/assignment`
-in `.claude/commands/`), so every user has the checkout, and the packaged
+created through this repo's command files (`/lect`, `/quiz` in
+`.claude/commands/`), so every user has the checkout, and the packaged
 app is just a nicer window onto it. A per-user OS data-dir vault was tried
 and removed — it split content between two locations for zero benefit (see
 git history). The installers this produces are therefore **for the machine

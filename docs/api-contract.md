@@ -7,7 +7,7 @@ Loaded by `/feat` only. Source of truth is the route files themselves
 
 | Route | Method | Body | Response |
 |---|---|---|---|
-| `/api/tree` | GET | — | `{ folders: [{ name, lessons: [{id,slug,title,seq}], quizzes: [...], assignments: [...] }] }` |
+| `/api/tree` | GET | — | `{ folders: [{ name, lessons: [{id,slug,title,seq}], quizzes: [...] }] }` |
 | `/api/folders` | POST | `{ name }` | `{ ok, folder }` — app slugifies `name` before calling vaultd |
 | `/api/folders/[name]` | DELETE | — | `{ ok }` |
 | `/api/lesson/[folder]/[id]` | GET | — | `{ html, title }` |
@@ -16,9 +16,6 @@ Loaded by `/feat` only. Source of truth is the route files themselves
 | `/api/quiz/[folder]/[id]` | GET | — | `{ html, title }` |
 | `/api/quiz/[folder]/[id]` | DELETE | — | `{ ok }` |
 | `/api/quiz/[folder]/[id]` | POST | `{ newTitle }` | `{ ok }` (rename) |
-| `/api/assignment/[folder]/[id]` | GET | — | `{ html, title }` |
-| `/api/assignment/[folder]/[id]` | DELETE | — | `{ ok }` |
-| `/api/assignment/[folder]/[id]` | POST | `{ newTitle }` | `{ ok }` (rename) |
 | `/api/search` | GET | `?q&folder&kind&limit` | `{ mode: "hybrid"\|"keyword", results: [chunk hits] }` — proxies indexd |
 | `/api/related/[folder]/[id]` | GET | `?kind` | `{ results: [{folder,id,kind,title,score}] }` — proxies indexd |
 | `/api/chat` | POST | `{ message, history }` | SSE passthrough of indexd `/chat` (sources → deltas → done) |
@@ -27,10 +24,9 @@ Loaded by `/feat` only. Source of truth is the route files themselves
 
 Error shape is always `{ error: string }` with a non-2xx status.
 
-There are no auth routes. There is no lesson-, quiz-, or assignment-
-generation route. Content creation happens via Claude Code (`/lect` for
-lessons, `/quiz` for quizzes, `/assignment` for assignment journals), not
-the web app.
+There are no auth routes. There is no lesson- or quiz-generation route.
+Content creation happens via Claude Code (`/lect` for lessons, `/quiz` for
+quizzes), not the web app.
 
 ## vaultd (Go helper, default `127.0.0.1:4321`)
 
@@ -46,26 +42,21 @@ the web app.
 | `/quiz/{folder}/{id}` | GET | — | `{ html, title }` |
 | `/quiz/{folder}/{id}` | DELETE | — | removes the `quiz-{id}.html` file + its index entry |
 | `/quiz/{folder}/{id}/rename` | POST | `{ newTitle }` | index-only update |
-| `/assignment` | POST | `{ folder, id, slug, title, seq, html }` | writes `assignment-{id}.html`, upserts `index.json`'s `assignments` array — used by Claude Code |
-| `/assignment/{folder}/{id}` | GET | — | `{ html, title }` |
-| `/assignment/{folder}/{id}` | DELETE | — | removes the `assignment-{id}.html` file + its index entry |
-| `/assignment/{folder}/{id}/rename` | POST | `{ newTitle }` | index-only update |
-| `/tree` | GET | — | `{ folders: [{ name, lessons: [...], quizzes: [...], assignments: [...] }] }` |
+| `/tree` | GET | — | `{ folders: [{ name, lessons: [...], quizzes: [...] }] }` |
 
-`index.json` holds `{ "lessons": [...], "quizzes": [...], "assignments":
-[...] }`. Quiz and assignment files share a folder with lesson files but
-never collide: quiz filenames carry a `quiz-` prefix and assignment
-filenames an `assignment-` prefix on disk, and each of the three arrays has
-its own independent `id`/`seq` sequencing. Older folders whose `index.json`
-is still a bare array (lessons only, pre-quiz format) are read transparently
-by vaultd and upgraded to the `{lessons,quizzes,assignments}` shape the next
-time anything in that folder is saved.
+`index.json` holds `{ "lessons": [...], "quizzes": [...] }`. Quiz files share
+a folder with lesson files but never collide: quiz filenames carry a `quiz-`
+prefix on disk, and each array has its own independent `id`/`seq` sequencing.
+Older folders whose `index.json` is still a bare array (lessons only,
+pre-quiz format) — or the retired `{lessons,quizzes,assignments}` shape — are
+read transparently by vaultd and upgraded to the `{lessons,quizzes}` shape
+the next time anything in that folder is saved.
 
 Every name/id arriving at vaultd is already fully resolved by the caller.
 Since the offline-first migration the app no longer calls vaultd — its two
-callers are Claude Code (`/lect`, `/quiz`, `/assignment` save content as
-files) and stored (which replays every DB mutation to disk through these
-endpoints). Don't `fetch()` vaultd from TypeScript.
+callers are Claude Code (`/lect`, `/quiz` save content as files) and stored
+(which replays every DB mutation to disk through these endpoints). Don't
+`fetch()` vaultd from TypeScript.
 
 ## indexd (Go search/RAG service, default `127.0.0.1:4322`)
 
@@ -85,7 +76,7 @@ it directly over HTTP for retrieval. See
 | `/chat` | POST | `{ message, history }` | grounded chat: retrieves top chunks, streams a local Ollama chat model (`CHAT_MODEL`, default `llama3.2`) as SSE; 503 without Ollama |
 | `/status` | GET | — | `{ documents, chunks, embedded, ollama, model, scanning, lastScan }` |
 
-`kind` is `lesson` (default), `quiz`, or `assignment`. Search result chunk
+`kind` is `lesson` (default) or `quiz`. Search result chunk
 shape: `{ folder, id, kind, title, topic, heading, summary, keywords, seq,
 headingIndex, score, html? }` — `headingIndex` is the 0-based occurrence of
 the heading text within its document (headings repeat), used by the viewer

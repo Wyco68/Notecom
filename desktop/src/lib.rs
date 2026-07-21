@@ -202,8 +202,8 @@ mod dev {
 
 // Release: vaultd, indexd, and a bundled Node runtime are sidecars resolved
 // from the installed app's resources. The vault is the repo checkout's
-// vault/ — the same folder dev mode and Claude Code (/lect, /quiz,
-// /assignment) use. This app is checkout-centric by design: content can
+// vault/ — the same folder dev mode and Claude Code (/lect, /quiz) use.
+// This app is checkout-centric by design: content can
 // only ever be created through the repo's command files, so every user has
 // the repo cloned, and the packaged app is just a nicer window onto that
 // same checkout. (CARGO_MANIFEST_DIR is baked at compile time — always

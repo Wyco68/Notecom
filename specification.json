@@ -59,10 +59,6 @@
         { "method": "GET", "path": "/quiz/{folder}/{id}" },
         { "method": "DELETE", "path": "/quiz/{folder}/{id}" },
         { "method": "POST", "path": "/quiz/{folder}/{id}/rename", "body": "{newTitle}" },
-        { "method": "POST", "path": "/assignment", "body": "{folder,id,slug,title,seq,html}", "usedBy": "Claude Code" },
-        { "method": "GET", "path": "/assignment/{folder}/{id}" },
-        { "method": "DELETE", "path": "/assignment/{folder}/{id}" },
-        { "method": "POST", "path": "/assignment/{folder}/{id}/rename", "body": "{newTitle}" },
         { "method": "GET", "path": "/tree" }
       ]
     },
@@ -105,12 +101,11 @@
     }
   },
   "apiRoutes": [
-    { "path": "/api/tree", "method": "GET", "response": "{folders:[{name,lessons,quizzes,assignments}]}" },
+    { "path": "/api/tree", "method": "GET", "response": "{folders:[{name,lessons,quizzes}]}" },
     { "path": "/api/folders", "method": "POST", "body": "{name}", "readOnlyBlocked": true },
     { "path": "/api/folders/[name]", "method": "DELETE", "readOnlyBlocked": true },
     { "path": "/api/lesson/[folder]/[id]", "methods": ["GET", "DELETE", "POST"], "readOnlyBlocked": ["DELETE", "POST"] },
     { "path": "/api/quiz/[folder]/[id]", "methods": ["GET", "DELETE", "POST"], "readOnlyBlocked": ["DELETE", "POST"] },
-    { "path": "/api/assignment/[folder]/[id]", "methods": ["GET", "DELETE", "POST"], "readOnlyBlocked": ["DELETE", "POST"] },
     { "path": "/api/search", "method": "GET", "proxiesTo": "indexd" },
     { "path": "/api/related/[folder]/[id]", "method": "GET", "proxiesTo": "indexd" },
     { "path": "/api/chat", "method": "POST", "proxiesTo": "indexd", "readOnlyExempt": true },
@@ -123,7 +118,6 @@
       "<folder-slug>/index.json",
       "<folder-slug>/<seq>-<slug>.html (lesson)",
       "<folder-slug>/quiz-<seq>-<slug>.html (quiz)",
-      "<folder-slug>/assignment-<seq>-<slug>.html (assignment journal)",
       "vault/.index/index.db (derived search index, indexd-owned)"
     ],
     "gitignored": true,
@@ -132,8 +126,7 @@
   "commands": {
     "/lect": { "purpose": "lesson generation and maintenance", "authoredBy": "Claude Code", "docs": ".claude/commands/lect.md" },
     "/quiz": { "purpose": "quiz creation and maintenance", "authoredBy": "Claude Code", "docs": ".claude/commands/quiz.md" },
-    "/feat": { "purpose": "application development only", "docs": ".claude/commands/feat.md" },
-    "/assignment": { "purpose": "university programming assignments + learning journal", "docs": ".claude/commands/assignment.md" }
+    "/feat": { "purpose": "application development only", "docs": ".claude/commands/feat.md" }
   },
   "deploymentModes": {
     "local-desktop": {

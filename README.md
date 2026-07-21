@@ -5,14 +5,14 @@ code-editor-style reader. Works for any subject. The app, the note-writing
 commands, the templates, and your notes all live in this one repo.
 
 Content creation happens entirely outside the web app: **Claude Code** (the
-CLI, on your own subscription) is the sole author of lesson/quiz/assignment
-content. The Next.js app only reads, browses, and manages what's already in
+CLI, on your own subscription) is the sole author of lesson/quiz content.
+The Next.js app only reads, browses, and manages what's already in
 `vault/` — see [SPECIFICATION.md](SPECIFICATION.md) for the full contract.
 
 ## Features
 
 - Plain-language lesson notes generated from uploaded slides/PDFs/images
-- Quiz + assignment-journal generation alongside lessons
+- Quiz generation alongside lessons
 - Hybrid search (keyword + semantic) and "Ask My Notes" chat over your own
   vault, fully local (Ollama) — nothing leaves your machine
 - Native desktop app (Tauri) or plain browser tab — same `vault/`, your choice
@@ -76,9 +76,8 @@ Type a request starting with `/feat`, e.g.:
 /feat add a delete button next to each lesson
 ```
 
-**Rule:** lesson content → `/lect`. Quiz content → `/quiz`. University
-assignments → `/assignment`. App/code → `/feat`. Never mix two of these in
-one request.
+**Rule:** lesson content → `/lect`. Quiz content → `/quiz`. App/code →
+`/feat`. Never mix two of these in one request.
 
 ## Remote access (read-only)
 

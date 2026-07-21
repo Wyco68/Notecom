@@ -1,7 +1,7 @@
 # Getting started
 
-Everything lives in this repo: the app, the `/lect` `/quiz` `/assignment`
-commands, the teaching templates, and your notes (`vault/`). Setup is:
+Everything lives in this repo: the app, the `/lect` `/quiz` commands, the
+teaching templates, and your notes (`vault/`). Setup is:
 clone, install, run one setup command, log in to Claude once.
 
 ## 1. Install the base tools
@@ -85,8 +85,6 @@ app uses it.
   nothing leaves your machine. Without Ollama, keyword search still works
   and the chat button tells you what's missing.
 - **`/quiz <Subject>`** — turn questions into a saved quiz.
-- **`/assignment`** — work through a university programming assignment with
-  a permanent learning journal saved next to your notes.
 - **Generate button in the app** — same as `/lect`/`/quiz`, but from an
   upload dialog inside the reader. Uses your local Claude Code login.
 - **Installable desktop build** — `npm run install:desktop` produces a

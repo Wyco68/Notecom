@@ -83,8 +83,7 @@ Division of responsibility, in one line each:
 - **Next.js** only proxies queries (`/api/search`, `/api/related/...` →
   `lib/search/indexd.ts`) and never chunks or embeds anything.
 - **Claude Code** can query indexd over HTTP to retrieve only the relevant
-  sections of a lesson instead of whole files (token reduction), e.g. from
-  `/assignment` lecture research.
+  sections of a lesson instead of whole files (token reduction).
 
 Freshness: indexd scans on startup and on `POST /reindex`; the Next.js
 `/api/tree` route fire-and-forgets a reindex on every tree fetch (page

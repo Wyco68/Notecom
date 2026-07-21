@@ -139,26 +139,24 @@ exactly:
 ```
 vault/
   <folder-slug>/
-    index.json                    -- ordered lesson/quiz/assignment index
+    index.json                    -- ordered lesson/quiz index
     01-topic-slug.html            -- one lesson's generated HTML
     02-another-topic.html
     quiz-01-topic-quiz.html       -- one quiz's generated HTML
-    assignment-01-task.html       -- one assignment journal's HTML
 ```
 
 `index.json` shape:
 ```json
 {
   "lessons": [{ "id": "01-topic-slug", "slug": "topic-slug", "title": "Topic", "seq": 1 }],
-  "quizzes": [],
-  "assignments": []
+  "quizzes": []
 }
 ```
 
-Quiz files (`quiz-` prefix) and assignment journals (`assignment-` prefix)
-share the folder with lessons but never collide, and each array sequences
-its `id`/`seq` independently. A legacy bare-array `index.json` (lessons
-only) is read transparently and upgraded on the next save.
+Quiz files (`quiz-` prefix) share the folder with lessons but never collide,
+and each array sequences its `id`/`seq` independently. A legacy bare-array
+`index.json` (lessons only) — or the retired `{lessons,quizzes,assignments}`
+shape — is read transparently and upgraded on the next save.
 
 - `id` = `<seq padded to 2 digits>-<slug>`, e.g. `"01-introduction"`
 - `slug` = lowercased, non-alphanumerics collapsed to `-`, leading/trailing `-` trimmed
@@ -232,13 +230,11 @@ mirror). stored adds `POST /import` and a richer `GET /status`; see
 | `DELETE` | `/lesson/:folder/:id` | — | `{ ok }` |
 | `POST` | `/lesson/:folder/:id/rename` | `{ newTitle }` | `{ ok }` |
 | `GET`/`DELETE`/`POST …/rename` | `/quiz/:folder/:id[…]` | — / `{ newTitle }` | mirrors `/lesson` for quizzes |
-| `GET`/`DELETE`/`POST …/rename` | `/assignment/:folder/:id[…]` | — / `{ newTitle }` | mirrors `/lesson` for assignment journals |
-| `GET` | `/tree` | — | `{ folders: [{ name, lessons: [...], quizzes: [...], assignments: [...] }] }` |
+| `GET` | `/tree` | — | `{ folders: [{ name, lessons: [...], quizzes: [...] }] }` |
 
-Note: `POST /lesson`, `POST /quiz`, and `POST /assignment` (save) are
-implemented in vaultd and used by Claude Code (`/lect`, `/quiz`,
-`/assignment`). See [docs/api-contract.md](docs/api-contract.md) for the
-full endpoint list.
+Note: `POST /lesson` and `POST /quiz` (save) are implemented in vaultd and
+used by Claude Code (`/lect`, `/quiz`). See
+[docs/api-contract.md](docs/api-contract.md) for the full endpoint list.
 
 ---
 
