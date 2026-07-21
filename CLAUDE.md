@@ -16,7 +16,6 @@ begin with exactly one of:
 - `/lect`
 - `/quiz`
 - `/feat`
-- `/assignment`
 
 If a prompt does not begin with one of these commands:
 
@@ -41,15 +40,12 @@ Start your request with one of:
 
 /feat
 - Application development and project improvements.
-
-/assignment
-- University programming assignments + learning journal.
 ```
 
 Do not make exceptions. Do not infer which command the user intended. Wait
 until a valid command is provided before proceeding.
 
-## The four commands
+## The three commands
 - **`/lect`** — [.claude/commands/lect.md](.claude/commands/lect.md).
   Lesson generation and maintenance only. Loads only
   `docs/teaching-guidelines.md`, `docs/html-output-contract.md`,
@@ -59,11 +55,6 @@ until a valid command is provided before proceeding.
 - **`/feat`** — [.claude/commands/feat.md](.claude/commands/feat.md).
   Application development only. Loads only `docs/architecture.md`,
   `docs/coding-style.md`, `docs/ui-guidelines.md`, `docs/api-contract.md`.
-- **`/assignment`** — [.claude/commands/assignment.md](.claude/commands/assignment.md).
-  University programming assignments (clone an external repo, implement it,
-  keep a learning journal) only. Loads only `docs/assignment-guidelines.md`
-  and `docs/api-contract.md`. Works inside a sibling
-  `../assignment-workspace/`, never this repo's app source.
 
 ## Never mix responsibilities (strict)
 Each command is self-contained and loads only its own docs. A request that
@@ -72,7 +63,6 @@ split into separate turns under the matching command — never mixed under
 one command.
 
 Generated lesson/quiz files (`vault/**/*.html`, `vault/**/index.json`,
-`vault/.quiz-state.json`) and assignment journals (`vault/**/assignment-*.html`
-and the `assignments` array in `index.json`) are **application data**, not
-application source. `/feat` never edits them except for an explicit,
-requested migration or format conversion.
+`vault/.quiz-state.json`) are **application data**, not application source.
+`/feat` never edits them except for an explicit, requested migration or
+format conversion.
