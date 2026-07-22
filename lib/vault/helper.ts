@@ -4,8 +4,16 @@
 //
 // All persistence flows through here. See SPECIFICATION.md.
 
+import { listTreeFromSupabase, loadDocFromSupabase } from "./supabase";
+
 const STORED_URL = process.env.STORED_URL || "http://127.0.0.1:4323";
 const STORED_TOKEN = process.env.STORED_TOKEN;
+
+// Hosted read-only deployments (Vercel) have no local stored/SQLite/vault, so
+// they read the synced content straight from Supabase. VAULT_SOURCE=supabase
+// selects that; unset (the desktop default) keeps every call on stored. Only
+// the read paths branch — writes are blocked by middleware on a READ_ONLY box.
+const FROM_SUPABASE = process.env.VAULT_SOURCE === "supabase";
 
 export interface LessonEntry {
   id: string;
@@ -39,8 +47,10 @@ async function call(path: string, init?: RequestInit): Promise<any> {
 
 // syncFromVault ingests Claude-authored vault files (written via /lect,
 // /quiz) into SQLite. Awaited by /api/tree so content generated a moment ago
-// is present in the very tree response that follows it.
+// is present in the very tree response that follows it. No-op in Supabase
+// mode: there is no local vault to import from.
 export async function syncFromVault(): Promise<void> {
+  if (FROM_SUPABASE) return;
   await call("/import", { method: "POST" });
 }
 
@@ -56,6 +66,7 @@ export function loadLesson(
   folder: string,
   id: string
 ): Promise<{ html: string; title: string }> {
+  if (FROM_SUPABASE) return loadDocFromSupabase(folder, id, "lesson");
   return call(`/lesson/${encodeURIComponent(folder)}/${encodeURIComponent(id)}`);
 }
 
@@ -80,6 +91,7 @@ export function loadQuiz(
   folder: string,
   id: string
 ): Promise<{ html: string; title: string }> {
+  if (FROM_SUPABASE) return loadDocFromSupabase(folder, id, "quiz");
   return call(`/quiz/${encodeURIComponent(folder)}/${encodeURIComponent(id)}`);
 }
 
@@ -101,5 +113,6 @@ export function renameQuiz(
 }
 
 export function listTree(): Promise<{ folders: TreeFolder[] }> {
+  if (FROM_SUPABASE) return listTreeFromSupabase();
   return call("/tree");
 }
