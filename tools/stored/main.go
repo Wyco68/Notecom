@@ -13,7 +13,8 @@
 //
 // The CRUD surface mirrors vaultd's contract 1:1 (routes.go); on top of it:
 //
-//	POST /import    scan vault/ into SQLite (disk wins; never enqueues sync)
+//	POST /import    scan vault/ into SQLite (disk wins; enqueues what changed
+//	                so Claude-authored content reaches Supabase)
 //	GET  /status    { ok, folders, queued, last_sync }
 //
 // After every DB mutation the change is replayed to vault/ by calling
