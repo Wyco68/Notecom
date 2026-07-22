@@ -11,7 +11,9 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
-RUN npm run build
+# This project ships no public/ dir; create it so the run-stage COPY never
+# fails (and still picks up assets if one is added later).
+RUN npm run build && mkdir -p public
 
 FROM node:22-alpine AS run
 WORKDIR /app
