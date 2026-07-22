@@ -10,11 +10,25 @@ duplicated here — read both before any architecture-affecting change):
   lesson creation (Claude Code → vault/), viewing, folder/lesson management.
 - [docs/desktop.md](desktop.md) — the Tauri shell (`desktop/`): startup
   orchestration, splash screen, dev vs production sidecar layout.
-Multi-device is cross-device sync, not a hosted reader: each machine runs
-the desktop app and the `stored` sidecar reconciles its SQLite database with
-Supabase in the background (see "Primary datastore" below). The former
-read-only cloud reader channels (`VAULT_SOURCE=gcs`/`worker`) were retired
-in favour of this — see git history for their setup docs.
+The primary model is cross-device sync: each machine runs the desktop app and
+the `stored` sidecar reconciles its SQLite database with Supabase in the
+background (see "Primary datastore" below). The former filesystem-based cloud
+reader channels (`VAULT_SOURCE=gcs`/`worker`) were retired in favour of this —
+see git history for their setup docs.
+
+A hosted read-only reader is still supported through the same Supabase data,
+selected by **`VAULT_SOURCE=supabase`** (e.g. the Vercel deployment). In that
+mode the Next.js read helpers (`lib/vault/supabase.ts`) query the
+`notes_folders`/`notes_documents` tables directly over PostgREST instead of a
+local `stored` — a serverless box has no sidecar, SQLite, or vault on disk.
+It is read-only by construction (run it with `READ_ONLY=1`, which the
+middleware enforces and `/api/tree` also forces on for this source); search
+and chat, which need the local `indexd`/Ollama, are unavailable there. The
+service key is a server-only env var (never `NEXT_PUBLIC_`), so it never
+reaches the browser; reads use the service role because the remote tables have
+RLS on with zero policies. This is the one sanctioned place the app reads
+Supabase directly — the desktop app still never does (sync lives only in
+`stored`).
 
 ## The one rule that must never break
 
@@ -25,7 +39,9 @@ Don't move logic across the layers when fixing or extending the app:
 - Don't add persistence to a React component or API route directly —
   always through `lib/vault/helper.ts` → `stored` (which mirrors to the
   filesystem via `vaultd`). Never fetch Supabase from the app; sync lives
-  only inside `stored`.
+  only inside `stored`. The one exception is the hosted read-only reader
+  (`VAULT_SOURCE=supabase`, `lib/vault/supabase.ts`): a serverless box has no
+  `stored`, so it reads — never writes — the synced tables directly.
 - Don't add any AI generation logic or Anthropic API calls to the Next.js
   app. Two delegations are the sanctioned exception (2026-07): the chat
   proxy (`/api/chat` → indexd `/chat` → local Ollama) and the generation
