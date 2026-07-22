@@ -1,0 +1,17 @@
+# Keep the web build context small and secret-free. The Go services build from
+# their own tools/<svc> contexts, so excluding them here only trims the web image.
+.git
+node_modules
+.next
+out
+vault
+tools
+desktop
+installation
+_templates
+**/*.exe
+**/*.exe~
+*.log
+.env*
+.vercel
+.claude

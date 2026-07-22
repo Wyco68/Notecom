@@ -1,0 +1,105 @@
+# Full self-hosted stack for a VPS (Dokploy deploys this file).
+#
+# Topology: web (Next.js) → stored (SQLite source of truth + Supabase sync) and
+# indexd (search) over the internal Docker network; stored mirrors every change
+# back to files through vaultd. All three Go services share ONE vault volume;
+# only web is published (Dokploy/Traefik terminates TLS in front of :3000).
+#
+# The full app reads through stored, so VAULT_SOURCE is intentionally NOT set
+# here — that flag is only for the thin Vercel reader that has no sidecars.
+#
+# Config comes from Dokploy env vars (a .env alongside this file works too):
+#   INTERNAL_TOKEN         shared secret the services require from each other
+#   READ_ONLY              1 = public read-only reader (recommended); unset to allow delete/rename
+#   SUPABASE_URL / _KEY    optional: sync with the same Supabase as the desktop app
+#   OLLAMA_URL             optional: enable vector search + chat (see the ollama profile)
+
+name: lecturelens
+
+services:
+  vaultd:
+    build: ./tools/vaultd
+    environment:
+      VAULTD_ADDR: 0.0.0.0:4321
+      VAULT_ROOT: /vault
+      VAULTD_TOKEN: ${INTERNAL_TOKEN}
+    volumes:
+      - vault:/vault
+    restart: unless-stopped
+
+  indexd:
+    build: ./tools/indexd
+    environment:
+      INDEXD_ADDR: 0.0.0.0:4322
+      VAULT_ROOT: /vault
+      INDEXD_TOKEN: ${INTERNAL_TOKEN}
+      # Points at the optional ollama service; unresolved/unreachable → indexd
+      # serves keyword-only search and 503s chat, by design.
+      OLLAMA_URL: ${OLLAMA_URL:-http://ollama:11434}
+      EMBED_MODEL: ${EMBED_MODEL:-nomic-embed-text}
+      CHAT_MODEL: ${CHAT_MODEL:-llama3.2}
+    volumes:
+      - vault:/vault
+    restart: unless-stopped
+
+  stored:
+    build: ./tools/stored
+    environment:
+      STORED_ADDR: 0.0.0.0:4323
+      VAULT_ROOT: /vault
+      STORED_DB: /vault/.data/notes.db
+      STORED_TOKEN: ${INTERNAL_TOKEN}
+      # stored mirrors every DB mutation back to files by calling vaultd.
+      VAULTD_URL: http://vaultd:4321
+      VAULTD_TOKEN: ${INTERNAL_TOKEN}
+      # Optional: same project as the desktop app → cross-device sync. Leave
+      # unset to run the VPS fully standalone (SQLite on the volume only).
+      SUPABASE_URL: ${SUPABASE_URL:-}
+      SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_KEY:-}
+    volumes:
+      - vault:/vault
+    depends_on:
+      - vaultd
+    restart: unless-stopped
+
+  web:
+    build: .
+    environment:
+      STORED_URL: http://stored:4323
+      STORED_TOKEN: ${INTERNAL_TOKEN}
+      INDEXD_URL: http://indexd:4322
+      INDEXD_TOKEN: ${INTERNAL_TOKEN}
+      # Public reader: 1 hides/blocks all writes (middleware enforces it).
+      READ_ONLY: ${READ_ONLY:-1}
+    depends_on:
+      - stored
+      - indexd
+    # No published host port: Dokploy's Traefik reaches the container on the
+    # shared dokploy-network, and you attach the domain in the Dokploy UI
+    # (service "web", port 3000). Traefik also owns host :80/:443/:3000, so
+    # publishing 3000 here would clash with the Dokploy dashboard.
+    # (Running plain `docker compose` instead of Dokploy? add: ports: ["8080:3000"].)
+    networks:
+      - default
+      - dokploy-network
+    restart: unless-stopped
+
+  # Optional vector search + "Ask my notes" chat. Enable with:
+  #   docker compose --profile search up -d
+  # then pull models once (see the guide). Heavy: needs 4GB+ RAM.
+  ollama:
+    image: ollama/ollama:latest
+    profiles: ["search"]
+    volumes:
+      - ollama:/root/.ollama
+    restart: unless-stopped
+
+volumes:
+  vault:
+  ollama:
+
+networks:
+  # Dokploy creates this; its Traefik proxy joins it to route your domain to
+  # the web service. Marked external so Compose attaches rather than recreates.
+  dokploy-network:
+    external: true
