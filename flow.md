@@ -14,7 +14,8 @@ Claude Code is the only tool that writes lesson content.
 ```
 /lect (Claude Code CLI)
   → Claude reads uploaded lecture file (PDF, image, slides)
-  → Claude generates semantic HTML following the output contract
+  → Claude generates semantic HTML following the output contract,
+    grounded strictly in that source (no invented content)
   → Claude writes vault/<Folder>/<id>.html
   → Claude upserts vault/<Folder>/index.json
   → Done
@@ -24,6 +25,15 @@ This happens entirely outside the Next.js process. On the next tree fetch
 the app awaits `stored POST /import`, which ingests the new files into
 SQLite (idempotent, disk-wins, never enqueues sync ops); the stored sync
 worker then uploads the new records to Supabase in the background.
+
+Strict generation: the saved file is what stored persists to SQLite and
+syncs to Supabase, so it must be faithful to the lecture — the content comes
+from the uploaded source, not the model's prior knowledge. The in-app
+Generate button drives the same `/lect` (or `/quiz`) flow via
+`lib/generate/runner.ts`, whose prompt pins the exact destination folder and
+enforces that grounding (fail rather than fabricate if the source can't be
+read). It never writes to storage directly — it only produces the vault
+file, and the import path above does the rest.
 
 **Naming convention (Claude Code must follow):**
 - `<folder>` = kebab-case slug of the subject name, e.g. `computer-networks`
