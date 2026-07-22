@@ -7,7 +7,8 @@ RUN go mod download
 COPY . .
 RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/indexd .
 
-FROM gcr.io/distroless/static-debian12:nonroot
+# Root (not :nonroot): writes /vault/.index on the shared root-owned volume.
+FROM gcr.io/distroless/static-debian12
 COPY --from=build /out/indexd /indexd
 # OLLAMA_URL points at the optional ollama service; without it indexd degrades
 # to FTS5 keyword search automatically (no vector embeddings).

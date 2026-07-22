@@ -5,7 +5,9 @@ WORKDIR /src
 COPY . .
 RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/vaultd .
 
-FROM gcr.io/distroless/static-debian12:nonroot
+# Root (not :nonroot): these services write to the shared, root-owned vault
+# volume — a nonroot UID can't mkdir /vault/.data or /vault/.index on it.
+FROM gcr.io/distroless/static-debian12
 COPY --from=build /out/vaultd /vaultd
 # VAULTD_ADDR must bind 0.0.0.0 in a container so sibling services can reach it.
 ENV VAULTD_ADDR=0.0.0.0:4321 VAULT_ROOT=/vault
