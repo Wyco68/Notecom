@@ -19,8 +19,9 @@
 //
 // After every DB mutation the change is replayed to vault/ by calling
 // vaultd (export.go), keeping the file tree a live legacy-format export for
-// indexd and Claude Code. Supabase sync (sync.go) is enabled by
-// SUPABASE_URL + SUPABASE_SERVICE_KEY (env or <data>/sync.env).
+// indexd and Claude Code. Supabase sync (sync.go) authenticates as the
+// signed-in user (auth.go), so Row Level Security — not this process — decides
+// which folders it may read and write.
 package main
 
 import (
@@ -78,15 +79,16 @@ func main() {
 
 	// Supabase credentials may live next to the database (<data>/sync.env)
 	// instead of the shell environment — handy for the packaged desktop app.
-	loadEnvFile(filepath.Join(filepath.Dir(dbPath), "sync.env"))
-	sb := newSupabaseClient()
+	envPath := filepath.Join(filepath.Dir(dbPath), "sync.env")
+	loadEnvFile(envPath)
+	sb := newSupabaseClient(newAuthenticator(envPath))
 	stop := make(chan struct{})
 	if sb.enabled() {
 		log.Printf("sync: enabled (%s)", sb.baseURL)
 		go s.syncLoop(sb, stop)
 	} else {
-		log.Printf("sync: disabled — set SUPABASE_URL and SUPABASE_SERVICE_KEY (env or %s) to enable",
-			filepath.Join(filepath.Dir(dbPath), "sync.env"))
+		log.Printf("sync: disabled — set SUPABASE_URL, SUPABASE_ANON_KEY and a credential "+
+			"(SUPABASE_REFRESH_TOKEN, or SUPABASE_EMAIL/SUPABASE_PASSWORD) in env or %s", envPath)
 	}
 
 	// Final queue flush on shutdown. Best-effort: the queue is durable, so a
