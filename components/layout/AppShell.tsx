@@ -9,6 +9,8 @@ import NewFolderModal from "../modals/NewFolderModal";
 import GenerateModal from "../modals/GenerateModal";
 import SignInModal from "../modals/SignInModal";
 import ChatPanel from "../chat/ChatPanel";
+import InvitationsInbox from "../collab/InvitationsInbox";
+import AccountControl from "../collab/AccountControl";
 import ThemeToggle from "../theme/ThemeToggle";
 import RefreshIcon from "../icons/RefreshIcon";
 import SearchIcon from "../icons/SearchIcon";
@@ -140,6 +142,10 @@ export default function AppShell() {
           </div>
         </div>
 
+        {/* Renders nothing unless the user actually has invitations, and
+            nothing at all when collaboration isn't configured. */}
+        <InvitationsInbox onChanged={refreshTree} />
+
         <div className="flex items-center justify-between px-3 py-2">
           <span className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-500">
             {query.trim() ? "Results" : "Subjects"}
@@ -166,6 +172,13 @@ export default function AppShell() {
                   <UploadIcon className="h-3.5 w-3.5" />
                 </button>
               )}
+              <a
+                href="/discover"
+                title="Discover folders shared by other people"
+                className="flex h-5 w-5 items-center justify-center rounded text-gray-600 hover:bg-black/5 dark:text-gray-300 dark:hover:bg-white/10"
+              >
+                <SearchIcon className="h-3.5 w-3.5" />
+              </a>
               <button
                 onClick={() => setShowNewFolder(true)}
                 title="New Folder"
@@ -189,6 +202,10 @@ export default function AppShell() {
             />
           )}
         </div>
+
+        {/* Sidebar foot: collaboration account. Renders nothing when the app
+            isn't configured for collaboration. */}
+        <AccountControl />
       </aside>
 
       <main className="relative flex-1 overflow-y-auto bg-white dark:bg-[#0d1117]">

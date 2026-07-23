@@ -5,7 +5,12 @@ import type { Folder, LessonRef } from "@/lib/vault/types";
 import ConfirmModal from "../modals/ConfirmModal";
 import TrashIcon from "../icons/TrashIcon";
 import QuizIcon from "../icons/QuizIcon";
+import ShareIcon from "../icons/ShareIcon";
 import { useToast } from "../toast/ToastProvider";
+
+// Collaboration entry point is only meaningful when the app is configured for
+// it; otherwise the manage page just 501s, so the control is hidden.
+const COLLAB_ENABLED = !!process.env.NEXT_PUBLIC_SUPABASE_URL;
 
 type PendingDelete =
   | { kind: "folder" }
@@ -84,6 +89,16 @@ export default function FileTreeNode({
           <span className="text-gray-500">{open ? "▾" : "▸"}</span>
           <span className="truncate font-medium">{folder.name.replace(/-/g, " ")}</span>
         </button>
+        {COLLAB_ENABLED && (
+          <a
+            href={`/vault/${encodeURIComponent(folder.name)}/manage`}
+            title="Manage sharing"
+            onClick={(e) => e.stopPropagation()}
+            className="mr-1 hidden h-5 w-5 shrink-0 items-center justify-center rounded text-gray-500 hover:bg-black/5 hover:text-gray-700 group-hover:flex dark:hover:bg-white/10 dark:hover:text-gray-200"
+          >
+            <ShareIcon className="h-3.5 w-3.5" />
+          </a>
+        )}
         <button
           onClick={(e) => {
             e.stopPropagation();
