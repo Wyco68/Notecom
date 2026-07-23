@@ -24,9 +24,38 @@ Loaded by `/feat` only. Source of truth is the route files themselves
 
 Error shape is always `{ error: string }` with a non-2xx status.
 
-There are no auth routes. There is no lesson- or quiz-generation route.
-Content creation happens via Claude Code (`/lect` for lessons, `/quiz` for
-quizzes), not the web app.
+There is no lesson- or quiz-generation route. Content creation happens via
+Claude Code (`/lect` for lessons, `/quiz` for quizzes), not the web app.
+
+## Collaboration (`app/api/collab/`)
+
+Folder sharing, membership and discovery. Every handler runs server-side with
+the caller's Supabase JWT and delegates to an RPC or an RLS-guarded select —
+these routes add no authorization logic of their own, because the database is
+the boundary. Model: [collaboration.md](collaboration.md).
+
+| Route | Method | Body/params | Response |
+|---|---|---|---|
+| `/api/collab/discover` | GET | `?q&tags&limit&offset` | `{ folders: [{slug,name,description,owner,tags,members,joinPolicy,visibility}] }` — `notes_search_folders`; never returns a non-discoverable folder to a non-member |
+| `/api/collab/tags` | GET | `?q` | `{ tags: [{slug,label,folders}] }` |
+| `/api/collab/folders/[slug]` | GET | — | `{ folder, role, members, tags }` — 404 when RLS hides it |
+| `/api/collab/folders/[slug]/settings` | POST | `{ visibility?, discoverable?, joinPolicy?, description? }` | `{ ok }` — manage-level |
+| `/api/collab/folders/[slug]/tags` | POST | `{ tag, grantsJoin }` | `{ ok }` |
+| `/api/collab/folders/[slug]/tags` | DELETE | `?tag` | `{ ok }` |
+| `/api/collab/folders/[slug]/members` | GET | — | `{ members: [{userId,username,avatarUrl,role,joinedAt}] }` |
+| `/api/collab/folders/[slug]/members` | POST | `{ userId, role }` | `{ ok }` — role change |
+| `/api/collab/folders/[slug]/members` | DELETE | `?userId` | `{ ok }` — remove, or leave when it's the caller |
+| `/api/collab/folders/[slug]/invitations` | GET | — | `{ invitations: [...] }` — manage-level |
+| `/api/collab/folders/[slug]/invitations` | POST | `{ username, role }` | `{ ok }` |
+| `/api/collab/folders/[slug]/requests` | GET | — | `{ requests: [...] }` — manage-level |
+| `/api/collab/folders/[slug]/requests` | POST | `{ requestId, approve }` | `{ ok }` |
+| `/api/collab/join` | POST | `{ slug, via: "open"\|"request"\|"tag", tag?, message? }` | `{ status: "joined"\|"requested" }` |
+| `/api/collab/invitations` | GET | — | `{ invitations: [...] }` — the caller's inbox |
+| `/api/collab/invitations` | POST | `{ invitationId, accept }` | `{ ok }` |
+
+`READ_ONLY=1` blocks non-GET `/api/*` in `middleware.ts`; `/api/collab/` is
+allowlisted alongside `/api/chat`, since these are membership writes rather
+than note-content writes. Unauthenticated callers get 401.
 
 ## vaultd (Go helper, default `127.0.0.1:4321`)
 
@@ -125,10 +154,14 @@ Last-Write-Wins by `version` then `updated_at`), and every mutation is
 mirrored back to `vault/` by calling vaultd, keeping the file tree a live
 legacy-format export for indexd and Claude Code.
 
-Sync is enabled by `SUPABASE_URL` + `SUPABASE_SERVICE_KEY` (env or
-`<vault>/.data/sync.env`); absent, stored runs fully local. Remote tables:
-`notes_folders`, `notes_documents` (RLS enabled, zero policies —
-service-role access only; server-trigger `synced_at` is the pull cursor).
+Sync is enabled by `SUPABASE_URL` + `SUPABASE_ANON_KEY` plus a user credential
+(env or `<vault>/.data/sync.env`); absent, stored runs fully local. stored
+signs in as that user and sends its access token, so **RLS decides what it may
+push and pull** — it never holds a service-role key and never sees another
+user's folders. Remote tables: `notes_folders`, `notes_documents`, and the
+`notes_folder_*` collaboration tables (server-trigger `synced_at` is the pull
+cursor). A 403 on push means the local role lacks `can_write` for that folder;
+the queue row resolves rather than retrying forever.
 
 Error shape is `{ error: string }` with a non-2xx status, matching the
 Next.js routes.

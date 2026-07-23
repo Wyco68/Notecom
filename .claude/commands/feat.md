@@ -10,6 +10,11 @@ Application development only.
 - [docs/api-contract.md](../../docs/api-contract.md)
 - [docs/desktop.md](../../docs/desktop.md) — only when the task touches
   `desktop/`, `scripts/*desktop*`, or app startup/packaging.
+- [docs/collaboration.md](../../docs/collaboration.md) — only when the task
+  touches folder sharing, roles, membership, tags, folder search, or
+  Supabase RLS. Pair it with the `collab` skill
+  ([.claude/skills/collab/SKILL.md](../skills/collab/SKILL.md)), which holds
+  the migration procedure and the required RLS proof.
 
 Do not load `docs/teaching-guidelines.md`, `docs/html-output-contract.md`,
 or `docs/lesson-template.md` — lesson-generation instructions are
@@ -43,4 +48,5 @@ If the request belongs to lesson generation, stop and tell the user to use
 ## Verification
 After any change: `npx tsc --noEmit` for the Next.js app, `go build` for
 `tools/vaultd`, and a browser check via the preview tools for anything
-UI-visible.
+UI-visible. For anything touching permissions or RLS, those checks prove
+nothing on their own — run the RLS proof in the `collab` skill as well.

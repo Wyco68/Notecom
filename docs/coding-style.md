@@ -16,7 +16,19 @@ match them, don't introduce a second style.
   (`./Modal`, `../sidebar/FileTree`).
 - One concern per `lib/` subfolder: `lib/vault/*` (naming, sanitizing,
   vaultd client, types), `lib/claude/*` (Claude client + prompt),
-  `lib/auth/*` (token store). Don't blend them.
+  `lib/auth/*` (Claude Code CLI sign-in — *not* user accounts),
+  `lib/supabase/*` (client factories only, no business logic),
+  `lib/collab/*` (folder sharing data layer). Don't blend them.
+- Database types come from `mcp__supabase__generate_typescript_types` after a
+  schema change — don't hand-write row interfaces that will drift.
+
+## SQL (`supabase/migrations/`)
+- One file per concern, `NNNN_short_description.sql`, applied in order.
+  Append-only: never edit an applied migration, fix forward with a new one —
+  same discipline as `tools/stored/migrations.go`.
+- Order within a migration set: schema, then functions, then policies.
+- Policies call the `notes_can_*` helper predicates rather than subquerying
+  the members table; see [collaboration.md](collaboration.md) for why.
 
 ## Go (`tools/vaultd`)
 - Single `main.go`, stdlib only (`net/http`, `encoding/json`,

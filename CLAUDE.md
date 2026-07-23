@@ -54,7 +54,9 @@ until a valid command is provided before proceeding.
   Quiz creation and maintenance only. Loads only `docs/quiz-guidelines.md`.
 - **`/feat`** — [.claude/commands/feat.md](.claude/commands/feat.md).
   Application development only. Loads only `docs/architecture.md`,
-  `docs/coding-style.md`, `docs/ui-guidelines.md`, `docs/api-contract.md`.
+  `docs/coding-style.md`, `docs/ui-guidelines.md`, `docs/api-contract.md`,
+  plus `docs/collaboration.md` when the task touches folder sharing,
+  permissions or RLS.
 
 ## Never mix responsibilities (strict)
 Each command is self-contained and loads only its own docs. A request that
@@ -66,3 +68,10 @@ Generated lesson/quiz files (`vault/**/*.html`, `vault/**/index.json`,
 `vault/.quiz-state.json`) are **application data**, not application source.
 `/feat` never edits them except for an explicit, requested migration or
 format conversion.
+
+## Collaboration and access control
+Folders are the unit of sharing: owner, members with roles, visibility,
+discoverability, tags. Documents inherit folder permissions and never carry
+their own. Access is enforced by Supabase Row Level Security — no
+service-role key exists in this app, and a frontend check is never the
+protection. Contract: [docs/collaboration.md](docs/collaboration.md).

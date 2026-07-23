@@ -43,6 +43,30 @@ base body color).
   [components/icons/](../components/icons/) (e.g. `TrashIcon`), no icon
   library dependency.
 
+## Collaboration UI
+Components live in `components/collab/`. Model and permission rules:
+[collaboration.md](collaboration.md).
+
+| Element | Style |
+|---|---|
+| `owner` badge | `bg-amber-500/15 text-amber-300 border-amber-500/30` |
+| `editor` badge | `bg-blue-500/15 text-blue-300 border-blue-500/30` |
+| `viewer` badge | `bg-gray-500/15 text-gray-400 border-white/10` |
+| Tag chip | `bg-white/5 text-gray-300 border-white/10`, `rounded-full` |
+| Tag chip that grants join | same, plus `border-emerald-500/40 text-emerald-300` |
+| Pending state (invite/request) | `text-amber-300` |
+
+- **Member rows** reuse the hover-reveal pattern above: `group` on the row,
+  `hidden group-hover:flex` on the remove button.
+- **Removing a member, leaving a folder, deleting a folder** all go through
+  `ConfirmModal` — no exceptions, same rule as lesson deletion.
+- **A hidden control is not a permission.** Grey out or omit write controls for
+  a `viewer`, but never assume that is what stops the action — the database
+  does. Show the server's error via `toast.error(...)` when it refuses.
+- **Empty states matter more here than elsewhere**: "no members yet", "no
+  pending requests", "no folders match" are the normal case early on. Write
+  them as a muted single line, not an illustration.
+
 ## Rendering generated content
 Lesson HTML is never inserted via `dangerouslySetInnerHTML`. It's parsed
 and walked node-by-node in

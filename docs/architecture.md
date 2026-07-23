@@ -21,14 +21,22 @@ selected by **`VAULT_SOURCE=supabase`** (e.g. the Vercel deployment). In that
 mode the Next.js read helpers (`lib/vault/supabase.ts`) query the
 `notes_folders`/`notes_documents` tables directly over PostgREST instead of a
 local `stored` — a serverless box has no sidecar, SQLite, or vault on disk.
-It is read-only by construction (run it with `READ_ONLY=1`, which the
-middleware enforces and `/api/tree` also forces on for this source); search
-and chat, which need the local `indexd`/Ollama, are unavailable there. The
-service key is a server-only env var (never `NEXT_PUBLIC_`), so it never
-reaches the browser; reads use the service role because the remote tables have
-RLS on with zero policies. This is the one sanctioned place the app reads
-Supabase directly — the desktop app still never does (sync lives only in
-`stored`).
+It is read-only for *content* (run it with `READ_ONLY=1`, which the middleware
+enforces and `/api/tree` also forces on for this source); search and chat, which
+need the local `indexd`/Ollama, are unavailable there. Collaboration actions are
+the deliberate exception the middleware allowlists — they are writes to
+membership, not to notes. Reads carry the signed-in user's JWT and are scoped by
+RLS, so a hosted reader shows exactly the folders that user owns, belongs to, or
+may discover.
+
+## Access control
+
+Folders are the unit of sharing (owner, members with roles, visibility,
+discoverability, tags); documents inherit folder permissions. Enforcement lives
+entirely in Postgres RLS — **no service-role key exists in this app**, in the
+web deployment or in `stored`. `stored` authenticates to Supabase as the
+signed-in user, so it syncs only rows RLS lets that user see, and it holds no
+permission logic of its own. Contract: [collaboration.md](collaboration.md).
 
 ## The one rule that must never break
 
@@ -38,10 +46,14 @@ Don't move logic across the layers when fixing or extending the app:
   — that's Next.js's job (`lib/vault/slug.ts`).
 - Don't add persistence to a React component or API route directly —
   always through `lib/vault/helper.ts` → `stored` (which mirrors to the
-  filesystem via `vaultd`). Never fetch Supabase from the app; sync lives
-  only inside `stored`. The one exception is the hosted read-only reader
-  (`VAULT_SOURCE=supabase`, `lib/vault/supabase.ts`): a serverless box has no
-  `stored`, so it reads — never writes — the synced tables directly.
+  filesystem via `vaultd`). Content sync lives only inside `stored`. Two
+  sanctioned exceptions read Supabase from the app, both server-side and both
+  through a **user-scoped** client (`lib/supabase/*`, anon key + the caller's
+  JWT), never a service key: the hosted reader (`VAULT_SOURCE=supabase`,
+  `lib/vault/supabase.ts`) — a serverless box has no `stored`, so it reads the
+  synced tables directly — and the collaboration surface (`lib/collab/*`,
+  `app/api/collab/**`), which manages folder membership, invitations, join
+  requests, tags and search. Neither touches lesson content persistence.
 - Don't add any AI generation logic or Anthropic API calls to the Next.js
   app. Two delegations are the sanctioned exception (2026-07): the chat
   proxy (`/api/chat` → indexd `/chat` → local Ollama) and the generation
