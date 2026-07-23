@@ -17,6 +17,8 @@
     "install:desktop": "npm install && npm run build:desktop"
   },
   "dependencies": {
+    "@supabase/ssr": "^0.12.3",
+    "@supabase/supabase-js": "^2.110.8",
     "framer-motion": "^11.11.17",
     "mermaid": "^11.4.1",
     "next": "^15.0.3",
