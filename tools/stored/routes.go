@@ -42,6 +42,10 @@ type treeFolder struct {
 	Name    string      `json:"name"`
 	Lessons []treeEntry `json:"lessons"`
 	Quizzes []treeEntry `json:"quizzes"`
+	// Role is the signed-in user's role for this folder ("" when sync is off).
+	// Advisory: it lets the UI hide write controls it would only be refused on.
+	Role     string `json:"role,omitempty"`
+	CanWrite bool   `json:"canWrite"`
 }
 
 func (s *server) handleTree(w http.ResponseWriter, r *http.Request) {
@@ -59,7 +63,10 @@ func (s *server) handleTree(w http.ResponseWriter, r *http.Request) {
 	out := make([]treeFolder, 0, len(folders))
 	bySlug := make(map[string]*treeFolder, len(folders))
 	for _, f := range folders {
-		out = append(out, treeFolder{Name: f.Slug, Lessons: []treeEntry{}, Quizzes: []treeEntry{}})
+		out = append(out, treeFolder{
+			Name: f.Slug, Lessons: []treeEntry{}, Quizzes: []treeEntry{},
+			Role: f.Role, CanWrite: f.CanWrite(),
+		})
 		bySlug[f.Slug] = &out[len(out)-1]
 	}
 	for _, d := range docs {

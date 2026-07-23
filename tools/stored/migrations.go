@@ -91,6 +91,31 @@ CREATE TABLE sync_state (
 INSERT INTO sync_state (id, last_sync) VALUES (1, NULL);
 `,
 	},
+	{
+		version: 2,
+		sql: `
+-- Collaboration fields, mirroring the remote notes_folders columns so a pulled
+-- row round-trips without loss. owner_id is nullable here (unlike remotely):
+-- a fully-local install has no Supabase user, and every folder it creates gets
+-- its owner assigned on first push.
+ALTER TABLE folders ADD COLUMN owner_id     TEXT;
+ALTER TABLE folders ADD COLUMN description  TEXT;
+ALTER TABLE folders ADD COLUMN visibility   TEXT    NOT NULL DEFAULT 'private';
+ALTER TABLE folders ADD COLUMN discoverable INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE folders ADD COLUMN join_policy  TEXT    NOT NULL DEFAULT 'request';
+
+-- The signed-in user's role per folder, replicated from the remote
+-- notes_folder_access view. Derived data: it is a cache of a server-side
+-- decision, never the decision itself — the database still refuses a write
+-- this table would have allowed. It exists so the desktop UI can grey out
+-- controls without a round trip.
+CREATE TABLE folder_access (
+  folder_id TEXT PRIMARY KEY REFERENCES folders(id) ON DELETE CASCADE,
+  role      TEXT NOT NULL,
+  synced_at TEXT NOT NULL
+);
+`,
+	},
 }
 
 // migrate applies any migrations whose version is above the DB's current

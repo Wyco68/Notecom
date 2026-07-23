@@ -15,20 +15,33 @@ func scanFolder(s interface {
 	Scan(...any) error
 }) (*Folder, error) {
 	var f Folder
-	var deleted int
-	if err := s.Scan(&f.ID, &f.Slug, &f.Name, &f.CreatedAt, &f.UpdatedAt, &f.Version, &deleted); err != nil {
+	var deleted, discoverable int
+	var owner, description, role sql.NullString
+	if err := s.Scan(&f.ID, &f.Slug, &f.Name, &owner, &description, &f.Visibility,
+		&discoverable, &f.JoinPolicy, &f.CreatedAt, &f.UpdatedAt, &f.Version, &deleted, &role); err != nil {
 		return nil, err
 	}
+	f.OwnerID = owner.String
+	f.Description = description.String
+	f.Role = role.String
 	f.Deleted = deleted != 0
+	f.Discoverable = discoverable != 0
 	return &f, nil
 }
 
-const folderCols = `id, slug, name, created_at, updated_at, version, deleted`
+const folderCols = `id, slug, name, owner_id, description, visibility, discoverable, join_policy, ` +
+	`created_at, updated_at, version, deleted`
+
+// folderSelect joins the cached role so callers get it without a second query.
+// The alias keeps folderCols usable for INSERT, where the join column has no
+// place.
+const folderSelect = `SELECT f.id, f.slug, f.name, f.owner_id, f.description, f.visibility, ` +
+	`f.discoverable, f.join_policy, f.created_at, f.updated_at, f.version, f.deleted, a.role ` +
+	`FROM folders f LEFT JOIN folder_access a ON a.folder_id = f.id`
 
 // GetBySlug returns the active (non-deleted) folder for a slug.
 func (r *FolderRepo) GetBySlug(slug string) (*Folder, error) {
-	row := r.db.sql.QueryRow(
-		`SELECT `+folderCols+` FROM folders WHERE slug = ? AND deleted = 0`, slug)
+	row := r.db.sql.QueryRow(folderSelect+` WHERE f.slug = ? AND f.deleted = 0`, slug)
 	f, err := scanFolder(row)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, errNotFound
@@ -62,10 +75,17 @@ func (r *FolderRepo) Create(slug, name string, track bool) (*Folder, error) {
 	defer tx.Rollback()
 
 	now := nowISO()
-	f := &Folder{ID: newID(), Slug: slug, Name: name, CreatedAt: now, UpdatedAt: now, Version: 1}
+	// New folders start private and undiscoverable: sharing is an explicit act
+	// performed later from the web UI, never a default. owner_id is left NULL
+	// and stamped by ClaimUnowned once the sync worker knows who is signed in.
+	f := &Folder{
+		ID: newID(), Slug: slug, Name: name,
+		Visibility: "private", Discoverable: false, JoinPolicy: "request",
+		CreatedAt: now, UpdatedAt: now, Version: 1,
+	}
 	if _, err := tx.Exec(
-		`INSERT INTO folders (`+folderCols+`) VALUES (?, ?, ?, ?, ?, 1, 0)`,
-		f.ID, f.Slug, f.Name, f.CreatedAt, f.UpdatedAt,
+		`INSERT INTO folders (`+folderCols+`) VALUES (?, ?, ?, NULL, NULL, ?, 0, ?, ?, ?, 1, 0)`,
+		f.ID, f.Slug, f.Name, f.Visibility, f.JoinPolicy, f.CreatedAt, f.UpdatedAt,
 	); err != nil {
 		return nil, err
 	}
@@ -137,7 +157,7 @@ func (r *FolderRepo) Delete(slug string, track bool) error {
 // ListActive returns every non-deleted folder ordered by name.
 func (r *FolderRepo) ListActive() ([]Folder, error) {
 	rows, err := r.db.sql.Query(
-		`SELECT ` + folderCols + ` FROM folders WHERE deleted = 0 ORDER BY name COLLATE NOCASE`)
+		folderSelect + ` WHERE f.deleted = 0 ORDER BY f.name COLLATE NOCASE`)
 	if err != nil {
 		return nil, err
 	}

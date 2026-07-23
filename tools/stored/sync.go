@@ -16,6 +16,7 @@ package main
 // to one upload of the final state — never one upload per keystroke.
 
 import (
+	"errors"
 	"log"
 	"time"
 )
@@ -29,14 +30,26 @@ const (
 )
 
 type remoteFolder struct {
-	ID        string `json:"id"`
-	Slug      string `json:"slug"`
-	Name      string `json:"name"`
-	CreatedAt string `json:"created_at"`
-	UpdatedAt string `json:"updated_at"`
-	Version   int    `json:"version"`
-	Deleted   bool   `json:"deleted"`
-	SyncedAt  string `json:"synced_at,omitempty"` // server-assigned; never sent
+	ID           string  `json:"id"`
+	Slug         string  `json:"slug"`
+	Name         string  `json:"name"`
+	OwnerID      string  `json:"owner_id"`
+	Description  *string `json:"description"`
+	Visibility   string  `json:"visibility"`
+	Discoverable bool    `json:"discoverable"`
+	JoinPolicy   string  `json:"join_policy"`
+	CreatedAt    string  `json:"created_at"`
+	UpdatedAt    string  `json:"updated_at"`
+	Version      int     `json:"version"`
+	Deleted      bool    `json:"deleted"`
+	SyncedAt     string  `json:"synced_at,omitempty"` // server-assigned; never sent
+}
+
+// remoteAccess mirrors the notes_folder_access view: the caller's role per
+// folder, as decided by the database.
+type remoteAccess struct {
+	FolderID string `json:"folder_id"`
+	Role     string `json:"role"`
 }
 
 type remoteDocument struct {
@@ -67,10 +80,16 @@ func normalizeTS(s string) string {
 }
 
 func (s *server) syncLoop(sb *supabaseClient, stop <-chan struct{}) {
+	// Claiming precedes bootstrap: a folder pushed with a null owner_id is
+	// rejected by the folders INSERT policy, so the user must be known first.
+	s.claimOnce(sb)
 	s.bootstrapOnce()
 	cycle := func() {
 		if err := s.pull(sb); err != nil {
 			log.Printf("sync: pull: %v", err)
+		}
+		if err := s.pullAccess(sb); err != nil {
+			log.Printf("sync: access: %v", err)
 		}
 		if err := s.push(sb); err != nil {
 			log.Printf("sync: push: %v", err)
@@ -90,6 +109,46 @@ func (s *server) syncLoop(sb *supabaseClient, stop <-chan struct{}) {
 			return
 		}
 	}
+}
+
+// claimOnce assigns the signed-in user to any folder that has no owner. On a
+// device that ran fully local before sign-in, that is every folder it created.
+func (s *server) claimOnce(sb *supabaseClient) {
+	if _, err := sb.auth.token(); err != nil {
+		log.Printf("sync: sign-in failed: %v", err)
+		return
+	}
+	uid := sb.auth.currentUser()
+	if uid == "" {
+		return
+	}
+	s.mu.Lock()
+	n, err := s.folders.ClaimUnowned(uid)
+	s.mu.Unlock()
+	if err != nil {
+		log.Printf("sync: claim: %v", err)
+		return
+	}
+	if n > 0 {
+		log.Printf("sync: claimed %d unowned folders for %s", n, uid)
+	}
+}
+
+// pullAccess refreshes the cached per-folder role. Advisory only: it drives
+// which folders this device bothers to push and what the UI greys out, while
+// the database remains the thing that actually refuses an unauthorized write.
+func (s *server) pullAccess(sb *supabaseClient) error {
+	var rows []remoteAccess
+	if err := sb.selectWhere("notes_folder_access", "select=folder_id,role", &rows); err != nil {
+		return err
+	}
+	roles := make(map[string]string, len(rows))
+	for _, r := range rows {
+		roles[r.FolderID] = r.Role
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.folders.ReplaceAccess(roles)
 }
 
 // bootstrapOnce queues every existing row the first time sync is enabled —
@@ -160,6 +219,18 @@ func (s *server) push(sb *supabaseClient) error {
 		}
 	}
 
+	// An RLS refusal is a permanent answer for this row, so the queue entry is
+	// dropped rather than retried until the backoff cap — otherwise one
+	// read-only folder would keep a queue entry alive forever.
+	settle := func(ids []int64, err error) {
+		if errors.Is(err, errForbidden) {
+			log.Printf("sync: push refused by RLS — dropping %d queued op(s)", len(ids))
+			resolve(ids, true, 0)
+			return
+		}
+		resolve(ids, err == nil, maxRetry)
+	}
+
 	// Folders first so a brand-new folder exists remotely before its docs.
 	var folderRows []remoteFolder
 	var folderQueue []int64
@@ -169,16 +240,31 @@ func (s *server) push(sb *supabaseClient) error {
 			resolve(g.queueIDs, true, 0) // row gone — nothing to upload
 			continue
 		}
+		// A folder with no owner cannot satisfy the remote INSERT policy; it
+		// stays queued until claimOnce stamps the signed-in user onto it.
+		if f.OwnerID == "" {
+			continue
+		}
+		if !f.CanWrite() {
+			resolve(g.queueIDs, true, 0)
+			continue
+		}
+		var desc *string
+		if f.Description != "" {
+			d := f.Description
+			desc = &d
+		}
 		folderRows = append(folderRows, remoteFolder{
-			ID: f.ID, Slug: f.Slug, Name: f.Name, CreatedAt: f.CreatedAt,
-			UpdatedAt: f.UpdatedAt, Version: f.Version, Deleted: f.Deleted,
+			ID: f.ID, Slug: f.Slug, Name: f.Name, OwnerID: f.OwnerID, Description: desc,
+			Visibility: f.Visibility, Discoverable: f.Discoverable, JoinPolicy: f.JoinPolicy,
+			CreatedAt: f.CreatedAt, UpdatedAt: f.UpdatedAt, Version: f.Version, Deleted: f.Deleted,
 		})
 		folderQueue = append(folderQueue, g.queueIDs...)
 	}
 	if len(folderRows) > 0 {
 		err := sb.upsert("notes_folders", folderRows)
-		resolve(folderQueue, err == nil, maxRetry)
-		if err != nil {
+		settle(folderQueue, err)
+		if err != nil && !errors.Is(err, errForbidden) {
 			return err
 		}
 	}
@@ -191,6 +277,12 @@ func (s *server) push(sb *supabaseClient) error {
 			resolve(g.queueIDs, true, 0)
 			continue
 		}
+		// Documents inherit folder permissions: a viewer's local edit is never
+		// uploaded. It stays on this device rather than silently vanishing.
+		if f, err := s.folders.GetByID(d.FolderID); err == nil && !f.CanWrite() {
+			resolve(g.queueIDs, true, 0)
+			continue
+		}
 		docRows = append(docRows, remoteDocument{
 			ID: d.ID, FolderID: d.FolderID, Kind: d.Kind, DocKey: d.DocKey,
 			Slug: d.Slug, Title: d.Title, Seq: d.Seq, HTML: d.HTML,
@@ -200,8 +292,8 @@ func (s *server) push(sb *supabaseClient) error {
 	}
 	if len(docRows) > 0 {
 		err := sb.upsert("notes_documents", docRows)
-		resolve(docQueue, err == nil, maxRetry)
-		if err != nil {
+		settle(docQueue, err)
+		if err != nil && !errors.Is(err, errForbidden) {
 			return err
 		}
 	}
@@ -226,8 +318,13 @@ func (s *server) pullFolders(sb *supabaseClient) error {
 			return err
 		}
 		for _, r := range rows {
+			desc := ""
+			if r.Description != nil {
+				desc = *r.Description
+			}
 			f := &Folder{
-				ID: r.ID, Slug: r.Slug, Name: r.Name,
+				ID: r.ID, Slug: r.Slug, Name: r.Name, OwnerID: r.OwnerID, Description: desc,
+				Visibility: r.Visibility, Discoverable: r.Discoverable, JoinPolicy: r.JoinPolicy,
 				CreatedAt: normalizeTS(r.CreatedAt), UpdatedAt: normalizeTS(r.UpdatedAt),
 				Version: r.Version, Deleted: r.Deleted,
 			}

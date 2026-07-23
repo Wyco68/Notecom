@@ -11,7 +11,7 @@ import (
 )
 
 func (r *FolderRepo) GetByID(id string) (*Folder, error) {
-	row := r.db.sql.QueryRow(`SELECT `+folderCols+` FROM folders WHERE id = ?`, id)
+	row := r.db.sql.QueryRow(folderSelect+` WHERE f.id = ?`, id)
 	f, err := scanFolder(row)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, errNotFound
@@ -44,13 +44,10 @@ func (r *FolderRepo) ApplyRemote(f *Folder) (bool, error) {
 	local, err := r.GetByID(f.ID)
 	switch {
 	case errors.Is(err, errNotFound):
-		deleted := 0
-		if f.Deleted {
-			deleted = 1
-		}
 		_, err := r.db.sql.Exec(
-			`INSERT INTO folders (`+folderCols+`) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-			f.ID, f.Slug, f.Name, f.CreatedAt, f.UpdatedAt, f.Version, deleted,
+			`INSERT INTO folders (`+folderCols+`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			f.ID, f.Slug, f.Name, nullable(f.OwnerID), nullable(f.Description), f.Visibility,
+			boolInt(f.Discoverable), f.JoinPolicy, f.CreatedAt, f.UpdatedAt, f.Version, boolInt(f.Deleted),
 		)
 		return err == nil, err
 	case err != nil:
@@ -59,15 +56,70 @@ func (r *FolderRepo) ApplyRemote(f *Folder) (bool, error) {
 	if !remoteWins(f.Version, local.Version, f.UpdatedAt, local.UpdatedAt) {
 		return false, nil
 	}
-	deleted := 0
-	if f.Deleted {
-		deleted = 1
-	}
 	_, err = r.db.sql.Exec(
-		`UPDATE folders SET slug = ?, name = ?, created_at = ?, updated_at = ?, version = ?, deleted = ? WHERE id = ?`,
-		f.Slug, f.Name, f.CreatedAt, f.UpdatedAt, f.Version, deleted, f.ID,
+		`UPDATE folders SET slug = ?, name = ?, owner_id = ?, description = ?, visibility = ?,
+		        discoverable = ?, join_policy = ?, created_at = ?, updated_at = ?, version = ?, deleted = ?
+		  WHERE id = ?`,
+		f.Slug, f.Name, nullable(f.OwnerID), nullable(f.Description), f.Visibility,
+		boolInt(f.Discoverable), f.JoinPolicy, f.CreatedAt, f.UpdatedAt, f.Version, boolInt(f.Deleted), f.ID,
 	)
 	return err == nil, err
+}
+
+func boolInt(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
+}
+
+// nullable keeps an empty optional column NULL rather than "", so a folder
+// that has not been claimed by a user is distinguishable from one whose owner
+// is the empty string.
+func nullable(s string) any {
+	if s == "" {
+		return nil
+	}
+	return s
+}
+
+// ReplaceAccess swaps the whole cached role table for the rows just pulled.
+// A full replace rather than an upsert: losing access is as important to
+// reflect as gaining it, and the set is tiny.
+func (r *FolderRepo) ReplaceAccess(roles map[string]string) error {
+	tx, err := r.db.sql.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err := tx.Exec(`DELETE FROM folder_access`); err != nil {
+		return err
+	}
+	now := nowISO()
+	for folderID, role := range roles {
+		// Skip roles for folders this device hasn't pulled yet; the FK would
+		// reject them and the next cycle picks them up.
+		if _, err := tx.Exec(
+			`INSERT INTO folder_access (folder_id, role, synced_at)
+			 SELECT ?, ?, ? WHERE EXISTS (SELECT 1 FROM folders WHERE id = ?)`,
+			folderID, role, now, folderID,
+		); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+// ClaimUnowned stamps the signed-in user onto folders created before this
+// device knew who it was. Without it, a locally-created folder would push with
+// a null owner_id and be rejected by the folders INSERT policy.
+func (r *FolderRepo) ClaimUnowned(userID string) (int64, error) {
+	res, err := r.db.sql.Exec(
+		`UPDATE folders SET owner_id = ? WHERE owner_id IS NULL OR owner_id = ''`, userID)
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
 }
 
 // ApplyRemote upserts a remote document row under the same LWW policy.
