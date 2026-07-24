@@ -84,11 +84,13 @@ source of truth while the app runs:
   keeps indexing files, Claude Code keeps writing files, and a vault import
   (`POST /import`, awaited by `/api/tree`) ingests Claude-authored files
   back into SQLite.
-- Supabase credentials live in `<vault>/.data/sync.env`
-  (`SUPABASE_URL`, `SUPABASE_SERVICE_KEY`); without them stored runs fully
-  local and just logs that sync is disabled. The remote `notes_folders` /
-  `notes_documents` tables have RLS enabled with no policies — only the
-  service role (this worker) can touch them.
+- Supabase credentials live in `<vault>/.data/sync.env` (`SUPABASE_URL`,
+  `SUPABASE_ANON_KEY`, plus `SUPABASE_REFRESH_TOKEN` or a one-time
+  `SUPABASE_EMAIL`/`SUPABASE_PASSWORD`); without them stored runs fully local
+  and just logs that sync is disabled. It signs in as that user and sends the
+  access token, so RLS — not this process — decides what it may push and pull.
+  A push refused with 403 (a folder the user only reads) drops its queue row
+  instead of retrying forever.
 
 Endpoints: [api-contract.md](api-contract.md). Division of responsibility:
 vaultd stays dumb filesystem I/O, indexd stays search-only, stored owns

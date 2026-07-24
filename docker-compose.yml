@@ -54,8 +54,13 @@ services:
       VAULTD_TOKEN: ${INTERNAL_TOKEN}
       # Optional: same project as the desktop app → cross-device sync. Leave
       # unset to run the VPS fully standalone (SQLite on the volume only).
+      # stored signs in as a real user, so RLS scopes what it may sync; there
+      # is no service-role key anywhere in this stack.
       SUPABASE_URL: ${SUPABASE_URL:-}
-      SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_KEY:-}
+      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:-}
+      SUPABASE_REFRESH_TOKEN: ${SUPABASE_REFRESH_TOKEN:-}
+      SUPABASE_EMAIL: ${SUPABASE_EMAIL:-}
+      SUPABASE_PASSWORD: ${SUPABASE_PASSWORD:-}
     volumes:
       - vault:/vault
     depends_on:
@@ -69,8 +74,14 @@ services:
       STORED_TOKEN: ${INTERNAL_TOKEN}
       INDEXD_URL: http://indexd:4322
       INDEXD_TOKEN: ${INTERNAL_TOKEN}
-      # Public reader: 1 hides/blocks all writes (middleware enforces it).
+      # Public reader: 1 hides/blocks note-content writes (middleware enforces
+      # it). Collaboration routes stay open — they write membership, not notes.
       READ_ONLY: ${READ_ONLY:-1}
+      # Collaboration + the hosted reader both query Supabase as the signed-in
+      # user. Publishable key: it is meant to reach the browser, and every
+      # table it can touch is guarded by RLS.
+      NEXT_PUBLIC_SUPABASE_URL: ${SUPABASE_URL:-}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:-}
     depends_on:
       - stored
       - indexd

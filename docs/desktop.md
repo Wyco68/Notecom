@@ -48,6 +48,17 @@ without it, search falls back to keyword mode and chat is unavailable, both
 handled in the app. stored's Supabase credentials are optional the same way
 — without `vault/.data/sync.env` it runs fully local and skips sync.
 
+Since folders became shareable, stored signs in to Supabase **as a user**, not
+with a service key (see `tools/stored/auth.go` and
+[collaboration.md](collaboration.md)). `sync.env` now needs `SUPABASE_URL`,
+`SUPABASE_ANON_KEY`, and one user credential — `SUPABASE_REFRESH_TOKEN`
+(preferred) or `SUPABASE_EMAIL` + `SUPABASE_PASSWORD` once, which stored
+exchanges for a refresh token and then erases the password from the file. A
+`sync.env` still holding only the old `SUPABASE_SERVICE_KEY` is treated as
+unconfigured: the new binary **disables sync rather than bypass RLS**, so an
+install carried over from before this change stops syncing until its
+`sync.env` is updated.
+
 The webview navigating to a `127.0.0.1` URL is not "opening localhost in a
 browser" — it's the app's own native window loading the app's own local
 server, the standard way Tauri/Electron ship a Next.js app that has live

@@ -141,7 +141,7 @@ stored sync worker
   │  push: drain sync_queue → read live rows → batched upserts (tombstones
   │        included) → remove queue rows (or retry with backoff)
   ▼
-Supabase (notes_folders / notes_documents — service-role only)
+Supabase (notes_folders / notes_documents — RLS, as the signed-in user)
 ```
 
 Conflicts: Last-Write-Wins — higher `version` wins, `updated_at` breaks

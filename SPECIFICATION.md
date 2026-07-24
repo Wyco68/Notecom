@@ -251,7 +251,7 @@ used by Claude Code (`/lect`, `/quiz`). See
 | Diagrams | `mermaid` | Client-side SVG from `div.mermaid` blocks |
 | Animation | `framer-motion` | Fade/slide on lesson switch |
 | Primary datastore | Go HTTP service (`stored`) + SQLite | Source of truth: folder/document CRUD, sync queue, Supabase sync worker |
-| Cloud sync | Supabase Postgres (`notes_*` tables, service-role only) | Cross-device synchronization + backup; never a runtime database |
+| Cloud sync | Supabase Postgres (`notes_*` tables, RLS-enforced) | Cross-device synchronization, backup and folder sharing; never a runtime database |
 | Filesystem helper | Go HTTP service (`vaultd`) | Legacy-format disk mirror + Claude Code's save path |
 | Search/RAG | Go HTTP service (`indexd`) + SQLite (FTS5 + vector BLOBs) | Section chunking, hybrid retrieval; Ollama embeddings when present |
 | Notes storage | `.html` + `index.json` under `vault/` | Live legacy-format mirror/export; gitignored |
@@ -292,8 +292,9 @@ starts all three Go services (vaultd :4321, indexd :4322, stored :4323):
 npm run dev                 # http://localhost:3000 -> /vault
 ```
 
-Cross-device sync (optional): put `SUPABASE_URL` and
-`SUPABASE_SERVICE_KEY` in `vault/.data/sync.env`; without them the app is
+Cross-device sync (optional): put `SUPABASE_URL`, `SUPABASE_ANON_KEY` and a
+user credential (`SUPABASE_REFRESH_TOKEN`, or `SUPABASE_EMAIL` +
+`SUPABASE_PASSWORD` once) in `vault/.data/sync.env`; without them the app is
 fully local.
 
 Semantic search (optional): install [Ollama](https://ollama.com) and run
@@ -310,9 +311,10 @@ Writing a note happens separately, via Claude Code in a terminal, using the
 - No hosted/browser reader deployment — multi-device is desktop app +
   background Supabase sync on each machine (the former GCS/Cloudflare
   read-only reader channels were retired 2026-07; see git history).
-- No multi-tenancy — one user's notes, one Supabase project; the sync
-  worker authenticates with the service-role key from a local env file.
-- No user authentication UI of any kind.
+- No anonymous access — collaboration requires a Supabase account, and
+  `anon` is granted nothing on any `notes_*` table.
+- No per-document permissions — folders are the unit of sharing and
+  documents inherit them (see docs/collaboration.md).
 - No generation *logic* inside the application — the app only delegates to
   the local Claude Code CLI (lessons/quizzes) or local Ollama (chat).
 - No reading or writing Supabase from the app/UI — sync lives only inside
