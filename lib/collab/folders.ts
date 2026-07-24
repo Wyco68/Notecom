@@ -63,15 +63,9 @@ export async function searchFolders(
 /** Folders the caller owns or belongs to, for their own sidebar/dashboard. */
 export async function myFolders(): Promise<FolderSummary[]> {
   const supabase = await createClient();
-  const { data: access, error: accessErr } = await supabase
-    .from("notes_folder_access")
-    .select("folder_id");
-  if (accessErr) throw new Error(accessErr.message);
-  const ids = (access ?? []).map((a: any) => a.folder_id);
-  if (!ids.length) return [];
-
-  const all = await searchFolders(undefined, undefined, 100, 0);
-  return all.filter((f) => ids.includes(f.id));
+  const { data, error } = await supabase.rpc("notes_my_folders");
+  if (error) throw new Error(error.message);
+  return (data ?? []).map(toSummary);
 }
 
 /**
