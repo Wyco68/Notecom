@@ -114,6 +114,29 @@ to scroll to the matched section. Embeddings come from a local Ollama server
 Ollama, `/search` serves `mode: "keyword"` (FTS5-only) and embeddings
 backfill on a later scan.
 
+## Collaboration account sign-in (`/api/auth/collab`)
+
+Identifies a person to other people (the account behind folder sharing) —
+separate from the Claude Code CLI sign-in below. Password with a mandatory
+email second factor: the password is checked server-side against an in-memory
+cookie jar so it never mints a session, and only `verifyOtp` on the 6-digit
+emailed code mints one. So a session needs both factors, structurally — there
+is no `mfa_ok` flag to forge and no middleware gate. Codes are typed, not
+clicked, so no email link is followed and the project's Auth Site URL is never
+hit. Pairs with `app/auth/{sign-in,sign-up,reset}` and `lib/auth/collab.ts`.
+
+| Endpoint | Method | Body | Response |
+|---|---|---|---|
+| `/api/auth/collab` | POST | `{ action: "signup", email, password }` | `{ ok, factor: "signup" }` — creates the account, emails a confirm code |
+| `/api/auth/collab` | POST | `{ action: "password", email, password }` | `{ ok, factor: "email" }` — verifies the password (no session), emails a login code; `401` on bad creds |
+| `/api/auth/collab` | POST | `{ action: "verify", email, token, factor }` | `{ ok }` — `verifyOtp` mints the session (`factor` `"email"`\|`"signup"`) |
+| `/api/auth/collab` | POST | `{ action: "reset", email }` | `{ ok, factor: "recovery" }` — emails a recovery code; never reveals if the email exists |
+| `/api/auth/collab` | POST | `{ action: "reset-verify", email, token, password }` | `{ ok }` — verifies the code, sets the new password, signs in |
+
+Needs `NEXT_PUBLIC_SUPABASE_URL`/`_ANON_KEY` (else `501`). Requires the Supabase
+email templates ("Confirm signup", "Magic Link", "Reset Password") to expose
+`{{ .Token }}`, or no code is sent.
+
 ## Claude Code sign-in (`/api/auth`)
 
 Drives the local CLI's own auth so an expired session can be fixed from the
