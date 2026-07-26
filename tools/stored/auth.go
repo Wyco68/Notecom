@@ -57,6 +57,22 @@ type grantResponse struct {
 	Error            string `json:"error"`
 	ErrorDescription string `json:"error_description"`
 	Message          string `json:"message"`
+	// GoTrue reports failures as {"error_code":"...","msg":"..."}; without
+	// these two the only thing left to print is the bare HTTP status, which
+	// turns "wrong password" and "email not confirmed" into the same
+	// unactionable "400 Bad Request".
+	ErrorCode string `json:"error_code"`
+	Msg       string `json:"msg"`
+}
+
+// reason picks the most specific failure text the response carries.
+func (g grantResponse) reason(status string) string {
+	for _, s := range []string{g.ErrorDescription, g.Msg, g.Message, g.Error, g.ErrorCode} {
+		if s != "" {
+			return s
+		}
+	}
+	return status
 }
 
 func newAuthenticator(envPath string) *authenticator {
@@ -79,6 +95,27 @@ func (a *authenticator) configured() bool {
 	}
 	return a.tok.refreshToken != "" ||
 		(os.Getenv("SUPABASE_EMAIL") != "" && os.Getenv("SUPABASE_PASSWORD") != "")
+}
+
+// missing names the first credential piece that is absent, for the log line a
+// user reads when sync did not start. An empty value counts as absent — a
+// `SUPABASE_PASSWORD=` line with nothing after the `=` is the trap this
+// message exists to call out.
+func (a *authenticator) missing() string {
+	switch {
+	case a.baseURL == "":
+		return "SUPABASE_URL is not set"
+	case a.anonKey == "":
+		return "SUPABASE_ANON_KEY is not set"
+	case a.tok.refreshToken != "":
+		return ""
+	case os.Getenv("SUPABASE_EMAIL") == "":
+		return "no SUPABASE_REFRESH_TOKEN, and SUPABASE_EMAIL is empty"
+	case os.Getenv("SUPABASE_PASSWORD") == "":
+		return "no SUPABASE_REFRESH_TOKEN, and SUPABASE_PASSWORD is empty " +
+			"(it is needed once, then exchanged for a refresh token and erased)"
+	}
+	return ""
 }
 
 // token returns a valid access token, refreshing or signing in as needed. The
@@ -148,14 +185,7 @@ func (a *authenticator) grant(grantType string, body map[string]string) error {
 		return fmt.Errorf("auth %s: %s", grantType, res.Status)
 	}
 	if res.StatusCode >= 300 || g.AccessToken == "" {
-		msg := g.ErrorDescription
-		if msg == "" {
-			msg = g.Message
-		}
-		if msg == "" {
-			msg = res.Status
-		}
-		return fmt.Errorf("auth %s: %s", grantType, msg)
+		return fmt.Errorf("auth %s: %s", grantType, g.reason(res.Status))
 	}
 
 	a.tok = tokenSet{
