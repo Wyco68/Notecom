@@ -18,8 +18,58 @@ package main
 import (
 	"errors"
 	"log"
+	gosync "sync"
 	"time"
 )
+
+// syncHealth is what the worker reports about itself on GET /status. Sync
+// failing is otherwise invisible: the app keeps working against SQLite, so a
+// wrong credential or a revoked token looks exactly like a healthy offline
+// session until someone reads stored's log. Advisory only — nothing in the
+// sync protocol reads it back.
+type syncHealth struct {
+	mu        gosync.Mutex
+	Enabled   bool   `json:"enabled"`
+	SignedIn  bool   `json:"signed_in"`
+	UserID    string `json:"user_id,omitempty"`
+	LastError string `json:"last_error,omitempty"`
+	LastPush  string `json:"last_push,omitempty"`
+}
+
+// note records the outcome of one sync step: the first error of a cycle
+// sticks until a later cycle completes cleanly.
+func (h *syncHealth) note(err error) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if err != nil {
+		h.LastError = err.Error()
+		return
+	}
+	h.LastError = ""
+}
+
+func (h *syncHealth) signedIn(userID string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.SignedIn = userID != ""
+	h.UserID = userID
+}
+
+func (h *syncHealth) pushed() {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.LastPush = nowISO()
+}
+
+// snapshot copies the health record for JSON encoding, without the mutex.
+func (h *syncHealth) snapshot() map[string]any {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return map[string]any{
+		"enabled": h.Enabled, "signed_in": h.SignedIn,
+		"user_id": h.UserID, "last_error": h.LastError, "last_push": h.LastPush,
+	}
+}
 
 const (
 	pushBatchLimit = 200
@@ -80,20 +130,28 @@ func normalizeTS(s string) string {
 }
 
 func (s *server) syncLoop(sb *supabaseClient, stop <-chan struct{}) {
-	// Claiming precedes bootstrap: a folder pushed with a null owner_id is
-	// rejected by the folders INSERT policy, so the user must be known first.
-	s.claimOnce(sb)
 	s.bootstrapOnce()
 	cycle := func() {
-		if err := s.pull(sb); err != nil {
+		// Claim every cycle, not just at boot: a folder created mid-session
+		// (e.g. a lesson generated into a brand-new folder) is inserted with a
+		// null owner_id, and push skips an unowned folder — and its documents'
+		// FK — until the signed-in user is stamped on. Claiming precedes push
+		// each tick so that content reaches Supabase on the next cycle instead
+		// of waiting for a stored restart.
+		s.claim(sb)
+		err := s.pull(sb)
+		if err != nil {
 			log.Printf("sync: pull: %v", err)
 		}
-		if err := s.pullAccess(sb); err != nil {
-			log.Printf("sync: access: %v", err)
+		if e := s.pullAccess(sb); e != nil {
+			log.Printf("sync: access: %v", e)
+			err = errors.Join(err, e)
 		}
-		if err := s.push(sb); err != nil {
-			log.Printf("sync: push: %v", err)
+		if e := s.push(sb); e != nil {
+			log.Printf("sync: push: %v", e)
+			err = errors.Join(err, e)
 		}
+		s.health.note(err)
 	}
 	cycle()
 	tick := time.NewTicker(syncInterval)
@@ -111,14 +169,20 @@ func (s *server) syncLoop(sb *supabaseClient, stop <-chan struct{}) {
 	}
 }
 
-// claimOnce assigns the signed-in user to any folder that has no owner. On a
-// device that ran fully local before sign-in, that is every folder it created.
-func (s *server) claimOnce(sb *supabaseClient) {
+// claim assigns the signed-in user to any folder that has no owner: every
+// folder created before this device signed in, plus any created mid-session
+// after sync started. Cheap (one UPDATE gated on a null owner_id) and
+// idempotent, so it runs every cycle; the log line only fires when it stamped
+// something.
+func (s *server) claim(sb *supabaseClient) {
 	if _, err := sb.auth.token(); err != nil {
 		log.Printf("sync: sign-in failed: %v", err)
+		s.health.signedIn("")
+		s.health.note(err)
 		return
 	}
 	uid := sb.auth.currentUser()
+	s.health.signedIn(uid)
 	if uid == "" {
 		return
 	}
@@ -296,6 +360,9 @@ func (s *server) push(sb *supabaseClient) error {
 		if err != nil && !errors.Is(err, errForbidden) {
 			return err
 		}
+	}
+	if len(folderRows) > 0 || len(docRows) > 0 {
+		s.health.pushed()
 	}
 	log.Printf("sync: pushed %d folders, %d documents", len(folderRows), len(docRows))
 	return nil

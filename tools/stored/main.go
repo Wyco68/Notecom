@@ -45,6 +45,9 @@ type server struct {
 	// import racing an in-app rename could read the not-yet-mirrored disk copy
 	// and revert the DB. Single-user local service — contention is nil.
 	mu gosync.Mutex
+	// health is the sync worker's self-report, surfaced by GET /status so a
+	// broken credential is visible without reading the log.
+	health syncHealth
 }
 
 func main() {
@@ -85,10 +88,14 @@ func main() {
 	stop := make(chan struct{})
 	if sb.enabled() {
 		log.Printf("sync: enabled (%s)", sb.baseURL)
+		s.health.Enabled = true
 		go s.syncLoop(sb, stop)
 	} else {
-		log.Printf("sync: disabled — set SUPABASE_URL, SUPABASE_ANON_KEY and a credential "+
-			"(SUPABASE_REFRESH_TOKEN, or SUPABASE_EMAIL/SUPABASE_PASSWORD) in env or %s", envPath)
+		// Name the missing piece. A half-filled sync.env (URL and key present,
+		// credential blank) is the failure that looks like success: every
+		// mutation still queues, nothing ever uploads, and the generic
+		// "set these variables" line reads like a fully-local install.
+		log.Printf("sync: DISABLED — %s. Fix in env or %s", sb.auth.missing(), envPath)
 	}
 
 	// Final queue flush on shutdown. Best-effort: the queue is durable, so a
@@ -131,6 +138,7 @@ func (s *server) handleStatus(w http.ResponseWriter, r *http.Request) {
 		"folders":   len(folders),
 		"queued":    depth,
 		"last_sync": last,
+		"sync":      s.health.snapshot(),
 	})
 }
 
