@@ -10,8 +10,19 @@ A **folder is the unit of collaboration**. It has one owner, a member list with
 roles, a visibility setting, a discoverability setting, a join policy, and tags.
 Documents (lessons and quizzes) inherit their folder's permissions completely —
 there is no per-document permission column and there must never be one. Users
-find folders through search or tags, and join by invitation (owner → user) or by
-request (user → owner).
+find folders through search, and reach them by invitation (owner → user), by
+request (user → owner), or by **holding a tag the folder carries**.
+
+Two rules override everything below, and are the reason the rest is shaped as it
+is:
+
+1. **Files are members-only, always.** A folder's `visibility` controls who sees
+   that the folder *exists*; it never controls who can read what is inside.
+   `notes_documents` is gated by `notes_is_folder_member()`, never by
+   `notes_can_read_folder()`. This is why folders can default to public safely.
+2. **Joining never grants writing.** Membership obtained by request or by tag is
+   `viewer`. `editor` is reachable only through an explicit invitation or a role
+   change by a manager.
 
 Deliberately absent, and not to be added: comments, reactions, likes, reading
 progress or tracking, hardcoded categories, translations. This is a note-sharing
@@ -48,17 +59,17 @@ transfer ownership or delete the folder.
 
 ## Visibility and discoverability are two axes
 
-Collapsing them into one flag is the mistake to avoid.
+Collapsing them into one flag is the mistake to avoid. Neither axis controls
+file access — that is membership, and only membership.
 
 | | `discoverable = true` | `discoverable = false` |
 |---|---|---|
-| `visibility = 'public'` | in search; anyone signed in can read the notes | members only, invisible |
-| `visibility = 'private'` | in search as **metadata only** (name, description, tags, owner) — notes stay members-only | members only, invisible |
+| `visibility = 'public'` | in search, metadata visible to anyone signed in | invisible except to members |
+| `visibility = 'private'` | in search as metadata only | invisible except to members |
 
-So: *every folder is searchable unless the owner turns discoverability off*, and
-a private folder's contents are never readable by a non-member regardless of
-discoverability. The rule is enforced in SQL by `notes_search_folders` and the
-`notes_folders` SELECT policy — never by hiding a button.
+New folders default to `visibility = 'public'`, which is safe precisely because
+"public" now means *listed*, not *readable*. Existing folders keep whatever
+their owner chose — a migration must never publish retroactively.
 
 ## Joining
 
@@ -73,11 +84,40 @@ Invitations are `notes_folder_invitations` rows
 (`pending` → `accepted` | `declined` | `revoked`). Requests are
 `notes_folder_join_requests` rows (`pending` → `approved` | `rejected`).
 
-**Tag-granted joining** is per tag, not per folder: a `notes_folder_tags` row
-with `grants_join = true` means "anyone who reached us through this tag may join
-without approval, regardless of `join_policy`". This keeps tags a discovery
-mechanism that can *optionally* carry an access grant, instead of a second
-parallel permission system.
+## Follows, and tags as credentials
+
+Following is a **one-sided** edge (`notes_follows`) needing no approval. Its only
+power is permissive in one direction: following someone lets *them* offer you a
+tag or invite you to a folder. Both `notes_grant_tag()` and
+`notes_invite_member()` refuse unless the target follows the caller, which is
+what keeps strangers from tagging or inviting anyone they like.
+
+A tag is therefore **a claim someone else makes about you**, never self-assigned:
+
+```
+A follows B  →  B grants tag T to A  →  A accepts  →  A holds T
+                                                    →  every folder tagged T
+                                                       (grants_join) is readable by A
+```
+
+Holding a tag grants read access to every folder carrying that tag with
+`grants_join = true`, with **no join step and no membership row** —
+`notes_is_folder_member()` treats a held tag as implied membership. Two
+consequences that matter:
+
+- Dropping a tag revokes every folder it was opening, at once. That is the
+  point of granting by tag rather than by invitation. Either side can do it:
+  the holder removes it from Account Settings, and the granter calls
+  `notes_revoke_tag()` to stop vouching. A tag granted by two people survives
+  until the last grant is revoked, so one person cannot strip another's grant.
+- Implied access is read-only, and an explicit `notes_folder_members` row always
+  wins, since it is the only thing `notes_can_write_folder()` consults.
+
+**Tags are deliberately not searchable.** A tag is a credential now, so
+`notes_search_folders` cannot filter or match on one — being able to ask "which
+folders does ISNE3RD open" would publish exactly the list worth acquiring it
+for. Folder tags stay visible on a folder you can already see; they are simply
+not a way to find one.
 
 ## Tables and why each exists
 
@@ -92,6 +132,9 @@ Existing tables are extended in preference to new ones.
 | `notes_folder_members` | the membership edge; composite PK `(folder_id, user_id)` |
 | `notes_tags` | normalized free-form tag vocabulary, user-created — deliberately not the hardcoded `categories` table |
 | `notes_folder_tags` | folder↔tag edge, plus the per-tag `grants_join` flag |
+| `notes_user_tags` | user↔tag edge — the other half of the match; written only by accepting a grant |
+| `notes_tag_grants` | a tag offered to a follower, `pending` → `accepted` \| `declined` \| `revoked` |
+| `notes_follows` | one-sided follow edge; the gate for tagging and inviting |
 | `notes_folder_invitations` | owner → user direction |
 | `notes_folder_join_requests` | user → owner direction |
 
@@ -134,21 +177,28 @@ Predicates used by policies (`STABLE SECURITY DEFINER`):
 | Function | True when |
 |---|---|
 | `notes_folder_role(folder)` | returns the caller's role text, or NULL |
-| `notes_can_read_folder(folder)` | owner ∨ member ∨ `visibility = 'public'` |
+| `notes_is_folder_member(folder)` | member row ∨ holds a `grants_join` tag the folder carries — **the gate on files** |
+| `notes_can_read_folder(folder)` | owner ∨ member ∨ tag-implied ∨ `visibility = 'public'` — folder metadata only |
+| `notes_follows_me(user)` | that user follows the caller |
 | `notes_can_write_folder(folder)` | the caller's role has `can_write` |
 | `notes_can_manage_folder(folder)` | the caller's role has `can_manage` |
 
 Action RPCs — the only writers of `notes_folder_members`:
 
-`notes_invite_member(folder, username, role)`,
+`notes_invite_member(folder, username, role)` *(requires the invitee follows the caller)*,
 `notes_respond_invitation(invitation, accept)`,
 `notes_request_join(folder, message)`,
 `notes_respond_join_request(request, approve)`,
-`notes_join_by_tag(folder, tag_slug)`,
+`notes_grant_tag(username, label)` *(requires the grantee follows the caller)*,
+`notes_respond_tag_grant(grant, accept)`,
 `notes_set_member_role(folder, user, role)`,
 `notes_remove_member(folder, user)`,
 `notes_leave_folder(folder)`,
-`notes_search_folders(q, tags, limit, offset)`.
+`notes_transfer_ownership(folder, user)`,
+`notes_search_folders(q, limit, offset)`.
+
+Retired: `notes_join_by_tag()` and `notes_suggested_folders()`. Both turned a tag
+into a membership row through a join; there is no join in the tag path any more.
 
 Invite-by-username resolves `profiles.username` inside the function, so the
 `profiles` table never needs a broad SELECT policy for member search.

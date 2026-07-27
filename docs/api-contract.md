@@ -36,8 +36,12 @@ the boundary. Model: [collaboration.md](collaboration.md).
 
 | Route | Method | Body/params | Response |
 |---|---|---|---|
-| `/api/collab/discover` | GET | `?q&tags&limit&offset` | `{ folders: [{slug,name,description,owner,tags,members,joinPolicy,visibility}] }` — `notes_search_folders`; never returns a non-discoverable folder to a non-member |
-| `/api/collab/tags` | GET | `?q` | `{ tags: [{slug,label,folders}] }` |
+| `/api/collab/discover` | GET | `?q&limit&offset` | `{ folders: [...] }` — `notes_search_folders`; never returns a non-discoverable folder to a non-member. **No tag filter**: tags are access grants, so looking up what a tag opens is not offered |
+| `/api/collab/my-folders` | GET | — | `{ folders: [...] }` — the caller's own folders with tags/role, used to group the sidebar |
+| `/api/collab/me/profile` | GET·POST | `{ username?, avatarUrl? }` | `{ profile }` / `{ ok }` — email and password are **not** changed here, they go through `/auth/reset` |
+| `/api/collab/me/tags` | GET·DELETE | `?tag` | `{ tags }` / `{ ok }` — **no POST**: a tag cannot be self-assigned, only accepted from a grant |
+| `/api/collab/me/grants` | GET·POST·DELETE | `{ username, tag }` / `{ grantId, accept }` / `?username&tag` | GET returns `{ grants, given }`; POST offers a tag to a follower or answers an offer; DELETE revokes a tag you gave, closing every folder it opened |
+| `/api/collab/me/follows` | GET·POST·DELETE | `{ username }` / `?userId&direction` | one-sided follow edges; following someone lets **them** tag or invite you |
 | `/api/collab/folders/[slug]` | GET | — | `{ folder, role, members, tags }` — 404 when RLS hides it |
 | `/api/collab/folders/[slug]/settings` | POST | `{ visibility?, discoverable?, joinPolicy?, description? }` | `{ ok }` — manage-level |
 | `/api/collab/folders/[slug]/tags` | POST | `{ tag, grantsJoin }` | `{ ok }` |
@@ -45,11 +49,12 @@ the boundary. Model: [collaboration.md](collaboration.md).
 | `/api/collab/folders/[slug]/members` | GET | — | `{ members: [{userId,username,avatarUrl,role,joinedAt}] }` |
 | `/api/collab/folders/[slug]/members` | POST | `{ userId, role }` | `{ ok }` — role change |
 | `/api/collab/folders/[slug]/members` | DELETE | `?userId` | `{ ok }` — remove, or leave when it's the caller |
+| `/api/collab/folders/[slug]/owner` | POST | `{ userId }` | `{ status }` — transfer ownership; target must already be a member |
 | `/api/collab/folders/[slug]/invitations` | GET | — | `{ invitations: [...] }` — manage-level |
 | `/api/collab/folders/[slug]/invitations` | POST | `{ username, role }` | `{ ok }` |
 | `/api/collab/folders/[slug]/requests` | GET | — | `{ requests: [...] }` — manage-level |
 | `/api/collab/folders/[slug]/requests` | POST | `{ requestId, approve }` | `{ ok }` |
-| `/api/collab/join` | POST | `{ slug, via: "open"\|"request"\|"tag", tag?, message? }` | `{ status: "joined"\|"requested" }` |
+| `/api/collab/join` | POST | `{ slug, owner?, message? }` | `{ status: "joined"\|"requested" }` — the tag path is retired; holding a tag grants access directly |
 | `/api/collab/invitations` | GET | — | `{ invitations: [...] }` — the caller's inbox |
 | `/api/collab/invitations` | POST | `{ invitationId, accept }` | `{ ok }` |
 
