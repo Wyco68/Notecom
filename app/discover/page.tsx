@@ -2,18 +2,16 @@
 
 import { useCallback, useEffect, useState } from "react";
 import FolderCard from "@/components/collab/FolderCard";
-import TagChip from "@/components/collab/TagChip";
 import SearchIcon from "@/components/icons/SearchIcon";
 import SpinnerIcon from "@/components/icons/SpinnerIcon";
 import type { FolderSummary } from "@/lib/collab/types";
 
-// Folder discovery. Search covers name, description, tags and owner username;
-// which folders are eligible at all is decided by notes_search_folders, so a
-// non-discoverable folder simply never arrives here.
+// Folder discovery. Search covers name, description and owner username — not
+// tags, which are access grants now and would otherwise let anyone enumerate
+// the folders a tag unlocks. Which folders are eligible at all is decided by
+// notes_search_folders, so a non-discoverable folder never arrives here.
 export default function DiscoverPage() {
   const [q, setQ] = useState("");
-  const [tags, setTags] = useState<{ slug: string; label: string }[]>([]);
-  const [active, setActive] = useState<string[]>([]);
   const [folders, setFolders] = useState<FolderSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -25,7 +23,6 @@ export default function DiscoverPage() {
     try {
       const params = new URLSearchParams();
       if (q.trim()) params.set("q", q.trim());
-      if (active.length) params.set("tags", active.join(","));
       const res = await fetch(`/api/collab/discover?${params}`);
       if (res.status === 401) {
         setNeedsAuth(true);
@@ -42,14 +39,7 @@ export default function DiscoverPage() {
     } finally {
       setLoading(false);
     }
-  }, [q, active]);
-
-  useEffect(() => {
-    fetch("/api/collab/tags")
-      .then((r) => (r.ok ? r.json() : { tags: [] }))
-      .then((d) => setTags(d.tags ?? []))
-      .catch(() => {});
-  }, []);
+  }, [q]);
 
   // Debounced so typing doesn't fire a query per keystroke.
   useEffect(() => {
@@ -74,27 +64,11 @@ export default function DiscoverPage() {
           autoFocus
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="Search by name, description, tag or owner"
+          placeholder="Search by name, description or owner"
           className="w-full rounded-lg border border-black/10 bg-gray-50 py-2.5 pl-10 pr-3 text-sm text-gray-900 outline-none focus:border-blue-500 dark:border-white/10 dark:bg-[#0d1117] dark:text-gray-100"
         />
       </div>
 
-      {tags.length > 0 && (
-        <div className="mb-6 flex flex-wrap gap-1.5">
-          {tags.map((t) => (
-            <TagChip
-              key={t.slug}
-              label={t.label}
-              active={active.includes(t.slug)}
-              onClick={() =>
-                setActive((cur) =>
-                  cur.includes(t.slug) ? cur.filter((s) => s !== t.slug) : [...cur, t.slug]
-                )
-              }
-            />
-          ))}
-        </div>
-      )}
 
       {error && <p className="mb-4 text-sm text-red-400">{error}</p>}
 

@@ -89,7 +89,28 @@ export default function LessonViewer({ lesson }: { lesson: LessonRef | null }) {
             <div className="h-4 w-5/6 animate-pulse rounded bg-black/5 dark:bg-white/5" />
           </div>
         ) : (
-          <HtmlRenderer html={html} />
+          <>
+            {/* Placeholders for the two planned content actions. Rendered
+                disabled rather than omitted so the workspace shows where they
+                will live; neither has a backend yet (see docs). */}
+            <div className="mb-4 flex items-center justify-end gap-2 border-b border-black/5 pb-3 dark:border-white/5">
+              <button
+                disabled
+                title="Version history is not available yet"
+                className="cursor-not-allowed rounded px-2 py-1 text-xs text-gray-400 dark:text-gray-600"
+              >
+                Version history
+              </button>
+              <button
+                disabled
+                title="AI actions are not available yet"
+                className="cursor-not-allowed rounded px-2 py-1 text-xs text-gray-400 dark:text-gray-600"
+              >
+                AI actions
+              </button>
+            </div>
+            <HtmlRenderer html={html} />
+          </>
         )}
       </motion.div>
     </AnimatePresence>

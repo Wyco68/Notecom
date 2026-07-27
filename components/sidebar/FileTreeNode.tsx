@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import type { Folder, LessonRef } from "@/lib/vault/types";
 import ConfirmModal from "../modals/ConfirmModal";
 import TrashIcon from "../icons/TrashIcon";
+import StarIcon from "../icons/StarIcon";
 import QuizIcon from "../icons/QuizIcon";
 import ShareIcon from "../icons/ShareIcon";
 import { useToast } from "../toast/ToastProvider";
@@ -20,12 +21,17 @@ type PendingDelete =
 export default function FileTreeNode({
   folder,
   selected,
+  favorites,
   onSelect,
+  onToggleFavorite,
   onChanged,
 }: {
   folder: Folder;
   selected: LessonRef | null;
+  /** Keys of starred files, as `kind:folder:id`. */
+  favorites: Set<string>;
   onSelect: (ref: LessonRef) => void;
+  onToggleFavorite: (ref: LessonRef, title: string) => void;
   onChanged: () => void;
 }) {
   // Folders start collapsed so a vault with many files reads as a tidy index
@@ -137,6 +143,30 @@ export default function FileTreeNode({
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
+                    onToggleFavorite(
+                      { folder: folder.name, id: lesson.id, kind: "lesson" },
+                      lesson.title
+                    );
+                  }}
+                  title={
+                    favorites.has(`lesson:${folder.name}:${lesson.id}`)
+                      ? "Remove from favorites"
+                      : "Add to favorites"
+                  }
+                  className={`mr-1 h-5 w-5 shrink-0 items-center justify-center rounded hover:bg-black/5 dark:hover:bg-white/10 ${
+                    favorites.has(`lesson:${folder.name}:${lesson.id}`)
+                      ? "flex text-amber-500"
+                      : "hidden text-gray-500 group-hover:flex"
+                  }`}
+                >
+                  <StarIcon
+                    className="h-3.5 w-3.5"
+                    filled={favorites.has(`lesson:${folder.name}:${lesson.id}`)}
+                  />
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
                     setPending({ kind: "lesson", id: lesson.id, title: lesson.title });
                   }}
                   title="Delete lesson"
@@ -171,6 +201,30 @@ export default function FileTreeNode({
                 >
                   <QuizIcon className="h-3.5 w-3.5 shrink-0 text-gray-400" />
                   <span className="truncate">{quiz.title}</span>
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onToggleFavorite(
+                      { folder: folder.name, id: quiz.id, kind: "quiz" },
+                      quiz.title
+                    );
+                  }}
+                  title={
+                    favorites.has(`quiz:${folder.name}:${quiz.id}`)
+                      ? "Remove from favorites"
+                      : "Add to favorites"
+                  }
+                  className={`mr-1 h-5 w-5 shrink-0 items-center justify-center rounded hover:bg-black/5 dark:hover:bg-white/10 ${
+                    favorites.has(`quiz:${folder.name}:${quiz.id}`)
+                      ? "flex text-amber-500"
+                      : "hidden text-gray-500 group-hover:flex"
+                  }`}
+                >
+                  <StarIcon
+                    className="h-3.5 w-3.5"
+                    filled={favorites.has(`quiz:${folder.name}:${quiz.id}`)}
+                  />
                 </button>
                 <button
                   onClick={(e) => {

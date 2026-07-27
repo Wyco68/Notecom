@@ -2,7 +2,16 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { Folder, LessonRef, VaultTree } from "@/lib/vault/types";
+import { pruneRecent, pushRecent, type RecentEntry } from "@/lib/vault/recent";
+import {
+  pruneFavorites,
+  readFavorites,
+  toggleFavorite,
+  type FavoriteEntry,
+} from "@/lib/vault/favorites";
 import FileTree from "../sidebar/FileTree";
+import RecentFiles from "../sidebar/RecentFiles";
+import FavoriteFiles from "../sidebar/FavoriteFiles";
 import SearchResults from "../sidebar/SearchResults";
 import LessonViewer from "../viewer/LessonViewer";
 import NewFolderModal from "../modals/NewFolderModal";
@@ -10,6 +19,7 @@ import GenerateModal from "../modals/GenerateModal";
 import SignInModal from "../modals/SignInModal";
 import ChatPanel from "../chat/ChatPanel";
 import InvitationsInbox from "../collab/InvitationsInbox";
+import TagGrantsInbox from "../collab/TagGrantsInbox";
 import AccountControl from "../collab/AccountControl";
 import ThemeToggle from "../theme/ThemeToggle";
 import RefreshIcon from "../icons/RefreshIcon";
@@ -34,6 +44,11 @@ export default function AppShell() {
   const [showChat, setShowChat] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [query, setQuery] = useState("");
+  // Collaboration metadata for the local tree, keyed by folder slug. Stays
+  // empty on a purely-local install, which keeps the sidebar flat.
+  const [tagsByFolder, setTagsByFolder] = useState<Record<string, string[]>>({});
+  const [recent, setRecent] = useState<RecentEntry[]>([]);
+  const [favorites, setFavorites] = useState<FavoriteEntry[]>([]);
   // Seed from the build-time env (fast path), then trust the runtime flag
   // /api/tree returns — so a read-only box hides controls even if the
   // client build was missing NEXT_PUBLIC_READ_ONLY.
@@ -46,12 +61,61 @@ export default function AppShell() {
     return list?.find((l) => l.id === selected.id)?.title ?? null;
   })();
 
+  // Tags live in Supabase while the tree comes from stored/SQLite, so they are
+  // fetched separately and merged by slug. A failure here is normal (no
+  // collaboration configured, signed out) and simply leaves the tree flat.
+  const refreshTags = useCallback(async () => {
+    try {
+      const res = await fetch("/api/collab/my-folders");
+      if (!res.ok) return;
+      const data = await res.json();
+      const map: Record<string, string[]> = {};
+      for (const f of data.folders ?? []) {
+        if (f.tags?.length) map[f.slug] = f.tags;
+      }
+      setTagsByFolder(map);
+    } catch {
+      setTagsByFolder({});
+    }
+  }, []);
+
   const refreshTree = useCallback(async () => {
     const res = await fetch("/api/tree", { cache: "no-store" });
     const data: VaultTree = await res.json();
-    setFolders(data.folders ?? []);
+    const list = data.folders ?? [];
+    setFolders(list);
     if (typeof data.readOnly === "boolean") setReadOnly(data.readOnly);
+    // Drop recents and favourites whose file was deleted (here or on another
+    // device) so neither list can offer a link that 404s.
+    const stillExists = (e: { folder: string; id: string; kind: string }) => {
+      const folder = list.find((f) => f.name === e.folder);
+      const inList = e.kind === "quiz" ? folder?.quizzes : folder?.lessons;
+      return !!inList?.some((l) => l.id === e.id);
+    };
+    setRecent(pruneRecent(stillExists));
+    setFavorites(pruneFavorites(stillExists));
+    refreshTags();
+  }, [refreshTags]);
+
+  // Record what the user opens, once the title is known. Runs on selection
+  // change rather than inside onSelect because the title comes from the tree.
+  useEffect(() => {
+    if (selected && currentTitle) setRecent(pushRecent(selected, currentTitle));
+  }, [selected, currentTitle]);
+
+  // localStorage is not readable during render (no server equivalent), so the
+  // first paint has no favourites and this fills them in after mount.
+  useEffect(() => {
+    setFavorites(readFavorites());
   }, []);
+
+  const onToggleFavorite = useCallback(
+    (ref: LessonRef, title: string) => setFavorites(toggleFavorite(ref, title)),
+    []
+  );
+
+  // Membership test the tree rows use, precomputed once per render.
+  const favoriteKeys = new Set(favorites.map((f) => `${f.kind}:${f.folder}:${f.id}`));
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -146,9 +210,26 @@ export default function AppShell() {
             nothing at all when collaboration isn't configured. */}
         <InvitationsInbox onChanged={refreshTree} />
 
+        {/* Tags offered by people the user follows. Accepting one is what
+            grants access to the folders carrying it. */}
+        <TagGrantsInbox onChanged={refreshTree} />
+
+        {!query.trim() && (
+          <FavoriteFiles
+            entries={favorites}
+            selected={selected}
+            onSelect={setSelected}
+            onToggle={onToggleFavorite}
+          />
+        )}
+
+        {!query.trim() && (
+          <RecentFiles entries={recent} selected={selected} onSelect={setSelected} />
+        )}
+
         <div className="flex items-center justify-between px-3 py-2">
           <span className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-500">
-            {query.trim() ? "Results" : "Subjects"}
+            {query.trim() ? "Results" : "Folders"}
           </span>
           {!query.trim() && !readOnly && (
             <div className="flex items-center gap-1">
@@ -197,7 +278,10 @@ export default function AppShell() {
             <FileTree
               folders={folders}
               selected={selected}
+              tagsByFolder={tagsByFolder}
+              favorites={favoriteKeys}
               onSelect={setSelected}
+              onToggleFavorite={onToggleFavorite}
               onChanged={refreshTree}
             />
           )}

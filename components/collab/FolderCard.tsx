@@ -19,13 +19,15 @@ export default function FolderCard({
   const [busy, setBusy] = useState(false);
   const toast = useToast();
 
-  async function join(via: "request" | "tag", tag?: string) {
+  // Only one path remains: ask the owner. Tags no longer join anything —
+  // holding one grants access directly, and it arrives as an offer to accept.
+  async function join() {
     setBusy(true);
     try {
       const res = await fetch("/api/collab/join", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ slug: folder.slug, owner: folder.ownerUsername, via, tag }),
+        body: JSON.stringify({ slug: folder.slug, owner: folder.ownerUsername }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "failed");
@@ -39,7 +41,6 @@ export default function FolderCard({
   }
 
   const joinable = !folder.myRole && folder.joinPolicy !== "invite_only";
-  const firstJoinTag = folder.joinTags[0];
 
   return (
     <div className="rounded-lg border border-black/10 bg-white p-4 dark:border-white/10 dark:bg-[#161b22]">
@@ -78,15 +79,11 @@ export default function FolderCard({
         </a>
       ) : joinable ? (
         <button
-          onClick={() => (firstJoinTag ? join("tag", firstJoinTag) : join("request"))}
+          onClick={join}
           disabled={busy}
           className="rounded bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-500 disabled:opacity-50"
         >
-          {busy
-            ? "Working..."
-            : firstJoinTag || folder.joinPolicy === "open"
-              ? "Join"
-              : "Request to join"}
+          {busy ? "Working..." : folder.joinPolicy === "open" ? "Join" : "Request to join"}
         </button>
       ) : (
         <span className="text-xs text-gray-400">Invite only</span>

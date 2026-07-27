@@ -36,10 +36,18 @@ export default function ManageFolderPage({
   const [needsAuth, setNeedsAuth] = useState(false);
 
   const [inviteName, setInviteName] = useState("");
+  // Only followers can be invited (notes_invite_member refuses anyone else), so
+  // the field offers exactly them rather than letting the user guess a username
+  // and receive a refusal.
+  const [followers, setFollowers] = useState<{ userId: string; username: string }[]>([]);
   const [inviteRole, setInviteRole] = useState<FolderRole>("viewer");
   const [tagLabel, setTagLabel] = useState("");
   const [tagGrantsJoin, setTagGrantsJoin] = useState(false);
   const [removing, setRemoving] = useState<Member | null>(null);
+  const [transferTo, setTransferTo] = useState("");
+  // Both destructive actions route through ConfirmModal, so one bit of state
+  // tracks which one is awaiting confirmation.
+  const [confirming, setConfirming] = useState<{ kind: "transfer" | "delete" } | null>(null);
   const [busy, setBusy] = useState(false);
 
   const base = `/api/collab/folders/${encodeURIComponent(slug)}`;
@@ -77,6 +85,13 @@ export default function ManageFolderPage({
     load();
   }, [load]);
 
+  useEffect(() => {
+    fetch("/api/collab/me/follows")
+      .then((r) => (r.ok ? r.json() : { followers: [] }))
+      .then((d) => setFollowers(d.followers ?? []))
+      .catch(() => {});
+  }, []);
+
   async function send(path: string, init: RequestInit, okMessage: string) {
     setBusy(true);
     try {
@@ -98,6 +113,9 @@ export default function ManageFolderPage({
   }
 
   const canManage = detail?.myRole === "owner";
+  // Ownership can only move to an existing member, which is also what the RPC
+  // enforces — offering anyone else would just produce a refusal.
+  const transferable = members.filter((m) => m.role !== "owner");
 
   if (loading) {
     return (
@@ -160,7 +178,7 @@ export default function ManageFolderPage({
           <div className="space-y-3">
             <Toggle
               label="Public"
-              hint="Anyone signed in can read the notes."
+              hint="Anyone signed in can see this folder exists. The files inside stay members-only either way."
               checked={detail.visibility === "public"}
               disabled={busy}
               onChange={(v) =>
@@ -236,13 +254,28 @@ export default function ManageFolderPage({
 
       {canManage && (
         <Section title="Invite someone">
+          <p className="mb-3 text-xs text-gray-500 dark:text-gray-400">
+            You can invite people who follow you. That is what stops unsolicited
+            invitations, so someone who has not followed you will not appear here.
+          </p>
+          {followers.length === 0 ? (
+            <Empty>Nobody follows you yet, so there is no one to invite.</Empty>
+          ) : (
           <div className="flex gap-2">
-            <input
+            <select
               value={inviteName}
               onChange={(e) => setInviteName(e.target.value)}
-              placeholder="username"
               className="min-w-0 flex-1 rounded border border-black/10 bg-gray-50 px-3 py-1.5 text-sm text-gray-900 outline-none focus:border-blue-500 dark:border-white/10 dark:bg-[#0d1117] dark:text-gray-100"
-            />
+            >
+              <option value="">Choose a follower...</option>
+              {followers
+                .filter((f) => !members.some((m) => m.userId === f.userId))
+                .map((f) => (
+                  <option key={f.userId} value={f.username}>
+                    {f.username}
+                  </option>
+                ))}
+            </select>
             <select
               value={inviteRole}
               onChange={(e) => setInviteRole(e.target.value as FolderRole)}
@@ -269,6 +302,7 @@ export default function ManageFolderPage({
               Invite
             </button>
           </div>
+          )}
           {invitations.length > 0 && (
             <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
               Pending: {invitations.map((i) => i.inviteeUsername).join(", ")}
@@ -361,6 +395,14 @@ export default function ManageFolderPage({
         )}
 
         {canManage && (
+          <p className="mb-3 text-xs text-gray-500 dark:text-gray-400">
+            A tag marked <span className="text-emerald-600 dark:text-emerald-300">allows joining</span>{" "}
+            offers this folder to everyone carrying the same tag, who can then join as a
+            viewer. That only happens while the folder is discoverable.
+          </p>
+        )}
+
+        {canManage && (
           <div className="flex flex-wrap items-center gap-2">
             <input
               value={tagLabel}
@@ -399,6 +441,108 @@ export default function ManageFolderPage({
           </div>
         )}
       </Section>
+
+      {canManage && (
+        <Section title="Danger zone">
+          <div className="rounded border border-red-500/30 p-3">
+            <p className="mb-2 text-sm font-medium text-gray-900 dark:text-gray-100">
+              Transfer ownership
+            </p>
+            <p className="mb-2 text-xs text-gray-500 dark:text-gray-400">
+              The new owner must already be a member. You stay in the folder as an editor.
+            </p>
+            {transferable.length === 0 ? (
+              <Empty>Invite someone first — there is no one to transfer to.</Empty>
+            ) : (
+              <div className="mb-4 flex flex-wrap items-center gap-2">
+                <select
+                  value={transferTo}
+                  onChange={(e) => setTransferTo(e.target.value)}
+                  className="min-w-0 flex-1 rounded border border-black/10 bg-gray-50 px-3 py-1.5 text-sm text-gray-900 outline-none focus:border-blue-500 dark:border-white/10 dark:bg-[#0d1117] dark:text-gray-100"
+                >
+                  <option value="">Choose a member...</option>
+                  {transferable.map((m) => (
+                    <option key={m.userId} value={m.userId}>
+                      {m.username}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  disabled={busy || !transferTo}
+                  onClick={() => setConfirming({ kind: "transfer" })}
+                  className="rounded border border-red-500/40 px-3 py-1.5 text-sm font-medium text-red-600 hover:bg-red-500/10 disabled:opacity-50 dark:text-red-400"
+                >
+                  Transfer
+                </button>
+              </div>
+            )}
+
+            <p className="mb-2 text-sm font-medium text-gray-900 dark:text-gray-100">
+              Delete folder
+            </p>
+            <p className="mb-2 text-xs text-gray-500 dark:text-gray-400">
+              Removes the folder and every file in it, on this device and everywhere it
+              has synced.
+            </p>
+            <button
+              disabled={busy}
+              onClick={() => setConfirming({ kind: "delete" })}
+              className="rounded bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-500 disabled:opacity-50"
+            >
+              Delete folder
+            </button>
+          </div>
+        </Section>
+      )}
+
+      {confirming?.kind === "transfer" && (
+        <ConfirmModal
+          title="Transfer ownership"
+          message={`Make ${
+            members.find((m) => m.userId === transferTo)?.username ?? "this member"
+          } the owner of ${detail.name}? You become an editor and cannot undo this yourself.`}
+          confirmLabel="Transfer"
+          busy={busy}
+          onCancel={() => setConfirming(null)}
+          onConfirm={async () => {
+            await send(
+              `${base}/owner`,
+              { method: "POST", body: JSON.stringify({ userId: transferTo }) },
+              "Ownership transferred"
+            );
+            setConfirming(null);
+            setTransferTo("");
+          }}
+        />
+      )}
+
+      {confirming?.kind === "delete" && (
+        <ConfirmModal
+          title="Delete folder"
+          message={`Delete "${detail.name}" and all its files? This cannot be undone.`}
+          confirmLabel="Delete"
+          busy={busy}
+          onCancel={() => setConfirming(null)}
+          onConfirm={async () => {
+            // Folder content is owned by stored, not by the collaboration
+            // layer: deleting goes through the same route the sidebar uses, so
+            // the tombstone syncs to Supabase the usual way.
+            setBusy(true);
+            try {
+              const res = await fetch(`/api/folders/${encodeURIComponent(slug)}`, {
+                method: "DELETE",
+              });
+              if (!res.ok) throw new Error((await res.json()).error || "failed");
+              toast.success(`Deleted "${detail.name}"`);
+              window.location.assign("/vault");
+            } catch (err: any) {
+              toast.error(err.message);
+              setBusy(false);
+              setConfirming(null);
+            }
+          }}
+        />
+      )}
 
       {removing && (
         <ConfirmModal
