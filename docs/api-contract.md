@@ -168,7 +168,7 @@ repeated here; the differences are:
 | Endpoint | Method | Body/params | Notes |
 |---|---|---|---|
 | `/import` | POST | — | scan `vault/` and upsert anything that differs into SQLite (disk wins); idempotent; never enqueues sync ops. `/api/tree` awaits this so Claude-authored files appear immediately |
-| `/status` | GET | — | `{ ok, folders, queued, last_sync }` |
+| `/status` | GET | — | `{ ok, folders, queued, last_sync, sync }` — `sync` is `{ enabled, signed_in, user_id, last_error, last_push }` |
 
 Behavioral differences from vaultd behind the shared contract: every
 mutation commits atomically with one `sync_queue` row (drained to Supabase
@@ -178,7 +178,12 @@ mirrored back to `vault/` by calling vaultd, keeping the file tree a live
 legacy-format export for indexd and Claude Code.
 
 Sync is enabled by `SUPABASE_URL` + `SUPABASE_ANON_KEY` plus a user credential
-(env or `<vault>/.data/sync.env`); absent, stored runs fully local. stored
+(env or `<vault>/.data/sync.env`); absent, stored runs fully local. Absent is a
+*silent* state by design — the app keeps working against SQLite — so the reason
+is reported in two places rather than only in a log: startup names the missing
+variable (`sync: DISABLED — SUPABASE_PASSWORD is empty…`), and `/status`'s
+`sync` object carries `signed_in` plus the last cycle's `last_error`. Check it
+first when local content is not reaching Supabase. stored
 signs in as that user and sends its access token, so **RLS decides what it may
 push and pull** — it never holds a service-role key and never sees another
 user's folders. Remote tables: `notes_folders`, `notes_documents`, and the
