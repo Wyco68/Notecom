@@ -29,6 +29,43 @@ export interface FolderDetail extends FolderSummary {
   discoverable: boolean;
 }
 
+export interface UserTag {
+  slug: string;
+  label: string;
+}
+
+/**
+ * A tag someone has offered the caller. Holding the tag is what grants access
+ * to folders carrying it, so it only takes effect once accepted — a pending
+ * grant confers nothing.
+ */
+export interface TagGrant {
+  id: string;
+  slug: string;
+  label: string;
+  granterUsername: string;
+  createdAt: string;
+}
+
+/** A tag the caller has given someone, and can take back. */
+export interface GrantedTag {
+  username: string;
+  slug: string;
+  label: string;
+  grantedAt: string;
+}
+
+/**
+ * One direction of a follow. Following is one-sided and needs no approval; its
+ * only power is that it lets the followee tag or invite the follower.
+ */
+export interface FollowEdge {
+  userId: string;
+  username: string;
+  avatarUrl: string | null;
+  since: string;
+}
+
 export interface Member {
   userId: string;
   username: string;
