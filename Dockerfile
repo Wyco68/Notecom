@@ -11,6 +11,11 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
+# Cap the build's heap so Node collects instead of ballooning. It shares a
+# small VPS with two Go builds that each compile modernc.org/libc; without a
+# ceiling the box OOMs and every parallel build dies with it. Raise this if the
+# build reports heap exhaustion on a larger machine.
+ENV NODE_OPTIONS=--max-old-space-size=1536
 # This project ships no public/ dir; create it so the run-stage COPY never
 # fails (and still picks up assets if one is added later).
 RUN npm run build && mkdir -p public

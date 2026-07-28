@@ -5,7 +5,13 @@ WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/stored .
+# -p=1 and a tighter GOGC keep the compiler's peak RSS down. modernc.org/libc
+# (pulled in by the pure-Go SQLite driver) is a single enormous generated
+# package, and compose builds every service at once — on a small VPS the
+# default parallelism runs the box out of memory and the OOM killer takes the
+# build with it, which Dokploy then reports as a cancelled deployment.
+RUN GOFLAGS=-p=1 GOGC=50 CGO_ENABLED=0 \
+    go build -trimpath -ldflags="-s -w" -o /out/stored .
 
 # Root (not :nonroot): writes /vault/.data (SQLite) on the shared root-owned volume.
 FROM gcr.io/distroless/static-debian12
