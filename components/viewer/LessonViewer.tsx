@@ -80,7 +80,7 @@ export default function LessonViewer({ lesson }: { lesson: LessonRef | null }) {
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: -8 }}
         transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
-        className="mx-auto max-w-3xl px-8 py-10"
+        className="mx-auto max-w-3xl px-4 py-6 sm:px-8 sm:py-10"
       >
         {html === null ? (
           <div className="space-y-3" aria-hidden>

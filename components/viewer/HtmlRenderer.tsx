@@ -152,6 +152,16 @@ function nodeToReact(node: Node, key: number): ReactNode {
     );
   }
 
+  // A wide table would push the whole page sideways on a narrow screen, so it
+  // scrolls inside its own box instead.
+  if (tag === "table") {
+    return (
+      <div key={key} className="overflow-x-auto">
+        <table>{childrenToReact(el)}</table>
+      </div>
+    );
+  }
+
   if (PASS_THROUGH.has(tag)) {
     return createElement(tag, { key }, childrenToReact(el));
   }
@@ -180,7 +190,7 @@ export default function HtmlRenderer({ html }: { html: string }) {
       : null;
 
   return (
-    <div className="prose prose-lg dark:prose-invert max-w-none prose-headings:font-semibold prose-h1:text-5xl prose-h2:text-2xl prose-h3:text-xl prose-p:text-lg prose-li:text-lg prose-table:text-base">
+    <div className="prose prose-base sm:prose-lg dark:prose-invert max-w-none prose-headings:font-semibold prose-h1:text-3xl sm:prose-h1:text-5xl prose-h2:text-2xl prose-h3:text-xl prose-p:text-base sm:prose-p:text-lg prose-li:text-base sm:prose-li:text-lg prose-table:text-sm sm:prose-table:text-base">
       {doc ? childrenToReact(doc.body) : null}
     </div>
   );
