@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<title>LectureLens</title>
+<title>Notecom</title>
 <style>
   html, body {
     margin: 0;
@@ -29,6 +29,12 @@
     font-size: 13px;
     color: #9ca3af;
   }
+  .mark {
+    width: 56px;
+    height: 56px;
+    margin: 0 auto 18px;
+    display: block;
+  }
   .spinner {
     width: 22px;
     height: 22px;
@@ -45,8 +51,22 @@
 </head>
 <body>
   <div class="panel">
+    <svg class="mark" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <rect width="512" height="512" rx="112" fill="#2563eb" />
+      <path d="M148 88 H292 L372 168 V352 a28 28 0 0 1 -28 28 H148 a28 28 0 0 1 -28 -28 V116 a28 28 0 0 1 28 -28 Z" fill="#ffffff" />
+      <path d="M292 88 L372 168 H292 Z" fill="#93c5fd" />
+      <g fill="#2563eb">
+        <rect x="160" y="212" width="172" height="24" rx="12" />
+        <rect x="160" y="268" width="112" height="24" rx="12" />
+        <rect x="160" y="324" width="80" height="24" rx="12" />
+      </g>
+      <g stroke="#ffffff" stroke-width="24" fill="none" stroke-linecap="round">
+        <line x1="392" y1="392" x2="436" y2="436" />
+        <circle cx="352" cy="352" r="64" fill="#1d4ed8" />
+      </g>
+    </svg>
     <div class="spinner"></div>
-    <div class="title">LectureLens</div>
+    <div class="title">Notecom</div>
     <div class="stage" id="stage">Starting...</div>
   </div>
   <script>
