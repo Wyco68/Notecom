@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "name": "lecturelens",
+  "name": "notecom",
   "version": "0.1.0",
   "description": "Web-based lesson library: plain-language study notes generated from slides/PDFs by Claude Code, read and managed by a Next.js app in a code-editor-style viewer.",
   "specVersion": "1.0.0",

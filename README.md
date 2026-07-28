@@ -1,4 +1,4 @@
-# LectureLens
+# Notecom
 
 Turns slides/PDFs into plain-language study notes, readable in a clean
 code-editor-style reader. Works for any subject. The app, the note-writing

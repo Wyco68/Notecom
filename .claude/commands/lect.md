@@ -98,7 +98,7 @@ noticed until a user did. The validator exists so that never happens
 again without being caught immediately.
 
 Once it passes, update `index.json`. That is the final step — do **not**
-open a browser or start the web app. The LectureLens app picks up the new lesson
+open a browser or start the web app. The Notecom app picks up the new lesson
 on its own: it refreshes when its window regains focus, and there's a
 refresh button next to the theme toggle for an immediate reload.
 

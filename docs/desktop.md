@@ -169,16 +169,16 @@ at the repo root and opens that folder. `bundle.targets: "all"` in
 formats:
 
 ```
-installation/LectureLens_<version>_x64-setup.exe   Windows (NSIS)  -- run this
-installation/LectureLens_<version>_x64_en-US.msi    Windows (MSI)   -- or this
-installation/LectureLens_<version>_x64.dmg          macOS
-installation/LectureLens_<version>_amd64.AppImage    Linux (portable)
-installation/LectureLens_<version>_amd64.deb         Linux (Debian/Ubuntu)
+installation/Notecom_<version>_x64-setup.exe   Windows (NSIS)  -- run this
+installation/Notecom_<version>_x64_en-US.msi    Windows (MSI)   -- or this
+installation/Notecom_<version>_x64.dmg          macOS
+installation/Notecom_<version>_amd64.AppImage    Linux (portable)
+installation/Notecom_<version>_amd64.deb         Linux (Debian/Ubuntu)
 ```
 
 `installation/` is emptied on each build so it only ever holds the latest
 artifacts (it's gitignored — build output, not source). Running the
-installer registers **LectureLens** with the OS like any native app (Start Menu
+installer registers **Notecom** with the OS like any native app (Start Menu
 on Windows, Applications on macOS, the app menu on Linux); after that it's
 just launching the app, no terminal. Re-running `npm run build:desktop` +
 the new installer after a source change replaces the install in place.

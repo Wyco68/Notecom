@@ -16,7 +16,7 @@ const BUNDLE_DIR = path.join(ROOT, "desktop", "target", "release", "bundle");
 const OUT_DIR = path.join(ROOT, "installation");
 
 // Tauri names installers `<productName>_<version>_...`. A rename (e.g.
-// Notes -> LectureLens) leaves the old-named bundles behind in the target
+// LectureLens -> Notecom) leaves the old-named bundles behind in the target
 // tree; without filtering they'd be copied in beside the new ones. Collect
 // only the current product's artifacts so `installation/` never carries a
 // stale name.
@@ -97,6 +97,6 @@ for (const src of artifacts) {
 
 console.log(`\nInstaller ready in installation/ :`);
 for (const file of copied) console.log(`  ${path.relative(ROOT, file)}`);
-console.log(`\nOpen that file to install LectureLens.\n`);
+console.log(`\nOpen that file to install Notecom.\n`);
 
 openFolder(OUT_DIR);

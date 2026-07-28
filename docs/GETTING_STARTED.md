@@ -88,7 +88,7 @@ app uses it.
 - **Generate button in the app** — same as `/lect`/`/quiz`, but from an
   upload dialog inside the reader. Uses your local Claude Code login.
 - **Installable desktop build** — `npm run install:desktop` produces a
-  native installer for *this machine* so you can launch LectureLens from the
+  native installer for *this machine* so you can launch Notecom from the
   Start Menu / Applications without a terminal. It still reads this
   checkout's `vault/`. See [desktop.md](desktop.md).
 

@@ -68,7 +68,7 @@ fn finish_launch(app: &AppHandle, next_port: u16) {
     app.run_on_main_thread(move || {
         let parsed = url.parse().expect("invalid app url");
         WebviewWindowBuilder::new(&app_for_main, "main", WebviewUrl::External(parsed))
-            .title("LectureLens")
+            .title("Notecom")
             .inner_size(1280.0, 800.0)
             .min_inner_size(960.0, 600.0)
             .build()
@@ -341,7 +341,7 @@ pub fn run() {
         .manage(ManagedChildren(Mutex::new(Vec::new())))
         .setup(|app| {
             WebviewWindowBuilder::new(app, "splash", WebviewUrl::App("splash.html".into()))
-                .title("LectureLens")
+                .title("Notecom")
                 .inner_size(420.0, 260.0)
                 .resizable(false)
                 .decorations(false)

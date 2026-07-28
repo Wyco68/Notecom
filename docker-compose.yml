@@ -14,7 +14,7 @@
 #   SUPABASE_URL / _KEY    optional: sync with the same Supabase as the desktop app
 #   OLLAMA_URL             optional: enable vector search + chat (see the ollama profile)
 
-name: lecturelens
+name: notecom
 
 services:
   vaultd:
