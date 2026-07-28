@@ -13,6 +13,18 @@ import { useToast } from "../toast/ToastProvider";
 // it; otherwise the manage page just 501s, so the control is hidden.
 const COLLAB_ENABLED = !!process.env.NEXT_PUBLIC_SUPABASE_URL;
 
+// The vault numbers files on disk (`01-introduction`, `seq: 1` in index.json);
+// showing that same number in the tree keeps the sidebar order readable as an
+// index rather than an arbitrary list.
+function SeqBadge({ seq }: { seq: number }) {
+  if (!Number.isFinite(seq) || seq <= 0) return null;
+  return (
+    <span className="shrink-0 tabular-nums text-xs text-gray-500 dark:text-gray-500">
+      {String(seq).padStart(2, "0")}
+    </span>
+  );
+}
+
 type PendingDelete =
   | { kind: "folder" }
   | { kind: "lesson"; id: string; title: string }
@@ -90,10 +102,12 @@ export default function FileTreeNode({
       <div className="group flex items-center">
         <button
           onClick={() => setOpen((o) => !o)}
-          className="flex flex-1 items-center gap-1.5 rounded px-2 py-1.5 text-left text-sm text-gray-800 hover:bg-black/5 dark:text-gray-200 dark:hover:bg-white/5"
+          className="flex min-w-0 flex-1 items-start gap-1.5 rounded px-2 py-1.5 text-left text-sm text-gray-800 hover:bg-black/5 dark:text-gray-200 dark:hover:bg-white/5"
         >
           <span className="text-gray-500">{open ? "▾" : "▸"}</span>
-          <span className="truncate font-medium">{folder.name.replace(/-/g, " ")}</span>
+          {/* Wraps rather than truncates: a folder name is how you find the
+              folder, and the sidebar never scrolls sideways. */}
+          <span className="break-words font-medium">{folder.name.replace(/-/g, " ")}</span>
         </button>
         {COLLAB_ENABLED && (
           <a
@@ -131,14 +145,15 @@ export default function FileTreeNode({
               <div key={lesson.id} className="group flex items-center">
                 <button
                   onClick={() => onSelect({ folder: folder.name, id: lesson.id, kind: "lesson" })}
-                  className={`flex-1 truncate rounded px-2 py-1 text-left text-sm ${
+                  className={`flex min-w-0 flex-1 items-start gap-1.5 rounded px-2 py-1 text-left text-sm ${
                     isActive
                       ? "bg-blue-600/10 text-blue-700 dark:bg-blue-600/20 dark:text-blue-300"
                       : "text-gray-700 hover:bg-black/5 dark:text-gray-300 dark:hover:bg-white/5"
                   }`}
                   title={lesson.title}
                 >
-                  {lesson.title}
+                  <SeqBadge seq={lesson.seq} />
+                  <span className="break-words">{lesson.title}</span>
                 </button>
                 <button
                   onClick={(e) => {
@@ -192,15 +207,16 @@ export default function FileTreeNode({
               <div key={quiz.id} className="group flex items-center">
                 <button
                   onClick={() => onSelect({ folder: folder.name, id: quiz.id, kind: "quiz" })}
-                  className={`flex flex-1 items-center gap-1.5 truncate rounded px-2 py-1 text-left text-sm ${
+                  className={`flex min-w-0 flex-1 items-start gap-1.5 rounded px-2 py-1 text-left text-sm ${
                     isActive
                       ? "bg-blue-600/10 text-blue-700 dark:bg-blue-600/20 dark:text-blue-300"
                       : "text-gray-700 hover:bg-black/5 dark:text-gray-300 dark:hover:bg-white/5"
                   }`}
                   title={quiz.title}
                 >
-                  <QuizIcon className="h-3.5 w-3.5 shrink-0 text-gray-400" />
-                  <span className="truncate">{quiz.title}</span>
+                  <QuizIcon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-gray-400" />
+                  <SeqBadge seq={quiz.seq} />
+                  <span className="break-words">{quiz.title}</span>
                 </button>
                 <button
                   onClick={(e) => {
