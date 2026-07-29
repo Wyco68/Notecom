@@ -40,9 +40,9 @@ export default function FolderCard({
   }
 
   return (
-    <div className="rounded-lg border border-black/10 bg-white p-4 dark:border-white/10 dark:bg-[#161b22]">
+    <div className="flex flex-col rounded-lg border border-black/10 bg-white p-4 transition-colors duration-150 ease-out hover:border-black/20 dark:border-white/10 dark:bg-[#161b22] dark:hover:border-white/20">
       <div className="mb-1 flex items-start gap-2">
-        <h3 className="min-w-0 flex-1 truncate text-sm font-semibold text-gray-900 dark:text-gray-100">
+        <h3 className="min-w-0 flex-1 truncate text-sm font-semibold tracking-tight text-gray-900 dark:text-gray-100">
           {folder.name}
         </h3>
         <RoleBadge role={folder.myRole} />
@@ -70,7 +70,7 @@ export default function FolderCard({
       {folder.myRole ? (
         <a
           href={`/vault?folder=${encodeURIComponent(folder.slug)}`}
-          className="inline-block rounded bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-500"
+          className="ui-btn ui-btn-xs ui-btn-primary mt-auto self-start"
         >
           Open
         </a>
@@ -78,7 +78,7 @@ export default function FolderCard({
         <button
           onClick={join}
           disabled={busy}
-          className="rounded bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-500 disabled:opacity-50"
+          className="ui-btn ui-btn-xs ui-btn-primary mt-auto self-start"
         >
           {busy ? "Working..." : "Request to join"}
         </button>

@@ -83,28 +83,34 @@ export default function LessonViewer({ lesson }: { lesson: LessonRef | null }) {
         className="mx-auto max-w-3xl px-4 py-6 sm:px-8 sm:py-10"
       >
         {html === null ? (
-          <div className="space-y-3" aria-hidden>
-            <div className="h-7 w-2/3 animate-pulse rounded bg-black/5 dark:bg-white/5" />
-            <div className="h-4 w-full animate-pulse rounded bg-black/5 dark:bg-white/5" />
-            <div className="h-4 w-5/6 animate-pulse rounded bg-black/5 dark:bg-white/5" />
+          // The skeleton mirrors the real layout: a toolbar rule, a title, then
+          // body lines — so the page doesn't jump when the content lands.
+          <div className="animate-pulse" aria-hidden>
+            <div className="mb-6 h-7 border-b border-black/5 dark:border-white/5" />
+            <div className="mb-6 h-8 w-2/3 rounded bg-black/[0.06] dark:bg-white/[0.06]" />
+            <div className="space-y-2.5">
+              <div className="h-4 w-full rounded bg-black/[0.04] dark:bg-white/[0.04]" />
+              <div className="h-4 w-11/12 rounded bg-black/[0.04] dark:bg-white/[0.04]" />
+              <div className="h-4 w-5/6 rounded bg-black/[0.04] dark:bg-white/[0.04]" />
+            </div>
           </div>
         ) : (
           <>
             {/* Placeholders for the two planned content actions. Rendered
                 disabled rather than omitted so the workspace shows where they
                 will live; neither has a backend yet (see docs). */}
-            <div className="mb-4 flex items-center justify-end gap-2 border-b border-black/5 pb-3 dark:border-white/5">
+            <div className="mb-6 flex items-center justify-end gap-1 border-b border-black/5 pb-3 dark:border-white/5">
               <button
                 disabled
                 title="Version history is not available yet"
-                className="cursor-not-allowed rounded px-2 py-1 text-xs text-gray-400 dark:text-gray-600"
+                className="ui-btn ui-btn-xs font-normal text-gray-500 dark:text-gray-400"
               >
                 Version history
               </button>
               <button
                 disabled
                 title="AI actions are not available yet"
-                className="cursor-not-allowed rounded px-2 py-1 text-xs text-gray-400 dark:text-gray-600"
+                className="ui-btn ui-btn-xs font-normal text-gray-500 dark:text-gray-400"
               >
                 AI actions
               </button>

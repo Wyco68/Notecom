@@ -21,7 +21,9 @@ export default function Modal({
         className="w-full max-w-sm rounded-lg border border-black/10 bg-white p-5 shadow-xl dark:border-white/10 dark:bg-[#161b22]"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="mb-4 text-sm font-semibold text-gray-900 dark:text-gray-100">{title}</h2>
+        <h2 className="mb-4 text-sm font-semibold tracking-tight text-gray-900 dark:text-gray-100">
+          {title}
+        </h2>
         {children}
       </div>
     </div>

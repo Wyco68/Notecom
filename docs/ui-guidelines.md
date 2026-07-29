@@ -52,6 +52,38 @@ regenerated, never hand-edited: `app/favicon.ico` and `app/apple-icon.png`
 ([desktop/assets/splash.html](../desktop/assets/splash.html)) inlines the same
 paths.
 
+## Shared control classes
+The same input and button were being spelled several slightly different ways
+per page, so the shapes live once in [app/globals.css](../app/globals.css)
+under `@layer components`. Compose these instead of re-deriving a control:
+
+| Class | Use |
+|---|---|
+| `ui-field` (+ `ui-field-sm`) | every text input, select and textarea |
+| `ui-btn` + `ui-btn-primary` / `-secondary` / `-ghost` / `-danger` / `-danger-outline` | buttons; add `ui-btn-sm` or `ui-btn-xs` for row-height and dense variants |
+| `ui-icon-btn` (+ `ui-icon-btn-danger`) | square icon-only controls |
+| `ui-row` | a list/tree row that tints on hover |
+| `ui-reveal` | a row action that appears on `group-hover` |
+| `ui-focus` | a visible focus ring on anything not covered above |
+
+Two rules that come with them:
+
+- **Focus is always visible.** `outline-none` on its own is a bug; every one of
+  the classes above puts a `focus-visible` ring back. The two deliberate
+  exceptions are the sidebar search input and the chat composer, where the
+  wrapper carries `ui-field` and the ring via `focus-within` so the whole box
+  lights up instead of the bare input.
+- **A field wrapper takes the ring**, not the input inside it.
+
+## Motion
+Transitions are 120–180ms `ease-out` for hover and focus, 200–280ms for
+enter/exit, and only ever on colour, opacity and transform — never on `width`,
+`height`, or anything else that reflows. `ui-reveal` fades a row action in
+while keeping it in the layout at all times, precisely so revealing it cannot
+resize a row or the fixed-width sidebar (the old `hidden group-hover:flex`
+did). One `@media (prefers-reduced-motion: reduce)` block in `globals.css`
+neutralises all of it for anyone who asked their OS for less motion.
+
 ## Components
 - **Modals**: every modal wraps [components/modals/Modal.tsx](../components/modals/Modal.tsx)
   (dimmed backdrop, centered panel, click-outside-to-close). Don't build a
@@ -136,7 +168,7 @@ type, merges the outer `title` into `data`, and calls the function.
 
 Then tell `/lect` to document the JSON shape in `docs/html-output-contract.md`.
 
-## Motion
+### Larger motion
 `framer-motion` for the lesson-switch fade/slide
 ([components/viewer/LessonViewer.tsx](../components/viewer/LessonViewer.tsx))
 and the Mermaid diagram fade-in. Keep transitions short (~0.3s) and subtle

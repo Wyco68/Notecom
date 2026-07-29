@@ -1,5 +1,6 @@
 "use client";
 
+import { AnimatePresence, motion } from "framer-motion";
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
 
 type ToastKind = "success" | "error";
@@ -41,19 +42,28 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <ToastContext.Provider value={api}>
       {children}
-      <div className="fixed bottom-4 right-4 z-[100] flex flex-col gap-2">
-        {toasts.map((t) => (
-          <div
-            key={t.id}
-            className={`rounded-md border px-4 py-2 text-sm shadow-lg ${
-              t.kind === "success"
-                ? "border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-800/60 dark:bg-emerald-950/90 dark:text-emerald-200"
-                : "border-red-300 bg-red-50 text-red-800 dark:border-red-800/60 dark:bg-red-950/90 dark:text-red-200"
-            }`}
-          >
-            {t.message}
-          </div>
-        ))}
+      {/* Toasts slide in 4px and fade, matching the reader's enter timing.
+          Presentational only — the list and its timeout are unchanged. */}
+      <div className="pointer-events-none fixed bottom-4 right-4 z-[100] flex flex-col items-end gap-2">
+        <AnimatePresence initial={false}>
+          {toasts.map((t) => (
+            <motion.div
+              key={t.id}
+              layout
+              initial={{ opacity: 0, y: 8, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 4, scale: 0.98 }}
+              transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+              className={`pointer-events-auto max-w-sm rounded-md border px-4 py-2.5 text-sm shadow-lg ${
+                t.kind === "success"
+                  ? "border-emerald-500/30 bg-emerald-50 text-emerald-800 dark:border-emerald-800/60 dark:bg-emerald-950/90 dark:text-emerald-200"
+                  : "border-red-500/30 bg-red-50 text-red-800 dark:border-red-800/60 dark:bg-red-950/90 dark:text-red-200"
+              }`}
+            >
+              {t.message}
+            </motion.div>
+          ))}
+        </AnimatePresence>
       </div>
     </ToastContext.Provider>
   );

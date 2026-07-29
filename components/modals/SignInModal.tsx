@@ -127,24 +127,24 @@ export default function SignInModal({
     <Modal title="Sign in to Claude Code" onClose={running ? () => {} : onClose}>
       {phase === "idle" ? (
         <>
-          <p className="mb-3 text-sm leading-snug text-gray-600 dark:text-gray-400">
+          <p className="mb-4 text-sm leading-relaxed text-gray-600 dark:text-gray-400">
             Generating notes runs the Claude Code CLI on your own account. Your
             session has expired or was never set up — signing in here runs the
             same flow as a terminal would.
           </p>
           <button
             onClick={() => start("claudeai")}
-            className="w-full rounded bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-500"
+            className="ui-btn ui-btn-primary w-full"
           >
             Sign in with Claude subscription
           </button>
           <button
             onClick={() => start("console")}
-            className="mt-2 w-full rounded border border-black/10 px-3 py-2 text-sm text-gray-600 hover:bg-black/5 dark:border-white/10 dark:text-gray-400 dark:hover:bg-white/5"
+            className="ui-btn ui-btn-secondary mt-2 w-full"
           >
             Use Anthropic Console instead
           </button>
-          <p className="mt-2 text-xs leading-snug text-gray-500">
+          <p className="mt-2.5 text-xs leading-snug text-gray-500">
             Opens Anthropic in your browser. The app never sees or stores your
             credentials — Claude Code keeps them, exactly as it does from a
             terminal.
@@ -172,7 +172,7 @@ export default function SignInModal({
 
           <div
             ref={logRef}
-            className="mb-3 h-40 overflow-y-auto rounded border border-black/20 bg-[#0a0e14] p-2.5 font-mono text-xs leading-relaxed text-emerald-400 dark:border-white/10"
+            className="mb-3 h-40 overflow-y-auto rounded-md border border-black/10 bg-[#0a0e14] p-3 font-mono text-xs leading-relaxed text-emerald-400 dark:border-white/10"
           >
             {log.map((l, i) => (
               <div key={i} className="whitespace-pre-wrap">
@@ -183,7 +183,7 @@ export default function SignInModal({
 
           {awaitingCode && running && (
             <div className="mb-3">
-              <label className="mb-1 block text-xs text-gray-500 dark:text-gray-400">
+              <label className="mb-1.5 block text-xs font-medium text-gray-500 dark:text-gray-400">
                 Paste the authorization code from the browser
               </label>
               <div className="flex gap-2">
@@ -193,12 +193,12 @@ export default function SignInModal({
                   onKeyDown={(e) => e.key === "Enter" && sendCode()}
                   autoComplete="off"
                   spellCheck={false}
-                  className="flex-1 rounded border border-black/10 bg-gray-50 px-3 py-2 font-mono text-sm text-gray-900 outline-none focus:border-blue-500 dark:border-white/10 dark:bg-[#0d1117] dark:text-gray-100"
+                  className="ui-field min-w-0 flex-1 font-mono"
                 />
                 <button
                   onClick={sendCode}
                   disabled={!code.trim()}
-                  className="rounded bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50"
+                  className="ui-btn ui-btn-primary shrink-0"
                 >
                   Submit
                 </button>
@@ -207,10 +207,7 @@ export default function SignInModal({
           )}
 
           {running ? (
-            <button
-              onClick={cancel}
-              className="w-full rounded border border-black/10 px-3 py-2 text-sm text-gray-600 hover:bg-black/5 dark:border-white/10 dark:text-gray-400 dark:hover:bg-white/5"
-            >
+            <button onClick={cancel} className="ui-btn ui-btn-secondary w-full">
               Cancel
             </button>
           ) : (
@@ -218,15 +215,12 @@ export default function SignInModal({
               {phase !== "done" && (
                 <button
                   onClick={() => start("claudeai")}
-                  className="flex-1 rounded bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-500"
+                  className="ui-btn ui-btn-primary flex-1"
                 >
                   Try again
                 </button>
               )}
-              <button
-                onClick={onClose}
-                className="flex-1 rounded border border-black/10 px-3 py-2 text-sm text-gray-600 hover:bg-black/5 dark:border-white/10 dark:text-gray-400 dark:hover:bg-white/5"
-              >
+              <button onClick={onClose} className="ui-btn ui-btn-secondary flex-1">
                 Close
               </button>
             </div>

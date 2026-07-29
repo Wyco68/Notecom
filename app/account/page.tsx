@@ -165,59 +165,62 @@ export default function AccountPage() {
   }
 
   return (
-    <div className="mx-auto max-w-2xl p-4 sm:p-6">
-      <div className="mb-6 flex items-center justify-between gap-3">
-        <h1 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Account</h1>
+    <div className="mx-auto max-w-2xl p-4 sm:p-8">
+      <div className="mb-8 flex items-baseline justify-between gap-3">
+        <h1 className="text-xl font-semibold tracking-tight text-gray-900 dark:text-gray-100">
+          Account
+        </h1>
         <a
           href="/vault"
-          className="shrink-0 text-sm text-blue-600 hover:text-blue-500 dark:text-blue-400"
+          className="ui-focus shrink-0 rounded text-sm text-blue-600 transition-colors duration-150 ease-out hover:text-blue-500 dark:text-blue-400"
         >
           Back to folders
         </a>
       </div>
 
       <Section title="Profile">
-        <label className="mb-3 block">
-          <span className="mb-1 block text-xs text-gray-500 dark:text-gray-400">Username</span>
+        <label className="mb-4 block">
+          <span className="mb-1.5 block text-xs font-medium text-gray-500 dark:text-gray-400">
+            Username
+          </span>
           <input
             value={username}
             onChange={(e) => setUsername(e.target.value)}
-            className="w-full rounded border border-black/10 bg-white px-2 py-1.5 text-sm text-gray-800 outline-none dark:border-white/10 dark:bg-white/5 dark:text-gray-200"
+            className="ui-field ui-field-sm"
           />
         </label>
-        <label className="mb-3 block">
-          <span className="mb-1 block text-xs text-gray-500 dark:text-gray-400">Avatar URL</span>
+        <label className="mb-4 block">
+          <span className="mb-1.5 block text-xs font-medium text-gray-500 dark:text-gray-400">
+            Avatar URL
+          </span>
           <input
             value={avatarUrl}
             onChange={(e) => setAvatarUrl(e.target.value)}
             placeholder="https://..."
-            className="w-full rounded border border-black/10 bg-white px-2 py-1.5 text-sm text-gray-800 outline-none placeholder:text-gray-400 dark:border-white/10 dark:bg-white/5 dark:text-gray-200"
+            className="ui-field ui-field-sm"
           />
         </label>
         <button
           onClick={saveProfile}
           disabled={busy}
-          className="rounded bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50"
+          className="ui-btn ui-btn-sm ui-btn-primary"
         >
           Save
         </button>
       </Section>
 
       <Section title="Email and password">
-        <p className="mb-2 text-sm text-gray-700 dark:text-gray-300">{profile.email}</p>
-        <p className="mb-3 text-xs text-gray-500 dark:text-gray-400">
+        <p className="mb-1 text-sm text-gray-800 dark:text-gray-200">{profile.email}</p>
+        <p className="mb-4 text-xs text-gray-500 dark:text-gray-400">
           Changing your password sends a code to this address.
         </p>
-        <a
-          href="/auth/reset?next=/account"
-          className="inline-block rounded border border-black/10 px-3 py-1.5 text-sm text-gray-700 hover:bg-black/5 dark:border-white/10 dark:text-gray-200 dark:hover:bg-white/5"
-        >
+        <a href="/auth/reset?next=/account" className="ui-btn ui-btn-sm ui-btn-secondary">
           Change password
         </a>
       </Section>
 
       <Section title="My tags">
-        <p className="mb-3 text-xs text-gray-500 dark:text-gray-400">
+        <p className="mb-4 max-w-prose text-xs leading-relaxed text-gray-500 dark:text-gray-400">
           Tags are given to you by people you follow — you cannot add your own. Every
           folder carrying a tag you hold is readable by you, so removing a tag gives up
           that access everywhere at once.
@@ -235,22 +238,22 @@ export default function AccountPage() {
       </Section>
 
       <Section title="Following">
-        <p className="mb-3 text-xs text-gray-500 dark:text-gray-400">
+        <p className="mb-4 max-w-prose text-xs leading-relaxed text-gray-500 dark:text-gray-400">
           Following someone lets them offer you tags and invite you to folders. It is
           one-sided and needs no approval.
         </p>
-        <div className="mb-3 flex gap-2">
+        <div className="mb-4 flex gap-2">
           <input
             value={followName}
             onChange={(e) => setFollowName(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && doFollow()}
             placeholder="username"
-            className="flex-1 rounded border border-black/10 bg-white px-2 py-1.5 text-sm text-gray-800 outline-none placeholder:text-gray-400 dark:border-white/10 dark:bg-white/5 dark:text-gray-200"
+            className="ui-field ui-field-sm min-w-0 flex-1"
           />
           <button
             onClick={doFollow}
             disabled={busy || !followName.trim()}
-            className="shrink-0 rounded bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50"
+            className="ui-btn ui-btn-sm ui-btn-primary shrink-0"
           >
             Follow
           </button>
@@ -274,7 +277,7 @@ export default function AccountPage() {
       </Section>
 
       <Section title="Give a tag">
-        <p className="mb-3 text-xs text-gray-500 dark:text-gray-400">
+        <p className="mb-4 max-w-prose text-xs leading-relaxed text-gray-500 dark:text-gray-400">
           You can offer a tag to anyone who follows you. They decide whether to accept,
           and accepting shares every folder you tag that way with them.
         </p>
@@ -282,7 +285,7 @@ export default function AccountPage() {
           value={grantQuery}
           onChange={(e) => setGrantQuery(e.target.value)}
           placeholder="Search your followers"
-          className="mb-2 w-full rounded border border-black/10 bg-white px-2 py-1.5 text-sm text-gray-800 outline-none placeholder:text-gray-400 dark:border-white/10 dark:bg-white/5 dark:text-gray-200"
+          className="ui-field ui-field-sm mb-2"
         />
         {grantCandidates.length === 0 ? (
           <p className="text-sm text-gray-500 dark:text-gray-400">
@@ -295,7 +298,7 @@ export default function AccountPage() {
             <select
               value={grantTo}
               onChange={(e) => setGrantTo(e.target.value)}
-              className="min-w-0 flex-1 rounded border border-black/10 bg-white px-2 py-1.5 text-sm text-gray-800 outline-none dark:border-white/10 dark:bg-white/5 dark:text-gray-200"
+              className="ui-field ui-field-sm min-w-0 flex-1"
             >
               <option value="">Choose a follower...</option>
               {grantCandidates.map((f) => (
@@ -308,12 +311,12 @@ export default function AccountPage() {
               value={grantTag}
               onChange={(e) => setGrantTag(e.target.value)}
               placeholder="e.g. ISNE3RD"
-              className="min-w-0 flex-1 rounded border border-black/10 bg-white px-2 py-1.5 text-sm text-gray-800 outline-none placeholder:text-gray-400 dark:border-white/10 dark:bg-white/5 dark:text-gray-200"
+              className="ui-field ui-field-sm min-w-0 flex-1"
             />
             <button
               onClick={doGrant}
               disabled={busy || !grantTo || grantTag.trim().length < 2}
-              className="shrink-0 rounded bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50"
+              className="ui-btn ui-btn-sm ui-btn-primary shrink-0"
             >
               Offer
             </button>
@@ -321,22 +324,22 @@ export default function AccountPage() {
         )}
 
         {given.length > 0 && (
-          <div className="mt-4">
-            <p className="mb-1 text-xs font-medium text-gray-500 dark:text-gray-400">
+          <div className="mt-5">
+            <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
               Tags you gave ({given.length})
             </p>
-            <ul>
+            <ul className="-mx-1.5">
               {given.map((g) => (
                 <li
                   key={`${g.username}:${g.slug}`}
-                  className="group flex items-center justify-between gap-2 rounded px-1 py-1 hover:bg-black/5 dark:hover:bg-white/5"
+                  className="group flex items-center justify-between gap-2 rounded px-1.5 py-1 transition-colors duration-150 ease-out hover:bg-black/[0.04] dark:hover:bg-white/[0.06]"
                 >
                   <span className="min-w-0 truncate text-sm text-gray-700 dark:text-gray-200">
                     {g.username} — {g.label || g.slug}
                   </span>
                   <button
                     onClick={() => doRevoke(g.username, g.slug)}
-                    className="shrink-0 rounded px-1.5 py-0.5 text-xs text-gray-500 opacity-0 hover:bg-red-500/10 hover:text-red-500 focus:opacity-100 group-hover:opacity-100"
+                    className="ui-btn ui-btn-xs ui-reveal shrink-0 font-normal text-gray-500 hover:bg-red-500/10 hover:text-red-600 dark:hover:text-red-400"
                   >
                     Revoke
                   </button>
@@ -407,8 +410,8 @@ function PeopleList({
   }, [direction, query, offset, revision]);
 
   return (
-    <div className="mt-3">
-      <p className="mb-1 text-xs font-medium text-gray-500 dark:text-gray-400">
+    <div className="mt-5">
+      <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
         {label} ({total})
       </p>
       {total > PAGE && (
@@ -419,7 +422,7 @@ function PeopleList({
             setOffset(0);
           }}
           placeholder="Search by username"
-          className="mb-2 w-full rounded border border-black/10 bg-white px-2 py-1 text-sm text-gray-800 outline-none placeholder:text-gray-400 dark:border-white/10 dark:bg-white/5 dark:text-gray-200"
+          className="ui-field ui-field-sm mb-2"
         />
       )}
       {people.length === 0 ? (
@@ -427,18 +430,18 @@ function PeopleList({
           {query.trim() ? "Nobody matches." : emptyText}
         </p>
       ) : (
-        <ul>
+        <ul className="-mx-1.5">
           {people.map((p) => (
             <li
               key={p.userId}
-              className="group flex items-center justify-between gap-2 rounded px-1 py-1 hover:bg-black/5 dark:hover:bg-white/5"
+              className="group flex items-center justify-between gap-2 rounded px-1.5 py-1 transition-colors duration-150 ease-out hover:bg-black/[0.04] dark:hover:bg-white/[0.06]"
             >
               <span className="truncate text-sm text-gray-700 dark:text-gray-200">
                 {p.username}
               </span>
               <button
                 onClick={() => onAction(p.userId)}
-                className="shrink-0 rounded px-1.5 py-0.5 text-xs text-gray-500 opacity-0 hover:bg-red-500/10 hover:text-red-500 focus:opacity-100 group-hover:opacity-100"
+                className="ui-btn ui-btn-xs ui-reveal shrink-0 font-normal text-gray-500 hover:bg-red-500/10 hover:text-red-600 dark:hover:text-red-400"
               >
                 {actionLabel}
               </button>
@@ -447,11 +450,11 @@ function PeopleList({
         </ul>
       )}
       {total > PAGE && (
-        <div className="mt-2 flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+        <div className="mt-3 flex items-center gap-2 text-xs tabular-nums text-gray-500 dark:text-gray-400">
           <button
             disabled={offset === 0}
             onClick={() => setOffset(Math.max(0, offset - PAGE))}
-            className="rounded border border-black/10 px-2 py-0.5 hover:bg-black/5 disabled:opacity-40 dark:border-white/10 dark:hover:bg-white/5"
+            className="ui-btn ui-btn-xs ui-btn-secondary font-normal"
           >
             Previous
           </button>
@@ -461,7 +464,7 @@ function PeopleList({
           <button
             disabled={offset + PAGE >= total}
             onClick={() => setOffset(offset + PAGE)}
-            className="rounded border border-black/10 px-2 py-0.5 hover:bg-black/5 disabled:opacity-40 dark:border-white/10 dark:hover:bg-white/5"
+            className="ui-btn ui-btn-xs ui-btn-secondary font-normal"
           >
             Next
           </button>
@@ -473,8 +476,8 @@ function PeopleList({
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="mb-6 rounded border border-black/10 p-4 dark:border-white/10">
-      <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+    <section className="mb-4 rounded-lg border border-black/10 bg-black/[0.01] p-5 dark:border-white/10 dark:bg-white/[0.02]">
+      <h2 className="mb-4 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
         {title}
       </h2>
       {children}

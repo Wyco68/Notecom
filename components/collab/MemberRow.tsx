@@ -24,8 +24,8 @@ export default function MemberRow({
   const editable = canManage && member.role !== "owner";
 
   return (
-    <div className="group flex items-center gap-3 rounded px-2 py-2 hover:bg-black/5 dark:hover:bg-white/5">
-      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-black/10 text-xs font-medium text-gray-600 dark:bg-white/10 dark:text-gray-300">
+    <div className="group flex items-center gap-3 rounded px-2 py-2 transition-colors duration-150 ease-out hover:bg-black/[0.04] dark:hover:bg-white/[0.06]">
+      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-black/[0.06] text-xs font-medium text-gray-600 dark:bg-white/10 dark:text-gray-300">
         {member.username.slice(0, 2).toUpperCase()}
       </div>
       <div className="min-w-0 flex-1">
@@ -39,7 +39,7 @@ export default function MemberRow({
         <select
           value={member.role}
           onChange={(e) => onRoleChange(e.target.value as FolderRole)}
-          className="rounded border border-black/10 bg-gray-50 px-2 py-1 text-xs text-gray-900 outline-none focus:border-blue-500 dark:border-white/10 dark:bg-[#0d1117] dark:text-gray-100"
+          className="ui-field w-auto shrink-0 px-2 py-1 text-xs"
         >
           <option value="viewer">viewer</option>
           <option value="editor">editor</option>
@@ -51,7 +51,7 @@ export default function MemberRow({
       {editable && (
         <button
           onClick={onRemove}
-          className="hidden h-5 w-5 shrink-0 items-center justify-center rounded text-gray-500 hover:bg-red-500/10 hover:text-red-400 group-hover:flex"
+          className="ui-icon-btn ui-icon-btn-danger ui-reveal h-5 w-5"
           aria-label={`Remove ${member.username}`}
         >
           <TrashIcon className="h-3.5 w-3.5" />

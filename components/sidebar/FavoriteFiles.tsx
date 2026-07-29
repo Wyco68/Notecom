@@ -36,10 +36,10 @@ export default function FavoriteFiles({
             <button
               onClick={() => onSelect(ref)}
               title={`${entry.title} — ${entry.folder.replace(/-/g, " ")}`}
-              className={`flex min-w-0 flex-1 items-center gap-1.5 truncate rounded px-2 py-1 text-left text-sm ${
+              className={`ui-row flex min-w-0 flex-1 items-center gap-1.5 truncate px-2 py-1 text-left text-sm ${
                 isActive
                   ? "bg-blue-600/10 text-blue-700 dark:bg-blue-600/20 dark:text-blue-300"
-                  : "text-gray-700 hover:bg-black/5 dark:text-gray-300 dark:hover:bg-white/5"
+                  : "text-gray-700 dark:text-gray-300"
               }`}
             >
               {entry.kind === "quiz" && (
@@ -51,7 +51,7 @@ export default function FavoriteFiles({
               onClick={() => onToggle(ref, entry.title)}
               title="Remove from favorites"
               aria-label={`Remove ${entry.title} from favorites`}
-              className="mr-1 flex h-5 w-5 shrink-0 items-center justify-center rounded text-amber-500 hover:bg-black/5 dark:hover:bg-white/10"
+              className="ui-icon-btn mr-1 h-5 w-5 text-amber-500 hover:text-amber-500 dark:text-amber-500 dark:hover:text-amber-400"
             >
               <StarIcon className="h-3.5 w-3.5" filled />
             </button>

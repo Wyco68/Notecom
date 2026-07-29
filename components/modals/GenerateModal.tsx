@@ -147,11 +147,13 @@ export default function GenerateModal({
     <Modal title="Generate from file" onClose={running ? () => {} : onClose}>
       {phase === "form" ? (
         <>
-          <label className="mb-1 block text-xs text-gray-500 dark:text-gray-400">Subject</label>
+          <label className="mb-1.5 block text-xs font-medium text-gray-500 dark:text-gray-400">
+            Subject
+          </label>
           <select
             value={folder}
             onChange={(e) => setFolder(e.target.value)}
-            className="mb-3 w-full rounded border border-black/10 bg-gray-50 px-3 py-2 text-sm text-gray-900 outline-none focus:border-blue-500 dark:border-white/10 dark:bg-[#0d1117] dark:text-gray-100"
+            className="ui-field mb-4"
           >
             {folders.map((f) => (
               <option key={f.name} value={f.name}>
@@ -160,16 +162,18 @@ export default function GenerateModal({
             ))}
           </select>
 
-          <label className="mb-1 block text-xs text-gray-500 dark:text-gray-400">Type</label>
-          <div className="mb-3 flex gap-2">
+          <label className="mb-1.5 block text-xs font-medium text-gray-500 dark:text-gray-400">
+            Type
+          </label>
+          <div className="mb-4 flex gap-2">
             {(["lect", "quiz"] as const).map((k) => (
               <button
                 key={k}
                 onClick={() => setKind(k)}
-                className={`flex-1 rounded border px-3 py-2 text-sm ${
+                className={`ui-btn flex-1 border ${
                   kind === k
-                    ? "border-blue-500 bg-blue-600/10 text-blue-700 dark:bg-blue-600/20 dark:text-blue-300"
-                    : "border-black/10 text-gray-600 hover:bg-black/5 dark:border-white/10 dark:text-gray-400 dark:hover:bg-white/5"
+                    ? "border-blue-600/50 bg-blue-600/10 text-blue-700 dark:bg-blue-600/20 dark:text-blue-300"
+                    : "ui-btn-secondary font-normal"
                 }`}
               >
                 {k === "lect" ? "Lesson" : "Quiz"}
@@ -177,23 +181,23 @@ export default function GenerateModal({
             ))}
           </div>
 
-          <label className="mb-1 block text-xs text-gray-500 dark:text-gray-400">
+          <label className="mb-1.5 block text-xs font-medium text-gray-500 dark:text-gray-400">
             Lecture file (PDF, slides, image, markdown)
           </label>
           <input
             type="file"
             onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-            className="mb-4 w-full text-sm text-gray-600 file:mr-3 file:rounded file:border-0 file:bg-blue-600 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-white hover:file:bg-blue-500 dark:text-gray-400"
+            className="ui-focus mb-5 w-full rounded-md text-sm text-gray-600 file:mr-3 file:cursor-pointer file:rounded-md file:border-0 file:bg-blue-600 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-white file:transition-colors hover:file:bg-blue-500 dark:text-gray-400"
           />
 
           <button
             onClick={start}
             disabled={!file || !folder}
-            className="w-full rounded bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50"
+            className="ui-btn ui-btn-primary w-full"
           >
             Generate with Claude Code
           </button>
-          <p className="mt-2 text-xs leading-snug text-gray-500">
+          <p className="mt-2.5 text-xs leading-snug text-gray-500">
             Runs your local Claude Code CLI on your existing subscription —
             same as /{kind} in a terminal. Takes a few minutes.
           </p>
@@ -208,7 +212,7 @@ export default function GenerateModal({
           </div>
           <div
             ref={logRef}
-            className="mb-3 h-56 overflow-y-auto rounded border border-black/20 bg-[#0a0e14] p-2.5 font-mono text-xs leading-relaxed text-emerald-400 dark:border-white/10"
+            className="mb-3 h-56 overflow-y-auto rounded-md border border-black/10 bg-[#0a0e14] p-3 font-mono text-xs leading-relaxed text-emerald-400 dark:border-white/10"
           >
             {log.map((l, i) => (
               // Cap any single line so a stray verbose block can't turn the
@@ -240,7 +244,7 @@ export default function GenerateModal({
           ) : (
             <>
               {phase === "error" && (
-                <p className="mb-2 rounded border border-red-300 bg-red-50 px-3 py-2 text-xs text-red-700 dark:border-red-800/60 dark:bg-red-950/30 dark:text-red-300">
+                <p className="mb-3 rounded-md border border-red-500/30 bg-red-500/[0.06] px-3 py-2 text-xs leading-relaxed text-red-700 dark:text-red-300">
                   {needsAuth
                     ? "Claude Code isn't signed in — nothing was saved. Sign in, then generate again."
                     : "Generation failed — nothing was saved. See the log above for the reason; if it was a network or usage-limit error, just press Generate again."}
@@ -249,15 +253,12 @@ export default function GenerateModal({
               {needsAuth && (
                 <button
                   onClick={onSignIn}
-                  className="mb-2 w-full rounded bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-500"
+                  className="ui-btn ui-btn-primary mb-2 w-full"
                 >
                   Sign in to Claude Code
                 </button>
               )}
-              <button
-                onClick={onClose}
-                className="w-full rounded border border-black/10 px-3 py-2 text-sm text-gray-700 hover:bg-black/5 dark:border-white/10 dark:text-gray-300 dark:hover:bg-white/5"
-              >
+              <button onClick={onClose} className="ui-btn ui-btn-secondary w-full">
                 Close
               </button>
             </>

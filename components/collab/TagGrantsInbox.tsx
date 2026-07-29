@@ -63,7 +63,7 @@ export default function TagGrantsInbox({ onChanged }: { onChanged?: () => void }
         {grants.map((grant) => (
           <div
             key={grant.id}
-            className="rounded border border-black/10 bg-black/[0.02] p-2 dark:border-white/10 dark:bg-white/[0.03]"
+            className="rounded-md border border-black/10 bg-black/[0.02] p-2.5 dark:border-white/10 dark:bg-white/[0.03]"
           >
             <div className="mb-1.5 flex items-center gap-2">
               <TagChip label={grant.label || grant.slug} grantsJoin />
@@ -76,14 +76,14 @@ export default function TagGrantsInbox({ onChanged }: { onChanged?: () => void }
               <button
                 onClick={() => respond(grant, true)}
                 disabled={busy === grant.id}
-                className="flex-1 rounded bg-blue-600 px-2 py-1 text-xs font-medium text-white hover:bg-blue-500 disabled:opacity-50"
+                className="ui-btn ui-btn-xs ui-btn-primary flex-1"
               >
                 Accept
               </button>
               <button
                 onClick={() => respond(grant, false)}
                 disabled={busy === grant.id}
-                className="flex-1 rounded border border-black/10 px-2 py-1 text-xs text-gray-600 hover:bg-black/5 disabled:opacity-50 dark:border-white/10 dark:text-gray-300 dark:hover:bg-white/5"
+                className="ui-btn ui-btn-xs ui-btn-secondary flex-1"
               >
                 Decline
               </button>

@@ -33,10 +33,10 @@ export default function RecentFiles({
             key={`${entry.kind}:${entry.folder}:${entry.id}`}
             onClick={() => onSelect({ folder: entry.folder, id: entry.id, kind: entry.kind })}
             title={`${entry.title} — ${entry.folder.replace(/-/g, " ")}`}
-            className={`flex w-full items-center gap-1.5 truncate rounded px-2 py-1 text-left text-sm ${
+            className={`ui-row flex w-full items-center gap-1.5 truncate px-2 py-1 text-left text-sm ${
               isActive
                 ? "bg-blue-600/10 text-blue-700 dark:bg-blue-600/20 dark:text-blue-300"
-                : "text-gray-700 hover:bg-black/5 dark:text-gray-300 dark:hover:bg-white/5"
+                : "text-gray-700 dark:text-gray-300"
             }`}
           >
             {entry.kind === "quiz" && (

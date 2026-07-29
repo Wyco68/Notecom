@@ -7,6 +7,123 @@ body {
   height: 100%;
 }
 
+/* ── Shared control conventions ────────────────────────────────────────────
+   One look for every text input, select, textarea and button in the app.
+   These exist because the same control was being spelled eight slightly
+   different ways across auth, account, the folder console and the modals.
+   Documented in docs/ui-guidelines.md — extend there, not ad hoc. */
+@layer components {
+  /* Keyboard focus, always visible. Most controls were `outline-none` with
+     nothing put back; this is what replaces it. */
+  .ui-focus {
+    @apply outline-none focus-visible:ring-2 focus-visible:ring-blue-600/70 dark:focus-visible:ring-blue-500/70;
+  }
+
+  /* Text inputs, selects, textareas. */
+  .ui-field {
+    @apply w-full rounded-md border border-black/10 bg-white px-3 py-2 text-sm text-gray-900 outline-none transition-colors duration-150 ease-out;
+    @apply placeholder:text-gray-400 hover:border-black/20;
+    @apply focus-visible:border-blue-600 focus-visible:ring-2 focus-visible:ring-blue-600/25;
+    @apply disabled:cursor-not-allowed disabled:opacity-50;
+    @apply dark:border-white/10 dark:bg-white/[0.04] dark:text-gray-100 dark:placeholder:text-gray-500;
+    @apply dark:hover:border-white/20 dark:focus-visible:border-blue-500 dark:focus-visible:ring-blue-500/25;
+  }
+
+  /* A denser field for rows and inline controls. */
+  .ui-field-sm {
+    @apply px-2.5 py-1.5 text-sm;
+  }
+
+  .ui-btn {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium;
+    @apply transition-colors duration-150 ease-out outline-none;
+    @apply focus-visible:ring-2 focus-visible:ring-blue-600/70;
+    @apply disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  /* Inline button: the same shape at row height. */
+  .ui-btn-sm {
+    @apply px-3 py-1.5 text-sm;
+  }
+
+  /* Dense button: pagination, inbox actions, chips. */
+  .ui-btn-xs {
+    @apply gap-1 px-2.5 py-1 text-xs;
+  }
+
+  .ui-btn-primary {
+    @apply bg-blue-600 text-white hover:bg-blue-500 disabled:hover:bg-blue-600;
+  }
+
+  .ui-btn-secondary {
+    @apply border border-black/10 text-gray-700 hover:bg-black/[0.04];
+    @apply dark:border-white/10 dark:text-gray-300 dark:hover:bg-white/[0.06];
+  }
+
+  .ui-btn-ghost {
+    @apply text-gray-700 hover:bg-black/[0.04] dark:text-gray-300 dark:hover:bg-white/[0.06];
+  }
+
+  .ui-btn-danger {
+    @apply bg-red-600 text-white hover:bg-red-500 disabled:hover:bg-red-600;
+    @apply focus-visible:ring-red-600/70 dark:focus-visible:ring-red-500/70;
+  }
+
+  .ui-btn-danger-outline {
+    @apply border border-red-500/40 text-red-600 hover:bg-red-500/10 dark:text-red-400;
+    @apply focus-visible:ring-red-600/70 dark:focus-visible:ring-red-500/70;
+  }
+
+  /* Square icon-only control (sidebar chrome, row actions). */
+  .ui-icon-btn {
+    @apply inline-flex shrink-0 items-center justify-center rounded text-gray-500;
+    @apply transition-colors duration-150 ease-out outline-none;
+    @apply hover:bg-black/5 hover:text-gray-700 focus-visible:ring-2 focus-visible:ring-blue-600/70;
+    @apply disabled:cursor-not-allowed disabled:opacity-50;
+    @apply dark:text-gray-400 dark:hover:bg-white/10 dark:hover:text-gray-200;
+  }
+
+  .ui-icon-btn-danger {
+    @apply hover:bg-red-500/10 hover:text-red-500 dark:hover:bg-red-500/10 dark:hover:text-red-400;
+    @apply focus-visible:ring-red-600/70 dark:focus-visible:ring-red-500/70;
+  }
+
+  /* A row that tints on hover. Colour only — never size, never layout. */
+  .ui-row {
+    @apply rounded transition-colors duration-150 ease-out outline-none;
+    @apply hover:bg-black/[0.04] focus-visible:ring-2 focus-visible:ring-blue-600/70;
+    @apply dark:hover:bg-white/[0.06];
+  }
+
+  /* Hover-revealed row action. It stays in the layout at all times and only
+     fades, so revealing it can never resize a row or the fixed sidebar —
+     `hidden group-hover:flex` reflowed the row on every hover. */
+  .ui-reveal {
+    @apply pointer-events-none opacity-0;
+    @apply group-hover:pointer-events-auto group-hover:opacity-100;
+    @apply group-focus-within:pointer-events-auto group-focus-within:opacity-100;
+    /* Spelled out rather than `transition-opacity` so it composes with
+       .ui-icon-btn's colour transition instead of overriding it. */
+    transition-property: opacity, color, background-color, border-color;
+    transition-duration: 150ms;
+    transition-timing-function: cubic-bezier(0, 0, 0.2, 1);
+  }
+}
+
+/* One rule for the whole app: someone who asked their OS for less motion gets
+   the same interface without the transitions and animations. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    transition-delay: 0ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 /* Custom scrollbars (horizontal + vertical), app-wide. Colors swap with the
    `dark` class on <html> — see components/theme/ThemeProvider.tsx. Scrollbar
    pseudo-elements aren't real DOM nodes, so this can't use Tailwind's

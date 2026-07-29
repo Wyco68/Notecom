@@ -182,7 +182,7 @@ export default function ManageFolderPage({
         </p>
         <a
           href={`/auth/sign-in?next=/vault/${encodeURIComponent(slug)}/manage`}
-          className="inline-block rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500"
+          className="ui-btn ui-btn-primary px-4"
         >
           Sign in
         </a>
@@ -193,8 +193,11 @@ export default function ManageFolderPage({
   if (error || !detail) {
     return (
       <main className="mx-auto max-w-2xl px-6 py-16 text-center">
-        <p className="text-sm text-red-400">{error ?? "Folder not found."}</p>
-        <a href="/vault" className="mt-4 inline-block text-sm text-blue-500 hover:text-blue-400">
+        <p className="text-sm text-red-600 dark:text-red-400">{error ?? "Folder not found."}</p>
+        <a
+          href="/vault"
+          className="ui-focus mt-4 inline-block rounded text-sm text-blue-600 transition-colors duration-150 ease-out hover:text-blue-500 dark:text-blue-400"
+        >
           Back to vault
         </a>
       </main>
@@ -202,21 +205,26 @@ export default function ManageFolderPage({
   }
 
   return (
-    <main className="mx-auto max-w-3xl px-6 py-10">
+    <main className="mx-auto max-w-3xl px-6 py-10 sm:py-12">
       <div className="mb-8 flex items-baseline justify-between gap-4">
-        <div>
-          <h1 className="text-lg font-semibold text-gray-900 dark:text-gray-100">{detail.name}</h1>
-          <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+        <div className="min-w-0">
+          <h1 className="truncate text-xl font-semibold tracking-tight text-gray-900 dark:text-gray-100">
+            {detail.name}
+          </h1>
+          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
             owned by {detail.ownerUsername} · {detail.documentCount} notes
           </p>
         </div>
-        <a href="/vault" className="text-sm text-blue-500 hover:text-blue-400">
+        <a
+          href="/vault"
+          className="ui-focus shrink-0 rounded text-sm text-blue-600 transition-colors duration-150 ease-out hover:text-blue-500 dark:text-blue-400"
+        >
           Back to vault
         </a>
       </div>
 
       {!canManage && (
-        <p className="mb-8 rounded border border-black/10 bg-black/[0.02] px-3 py-2 text-xs text-gray-500 dark:border-white/10 dark:bg-white/[0.03] dark:text-gray-400">
+        <p className="mb-6 rounded-md border border-black/10 bg-black/[0.02] px-3 py-2.5 text-xs leading-relaxed text-gray-500 dark:border-white/10 dark:bg-white/[0.03] dark:text-gray-400">
           You are a {detail.myRole ?? "guest"} in this folder. Only the owner can change its
           settings.
         </p>
@@ -235,7 +243,7 @@ export default function ManageFolderPage({
               }
             />
             <div>
-              <label className="mb-1 block text-xs text-gray-500 dark:text-gray-400">
+              <label className="mb-1.5 block text-xs font-medium text-gray-500 dark:text-gray-400">
                 Description
               </label>
               <textarea
@@ -244,7 +252,7 @@ export default function ManageFolderPage({
                 disabled={busy}
                 onChange={(e) => setDraft({ ...draft, description: e.target.value })}
                 placeholder="What is in this folder?"
-                className="w-full rounded border border-black/10 bg-gray-50 px-3 py-2 text-sm text-gray-900 outline-none focus:border-blue-500 dark:border-white/10 dark:bg-[#0d1117] dark:text-gray-100"
+                className="ui-field resize-y"
               />
             </div>
             <div className="flex items-center gap-2">
@@ -263,7 +271,7 @@ export default function ManageFolderPage({
                     "Changes saved"
                   )
                 }
-                className="rounded bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50"
+                className="ui-btn ui-btn-sm ui-btn-primary"
               >
                 Save changes
               </button>
@@ -275,7 +283,7 @@ export default function ManageFolderPage({
                     description: detail.description ?? "",
                   })
                 }
-                className="rounded border border-black/10 px-3 py-1.5 text-sm text-gray-600 hover:bg-black/5 disabled:opacity-50 dark:border-white/10 dark:text-gray-300 dark:hover:bg-white/5"
+                className="ui-btn ui-btn-sm ui-btn-secondary"
               >
                 Discard
               </button>
@@ -295,7 +303,7 @@ export default function ManageFolderPage({
             setMemberOffset(0);
           }}
           placeholder="Search members by username"
-          className="mb-3 w-full rounded border border-black/10 bg-gray-50 px-3 py-1.5 text-sm text-gray-900 outline-none focus:border-blue-500 dark:border-white/10 dark:bg-[#0d1117] dark:text-gray-100"
+          className="ui-field ui-field-sm mb-3"
         />
         {members.length === 0 ? (
           <Empty>{memberQuery.trim() ? "Nobody matches." : "No members yet."}</Empty>
@@ -324,7 +332,7 @@ export default function ManageFolderPage({
             <button
               disabled={memberOffset === 0}
               onClick={() => setMemberOffset(Math.max(0, memberOffset - PAGE))}
-              className="rounded border border-black/10 px-2 py-1 hover:bg-black/5 disabled:opacity-40 dark:border-white/10 dark:hover:bg-white/5"
+              className="ui-btn ui-btn-xs ui-btn-secondary font-normal"
             >
               Previous
             </button>
@@ -334,7 +342,7 @@ export default function ManageFolderPage({
             <button
               disabled={memberOffset + PAGE >= memberTotal}
               onClick={() => setMemberOffset(memberOffset + PAGE)}
-              className="rounded border border-black/10 px-2 py-1 hover:bg-black/5 disabled:opacity-40 dark:border-white/10 dark:hover:bg-white/5"
+              className="ui-btn ui-btn-xs ui-btn-secondary font-normal"
             >
               Next
             </button>
@@ -344,7 +352,7 @@ export default function ManageFolderPage({
 
       {canManage && (
         <Section title="Invite someone">
-          <p className="mb-3 text-xs text-gray-500 dark:text-gray-400">
+          <p className="mb-4 max-w-prose text-xs leading-relaxed text-gray-500 dark:text-gray-400">
             You can invite people who follow you. That is what stops unsolicited
             invitations, so someone who has not followed you will not appear here.
           </p>
@@ -352,7 +360,7 @@ export default function ManageFolderPage({
             value={followerQuery}
             onChange={(e) => setFollowerQuery(e.target.value)}
             placeholder="Search your followers"
-            className="mb-2 w-full rounded border border-black/10 bg-gray-50 px-3 py-1.5 text-sm text-gray-900 outline-none focus:border-blue-500 dark:border-white/10 dark:bg-[#0d1117] dark:text-gray-100"
+            className="ui-field ui-field-sm mb-2"
           />
           {followers.length === 0 ? (
             <Empty>
@@ -365,7 +373,7 @@ export default function ManageFolderPage({
             <select
               value={inviteName}
               onChange={(e) => setInviteName(e.target.value)}
-              className="min-w-0 flex-1 rounded border border-black/10 bg-gray-50 px-3 py-1.5 text-sm text-gray-900 outline-none focus:border-blue-500 dark:border-white/10 dark:bg-[#0d1117] dark:text-gray-100"
+              className="ui-field ui-field-sm min-w-0 flex-1"
             >
               <option value="">Choose a follower...</option>
               {followers
@@ -379,7 +387,7 @@ export default function ManageFolderPage({
             <select
               value={inviteRole}
               onChange={(e) => setInviteRole(e.target.value as FolderRole)}
-              className="rounded border border-black/10 bg-gray-50 px-2 text-sm text-gray-900 outline-none focus:border-blue-500 dark:border-white/10 dark:bg-[#0d1117] dark:text-gray-100"
+              className="ui-field ui-field-sm w-auto shrink-0 px-2"
             >
               <option value="viewer">viewer</option>
               <option value="editor">editor</option>
@@ -397,7 +405,7 @@ export default function ManageFolderPage({
                 );
                 if (ok) setInviteName("");
               }}
-              className="rounded bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50"
+              className="ui-btn ui-btn-sm ui-btn-primary shrink-0"
             >
               Invite
             </button>
@@ -420,7 +428,7 @@ export default function ManageFolderPage({
               {requests.map((r) => (
                 <div
                   key={r.id}
-                  className="flex items-center gap-3 rounded border border-black/10 px-3 py-2 dark:border-white/10"
+                  className="flex items-center gap-3 rounded-md border border-black/10 px-3 py-2.5 dark:border-white/10"
                 >
                   <div className="min-w-0 flex-1">
                     <div className="text-sm text-gray-900 dark:text-gray-100">{r.username}</div>
@@ -442,7 +450,7 @@ export default function ManageFolderPage({
                         `${r.username} added`
                       )
                     }
-                    className="rounded bg-blue-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-blue-500 disabled:opacity-50"
+                    className="ui-btn ui-btn-xs ui-btn-primary shrink-0"
                   >
                     Approve
                   </button>
@@ -458,7 +466,7 @@ export default function ManageFolderPage({
                         "Request rejected"
                       )
                     }
-                    className="rounded border border-black/10 px-2.5 py-1 text-xs text-gray-600 hover:bg-black/5 disabled:opacity-50 dark:border-white/10 dark:text-gray-300 dark:hover:bg-white/5"
+                    className="ui-btn ui-btn-xs ui-btn-secondary shrink-0"
                   >
                     Reject
                   </button>
@@ -495,7 +503,7 @@ export default function ManageFolderPage({
         )}
 
         {canManage && (
-          <p className="mb-3 text-xs text-gray-500 dark:text-gray-400">
+          <p className="mb-4 max-w-prose text-xs leading-relaxed text-gray-500 dark:text-gray-400">
             A tag marked <span className="text-emerald-600 dark:text-emerald-300">allows joining</span>{" "}
             opens this folder to everyone carrying the same tag, as a viewer, with no
             request to approve. Remove the tag to close it again.
@@ -508,13 +516,14 @@ export default function ManageFolderPage({
               value={tagLabel}
               onChange={(e) => setTagLabel(e.target.value)}
               placeholder="e.g. algorithms"
-              className="min-w-0 flex-1 rounded border border-black/10 bg-gray-50 px-3 py-1.5 text-sm text-gray-900 outline-none focus:border-blue-500 dark:border-white/10 dark:bg-[#0d1117] dark:text-gray-100"
+              className="ui-field ui-field-sm min-w-0 flex-1"
             />
-            <label className="flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-300">
+            <label className="flex shrink-0 cursor-pointer items-center gap-1.5 text-xs text-gray-600 dark:text-gray-300">
               <input
                 type="checkbox"
                 checked={tagGrantsJoin}
                 onChange={(e) => setTagGrantsJoin(e.target.checked)}
+                className="ui-focus h-4 w-4 rounded accent-blue-600"
               />
               allows joining
             </label>
@@ -534,7 +543,7 @@ export default function ManageFolderPage({
                   setTagGrantsJoin(false);
                 }
               }}
-              className="rounded bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50"
+              className="ui-btn ui-btn-sm ui-btn-primary shrink-0"
             >
               Add
             </button>
@@ -543,12 +552,12 @@ export default function ManageFolderPage({
       </Section>
 
       {canManage && (
-        <Section title="Danger zone">
-          <div className="rounded border border-red-500/30 p-3">
-            <p className="mb-2 text-sm font-medium text-gray-900 dark:text-gray-100">
+        <Section title="Danger zone" tone="danger">
+          <div>
+            <p className="mb-1 text-sm font-medium text-gray-900 dark:text-gray-100">
               Transfer ownership
             </p>
-            <p className="mb-2 text-xs text-gray-500 dark:text-gray-400">
+            <p className="mb-3 max-w-prose text-xs leading-relaxed text-gray-500 dark:text-gray-400">
               The new owner must already be a member. You stay in the folder as an editor.
             </p>
             {transferable.length === 0 ? (
@@ -558,7 +567,7 @@ export default function ManageFolderPage({
                 <select
                   value={transferTo}
                   onChange={(e) => setTransferTo(e.target.value)}
-                  className="min-w-0 flex-1 rounded border border-black/10 bg-gray-50 px-3 py-1.5 text-sm text-gray-900 outline-none focus:border-blue-500 dark:border-white/10 dark:bg-[#0d1117] dark:text-gray-100"
+                  className="ui-field ui-field-sm min-w-0 flex-1"
                 >
                   <option value="">Choose a member...</option>
                   {transferable.map((m) => (
@@ -570,24 +579,24 @@ export default function ManageFolderPage({
                 <button
                   disabled={busy || !transferTo}
                   onClick={() => setConfirming({ kind: "transfer" })}
-                  className="rounded border border-red-500/40 px-3 py-1.5 text-sm font-medium text-red-600 hover:bg-red-500/10 disabled:opacity-50 dark:text-red-400"
+                  className="ui-btn ui-btn-sm ui-btn-danger-outline shrink-0"
                 >
                   Transfer
                 </button>
               </div>
             )}
 
-            <p className="mb-2 text-sm font-medium text-gray-900 dark:text-gray-100">
+            <p className="mb-1 mt-6 border-t border-red-500/20 pt-6 text-sm font-medium text-gray-900 dark:text-gray-100">
               Delete folder
             </p>
-            <p className="mb-2 text-xs text-gray-500 dark:text-gray-400">
+            <p className="mb-3 max-w-prose text-xs leading-relaxed text-gray-500 dark:text-gray-400">
               Removes the folder and every file in it, on this device and everywhere it
               has synced.
             </p>
             <button
               disabled={busy}
               onClick={() => setConfirming({ kind: "delete" })}
-              className="rounded bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-500 disabled:opacity-50"
+              className="ui-btn ui-btn-sm ui-btn-danger"
             >
               Delete folder
             </button>
@@ -665,10 +674,35 @@ export default function ManageFolderPage({
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+/**
+ * One panel of the console. Cards rather than a single long form: the console
+ * is six unrelated concerns stacked, and the borders are what stop it reading
+ * as one dense sheet. `tone="danger"` only changes the border colour.
+ */
+function Section({
+  title,
+  tone = "default",
+  children,
+}: {
+  title: string;
+  tone?: "default" | "danger";
+  children: React.ReactNode;
+}) {
   return (
-    <section className="mb-8">
-      <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+    <section
+      className={`mb-4 rounded-lg border p-5 ${
+        tone === "danger"
+          ? "border-red-500/30 bg-red-500/[0.02]"
+          : "border-black/10 bg-black/[0.01] dark:border-white/10 dark:bg-white/[0.02]"
+      }`}
+    >
+      <h2
+        className={`mb-4 text-xs font-semibold uppercase tracking-wide ${
+          tone === "danger"
+            ? "text-red-600 dark:text-red-400"
+            : "text-gray-500 dark:text-gray-400"
+        }`}
+      >
         {title}
       </h2>
       {children}
@@ -694,17 +728,19 @@ function Toggle({
   onChange: (v: boolean) => void;
 }) {
   return (
-    <label className="flex items-start gap-2.5">
+    <label className="flex cursor-pointer items-start gap-2.5">
       <input
         type="checkbox"
         checked={checked}
         disabled={disabled}
         onChange={(e) => onChange(e.target.checked)}
-        className="mt-0.5"
+        className="ui-focus mt-0.5 h-4 w-4 shrink-0 rounded accent-blue-600"
       />
       <span>
-        <span className="block text-sm text-gray-900 dark:text-gray-100">{label}</span>
-        <span className="block text-xs text-gray-500 dark:text-gray-400">{hint}</span>
+        <span className="block text-sm font-medium text-gray-900 dark:text-gray-100">{label}</span>
+        <span className="mt-0.5 block max-w-prose text-xs leading-relaxed text-gray-500 dark:text-gray-400">
+          {hint}
+        </span>
       </span>
     </label>
   );

@@ -51,8 +51,10 @@ function SignUpForm() {
 
   return (
     <main className="mx-auto flex min-h-screen max-w-sm flex-col justify-center px-6">
-      <h1 className="mb-1 text-lg font-semibold text-gray-900 dark:text-gray-100">Create account</h1>
-      <p className="mb-6 text-sm text-gray-500 dark:text-gray-400">
+      <h1 className="mb-1.5 text-xl font-semibold tracking-tight text-gray-900 dark:text-gray-100">
+        Create account
+      </h1>
+      <p className="mb-8 text-sm text-gray-500 dark:text-gray-400">
         To share folders and join other people&apos;s.
       </p>
 
@@ -65,7 +67,7 @@ function SignUpForm() {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="you@example.com"
-            className="mb-3 w-full rounded border border-black/10 bg-gray-50 px-3 py-2 text-sm text-gray-900 outline-none focus:border-blue-500 dark:border-white/10 dark:bg-[#0d1117] dark:text-gray-100"
+            className="ui-field mb-3"
           />
           <input
             type="password"
@@ -74,19 +76,19 @@ function SignUpForm() {
             onChange={(e) => setPassword(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && submitForm()}
             placeholder="Password (8+ characters)"
-            className="mb-3 w-full rounded border border-black/10 bg-gray-50 px-3 py-2 text-sm text-gray-900 outline-none focus:border-blue-500 dark:border-white/10 dark:bg-[#0d1117] dark:text-gray-100"
+            className="ui-field mb-3"
           />
-          {error && <p className="mb-3 text-xs text-red-400">{error}</p>}
+          {error && <p className="mb-3 text-xs text-red-600 dark:text-red-400">{error}</p>}
           <button
             onClick={submitForm}
             disabled={busy || !email.trim() || password.length < 8}
-            className="w-full rounded bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50"
+            className="ui-btn ui-btn-primary w-full"
           >
             {busy ? "Creating..." : "Create account"}
           </button>
           <a
             href={`/auth/sign-in?next=${encodeURIComponent(next)}`}
-            className="mt-4 text-center text-sm text-blue-500 hover:text-blue-400"
+            className="ui-focus mt-5 rounded text-center text-sm text-blue-600 transition-colors duration-150 ease-out hover:text-blue-500 dark:text-blue-400"
           >
             Already have an account? Sign in
           </a>
@@ -104,20 +106,23 @@ function SignUpForm() {
             onChange={(e) => setCode(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && submitCode()}
             placeholder="12345678"
-            className="mb-3 w-full rounded border border-black/10 bg-gray-50 px-3 py-2 text-center font-mono text-lg tracking-widest text-gray-900 outline-none focus:border-blue-500 dark:border-white/10 dark:bg-[#0d1117] dark:text-gray-100"
+            className="ui-field mb-3 text-center font-mono text-lg tracking-[0.3em]"
           />
-          {error && <p className="mb-3 text-xs text-red-400">{error}</p>}
+          {error && <p className="mb-3 text-xs text-red-600 dark:text-red-400">{error}</p>}
           <button
             onClick={submitCode}
             disabled={busy || !code.trim()}
-            className="w-full rounded bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50"
+            className="ui-btn ui-btn-primary w-full"
           >
             {busy ? "Verifying..." : "Confirm and continue"}
           </button>
         </>
       )}
 
-      <a href="/vault" className="mt-6 text-center text-sm text-gray-500 hover:text-gray-400">
+      <a
+        href="/vault"
+        className="ui-focus mt-8 rounded text-center text-sm text-gray-500 transition-colors duration-150 ease-out hover:text-gray-700 dark:hover:text-gray-300"
+      >
         Back to vault
       </a>
     </main>

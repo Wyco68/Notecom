@@ -37,20 +37,22 @@ export default function NewFolderModal({
 
   return (
     <Modal title="New Folder" onClose={onClose}>
-      <label className="mb-1 block text-xs text-gray-500 dark:text-gray-400">Folder Name</label>
+      <label className="mb-1.5 block text-xs font-medium text-gray-500 dark:text-gray-400">
+        Folder name
+      </label>
       <input
         autoFocus
         value={name}
         onChange={(e) => setName(e.target.value)}
         onKeyDown={(e) => e.key === "Enter" && create()}
-        className="mb-3 w-full rounded border border-black/10 bg-gray-50 px-3 py-2 text-sm text-gray-900 outline-none focus:border-blue-500 dark:border-white/10 dark:bg-[#0d1117] dark:text-gray-100"
+        className="ui-field mb-3"
         placeholder="e.g. Wireless Network"
       />
-      {error && <p className="mb-3 text-xs text-red-400">{error}</p>}
+      {error && <p className="mb-3 text-xs text-red-600 dark:text-red-400">{error}</p>}
       <button
         onClick={create}
         disabled={busy || !name.trim()}
-        className="w-full rounded bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50"
+        className="ui-btn ui-btn-primary w-full"
       >
         {busy ? "Creating..." : "Create"}
       </button>

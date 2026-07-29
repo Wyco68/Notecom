@@ -58,22 +58,16 @@ export default function AccountControl() {
           <a
             href="/account"
             title="Account settings"
-            className="min-w-0 truncate text-gray-600 hover:text-blue-600 dark:text-gray-300 dark:hover:text-blue-400"
+            className="ui-focus min-w-0 truncate rounded text-gray-600 transition-colors duration-150 ease-out hover:text-blue-600 dark:text-gray-300 dark:hover:text-blue-400"
           >
             <span className="text-gray-400">signed in as </span>
             {username}
           </a>
-          <div className="flex shrink-0 items-center gap-1">
-            <a
-              href="/account"
-              className="rounded px-1.5 py-0.5 text-gray-500 hover:bg-black/5 hover:text-gray-700 dark:hover:bg-white/10 dark:hover:text-gray-200"
-            >
+          <div className="flex shrink-0 items-center gap-0.5">
+            <a href="/account" className="ui-btn ui-btn-xs ui-btn-ghost font-normal">
               Settings
             </a>
-            <button
-              onClick={signOut}
-              className="rounded px-1.5 py-0.5 text-gray-500 hover:bg-black/5 hover:text-gray-700 dark:hover:bg-white/10 dark:hover:text-gray-200"
-            >
+            <button onClick={signOut} className="ui-btn ui-btn-xs ui-btn-ghost font-normal">
               Sign out
             </button>
           </div>
@@ -81,7 +75,7 @@ export default function AccountControl() {
       ) : (
         <a
           href="/auth/sign-in"
-          className="text-blue-600 hover:text-blue-500 dark:text-blue-400"
+          className="ui-focus rounded text-blue-600 transition-colors duration-150 ease-out hover:text-blue-500 dark:text-blue-400"
         >
           Sign in to share folders
         </a>

@@ -55,10 +55,10 @@ function ResetForm() {
 
   return (
     <main className="mx-auto flex min-h-screen max-w-sm flex-col justify-center px-6">
-      <h1 className="mb-1 text-lg font-semibold text-gray-900 dark:text-gray-100">
+      <h1 className="mb-1.5 text-xl font-semibold tracking-tight text-gray-900 dark:text-gray-100">
         {openedFromLink ? "Choose a new password" : "Set a password"}
       </h1>
-      <p className="mb-6 text-sm text-gray-500 dark:text-gray-400">
+      <p className="mb-8 text-sm text-gray-500 dark:text-gray-400">
         {openedFromLink
           ? "This finishes the reset — you'll be signed in with it."
           : "We'll email you a link to confirm it's you."}
@@ -74,19 +74,19 @@ function ResetForm() {
             onChange={(e) => setPassword(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && submitPassword()}
             placeholder="New password (8+ characters)"
-            className="mb-3 w-full rounded border border-black/10 bg-gray-50 px-3 py-2 text-sm text-gray-900 outline-none focus:border-blue-500 dark:border-white/10 dark:bg-[#0d1117] dark:text-gray-100"
+            className="ui-field mb-3"
           />
-          {error && <p className="mb-3 text-xs text-red-400">{error}</p>}
+          {error && <p className="mb-3 text-xs text-red-600 dark:text-red-400">{error}</p>}
           <button
             onClick={submitPassword}
             disabled={busy || password.length < 8}
-            className="w-full rounded bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50"
+            className="ui-btn ui-btn-primary w-full"
           >
             {busy ? "Saving..." : "Set password and continue"}
           </button>
         </>
       ) : sent ? (
-        <p className="text-sm text-gray-500 dark:text-gray-400">
+        <p className="rounded-md border border-black/10 bg-black/[0.02] px-3 py-2.5 text-sm leading-relaxed text-gray-600 dark:border-white/10 dark:bg-white/[0.03] dark:text-gray-400">
           If {email} has an account, a reset link is on its way. Open it in this
           browser and you&apos;ll come straight back here to choose a new
           password. The link expires in an hour.
@@ -101,13 +101,13 @@ function ResetForm() {
             onChange={(e) => setEmail(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && sendLink()}
             placeholder="you@example.com"
-            className="mb-3 w-full rounded border border-black/10 bg-gray-50 px-3 py-2 text-sm text-gray-900 outline-none focus:border-blue-500 dark:border-white/10 dark:bg-[#0d1117] dark:text-gray-100"
+            className="ui-field mb-3"
           />
-          {error && <p className="mb-3 text-xs text-red-400">{error}</p>}
+          {error && <p className="mb-3 text-xs text-red-600 dark:text-red-400">{error}</p>}
           <button
             onClick={sendLink}
             disabled={busy || !email.trim()}
-            className="w-full rounded bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50"
+            className="ui-btn ui-btn-primary w-full"
           >
             {busy ? "Sending..." : "Email me a reset link"}
           </button>
@@ -116,7 +116,7 @@ function ResetForm() {
 
       <a
         href={`/auth/sign-in?next=${encodeURIComponent(next)}`}
-        className="mt-6 text-center text-sm text-gray-500 hover:text-gray-400"
+        className="ui-focus mt-8 rounded text-center text-sm text-gray-500 transition-colors duration-150 ease-out hover:text-gray-700 dark:hover:text-gray-300"
       >
         Back to sign in
       </a>

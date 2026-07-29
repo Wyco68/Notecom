@@ -99,12 +99,17 @@ export default function FileTreeNode({
 
   return (
     <div className="mb-1">
+      {/* The action icons stay in the layout and only fade in on hover: the
+          sidebar is a fixed width and these rows wrap, so anything that
+          appears or disappears would reflow the row under the cursor. */}
       <div className="group flex items-center">
         <button
           onClick={() => setOpen((o) => !o)}
-          className="flex min-w-0 flex-1 items-start gap-1.5 rounded px-2 py-1.5 text-left text-sm text-gray-800 hover:bg-black/5 dark:text-gray-200 dark:hover:bg-white/5"
+          className="ui-row flex min-w-0 flex-1 items-start gap-1.5 px-2 py-1.5 text-left text-sm text-gray-800 dark:text-gray-200"
         >
-          <span className="text-gray-500">{open ? "▾" : "▸"}</span>
+          <span className="text-gray-500 transition-colors duration-150 ease-out">
+            {open ? "▾" : "▸"}
+          </span>
           {/* Wraps rather than truncates: a folder name is how you find the
               folder, and the sidebar never scrolls sideways. */}
           <span className="break-words font-medium">{folder.name.replace(/-/g, " ")}</span>
@@ -114,7 +119,7 @@ export default function FileTreeNode({
             href={`/vault/${encodeURIComponent(folder.name)}/manage`}
             title="Manage sharing"
             onClick={(e) => e.stopPropagation()}
-            className="mr-1 hidden h-5 w-5 shrink-0 items-center justify-center rounded text-gray-500 hover:bg-black/5 hover:text-gray-700 group-hover:flex dark:hover:bg-white/10 dark:hover:text-gray-200"
+            className="ui-icon-btn ui-reveal mr-1 h-5 w-5"
           >
             <ShareIcon className="h-3.5 w-3.5" />
           </a>
@@ -125,7 +130,7 @@ export default function FileTreeNode({
             setPending({ kind: "folder" });
           }}
           title="Delete folder"
-          className="mr-1 hidden h-5 w-5 shrink-0 items-center justify-center rounded text-gray-500 hover:bg-red-500/10 hover:text-red-400 group-hover:flex"
+          className="ui-icon-btn ui-icon-btn-danger ui-reveal mr-1 h-5 w-5"
         >
           <TrashIcon className="h-3.5 w-3.5" />
         </button>
@@ -145,10 +150,10 @@ export default function FileTreeNode({
               <div key={lesson.id} className="group flex items-center">
                 <button
                   onClick={() => onSelect({ folder: folder.name, id: lesson.id, kind: "lesson" })}
-                  className={`flex min-w-0 flex-1 items-start gap-1.5 rounded px-2 py-1 text-left text-sm ${
+                  className={`ui-row flex min-w-0 flex-1 items-start gap-1.5 px-2 py-1 text-left text-sm ${
                     isActive
                       ? "bg-blue-600/10 text-blue-700 dark:bg-blue-600/20 dark:text-blue-300"
-                      : "text-gray-700 hover:bg-black/5 dark:text-gray-300 dark:hover:bg-white/5"
+                      : "text-gray-700 dark:text-gray-300"
                   }`}
                   title={lesson.title}
                 >
@@ -168,10 +173,10 @@ export default function FileTreeNode({
                       ? "Remove from favorites"
                       : "Add to favorites"
                   }
-                  className={`mr-1 h-5 w-5 shrink-0 items-center justify-center rounded hover:bg-black/5 dark:hover:bg-white/10 ${
+                  className={`ui-icon-btn mr-1 h-5 w-5 ${
                     favorites.has(`lesson:${folder.name}:${lesson.id}`)
-                      ? "flex text-amber-500"
-                      : "hidden text-gray-500 group-hover:flex"
+                      ? "text-amber-500 hover:text-amber-500 dark:text-amber-500 dark:hover:text-amber-400"
+                      : "ui-reveal"
                   }`}
                 >
                   <StarIcon
@@ -185,7 +190,7 @@ export default function FileTreeNode({
                     setPending({ kind: "lesson", id: lesson.id, title: lesson.title });
                   }}
                   title="Delete lesson"
-                  className="mr-1 hidden h-5 w-5 shrink-0 items-center justify-center rounded text-gray-500 hover:bg-red-500/10 hover:text-red-400 group-hover:flex"
+                  className="ui-icon-btn ui-icon-btn-danger ui-reveal mr-1 h-5 w-5"
                 >
                   <TrashIcon className="h-3.5 w-3.5" />
                 </button>
@@ -207,10 +212,10 @@ export default function FileTreeNode({
               <div key={quiz.id} className="group flex items-center">
                 <button
                   onClick={() => onSelect({ folder: folder.name, id: quiz.id, kind: "quiz" })}
-                  className={`flex min-w-0 flex-1 items-start gap-1.5 rounded px-2 py-1 text-left text-sm ${
+                  className={`ui-row flex min-w-0 flex-1 items-start gap-1.5 px-2 py-1 text-left text-sm ${
                     isActive
                       ? "bg-blue-600/10 text-blue-700 dark:bg-blue-600/20 dark:text-blue-300"
-                      : "text-gray-700 hover:bg-black/5 dark:text-gray-300 dark:hover:bg-white/5"
+                      : "text-gray-700 dark:text-gray-300"
                   }`}
                   title={quiz.title}
                 >
@@ -231,10 +236,10 @@ export default function FileTreeNode({
                       ? "Remove from favorites"
                       : "Add to favorites"
                   }
-                  className={`mr-1 h-5 w-5 shrink-0 items-center justify-center rounded hover:bg-black/5 dark:hover:bg-white/10 ${
+                  className={`ui-icon-btn mr-1 h-5 w-5 ${
                     favorites.has(`quiz:${folder.name}:${quiz.id}`)
-                      ? "flex text-amber-500"
-                      : "hidden text-gray-500 group-hover:flex"
+                      ? "text-amber-500 hover:text-amber-500 dark:text-amber-500 dark:hover:text-amber-400"
+                      : "ui-reveal"
                   }`}
                 >
                   <StarIcon
@@ -248,7 +253,7 @@ export default function FileTreeNode({
                     setPending({ kind: "quiz", id: quiz.id, title: quiz.title });
                   }}
                   title="Delete quiz"
-                  className="mr-1 hidden h-5 w-5 shrink-0 items-center justify-center rounded text-gray-500 hover:bg-red-500/10 hover:text-red-400 group-hover:flex"
+                  className="ui-icon-btn ui-icon-btn-danger ui-reveal mr-1 h-5 w-5"
                 >
                   <TrashIcon className="h-3.5 w-3.5" />
                 </button>

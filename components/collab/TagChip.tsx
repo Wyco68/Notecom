@@ -24,8 +24,8 @@ export default function TagChip({
   return (
     <span
       onClick={onClick}
-      className={`group inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs ${tone} ${
-        onClick ? "cursor-pointer hover:border-blue-500/50" : ""
+      className={`group inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs transition-colors duration-150 ease-out ${tone} ${
+        onClick ? "cursor-pointer hover:border-blue-600/50" : ""
       }`}
     >
       {label}
@@ -35,7 +35,7 @@ export default function TagChip({
             e.stopPropagation();
             onRemove();
           }}
-          className="hidden text-gray-400 hover:text-red-400 group-hover:inline"
+          className="ui-reveal ui-focus rounded-full leading-none text-gray-400 hover:text-red-500 dark:hover:text-red-400"
           aria-label={`Remove ${label}`}
         >
           ×

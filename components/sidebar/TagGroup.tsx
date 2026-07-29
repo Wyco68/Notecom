@@ -51,13 +51,13 @@ export default function TagGroup({
       <button
         onClick={toggle}
         aria-expanded={open}
-        className="flex w-full items-center gap-1.5 rounded px-2 py-1 text-left hover:bg-black/5 dark:hover:bg-white/5"
+        className="ui-row flex w-full items-center gap-1.5 px-2 py-1 text-left"
       >
         <span className="text-[10px] text-gray-400">{open ? "▾" : "▸"}</span>
         <span className="truncate text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-500">
           {tag}
         </span>
-        <span className="ml-auto shrink-0 text-[10px] text-gray-400">{count}</span>
+        <span className="ml-auto shrink-0 tabular-nums text-[10px] text-gray-400">{count}</span>
       </button>
       {open && <div className="ml-1.5 border-l border-black/10 pl-1 dark:border-white/10">{children}</div>}
     </div>

@@ -39,10 +39,10 @@ export default function AppShell() {
   const [showNewFolder, setShowNewFolder] = useState(false);
   const [showGenerate, setShowGenerate] = useState(false);
   const [showSignIn, setShowSignIn] = useState(false);
+  const [showChat, setShowChat] = useState(false);
   // undefined until the first status check answers — avoids flashing a
   // "signed out" warning during the initial load.
   const [signedIn, setSignedIn] = useState<boolean | undefined>(undefined);
-  const [showChat, setShowChat] = useState(false);
   // Hideable at every width: an off-canvas drawer below `lg`, a static column
   // from `lg` up. Starts closed and opens on wide screens after mount, since
   // the viewport isn't known during the server render.
@@ -200,14 +200,14 @@ export default function AppShell() {
         }`}
       >
         <div className="flex items-center justify-between border-b border-black/10 px-3 py-3 dark:border-white/10">
-          <span className="text-sm font-semibold text-gray-900 dark:text-gray-200">
+          <span className="text-sm font-semibold tracking-tight text-gray-900 dark:text-gray-200">
             Notecom
           </span>
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-0.5">
             <button
               onClick={() => setSidebarOpen(false)}
               title="Hide sidebar"
-              className="flex h-7 w-7 items-center justify-center rounded text-gray-500 hover:bg-black/5 dark:text-gray-400 dark:hover:bg-white/10"
+              className="ui-icon-btn h-7 w-7 text-xs"
             >
               ✕
             </button>
@@ -215,7 +215,7 @@ export default function AppShell() {
               onClick={handleRefresh}
               disabled={refreshing}
               title="Refresh or push to database"
-              className="flex h-7 w-7 items-center justify-center rounded text-gray-500 hover:bg-black/5 disabled:opacity-50 dark:text-gray-400 dark:hover:bg-white/10"
+              className="ui-icon-btn h-7 w-7"
             >
               <RefreshIcon className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
             </button>
@@ -224,19 +224,21 @@ export default function AppShell() {
         </div>
 
         <div className="px-3 pt-3">
-          <div className="flex items-center gap-2 rounded border border-black/10 bg-white px-2 py-1.5 dark:border-white/10 dark:bg-white/5">
-            <SearchIcon className="h-3.5 w-3.5 shrink-0 text-gray-500" />
+          {/* The field is the wrapper, so the whole box takes the focus ring
+              rather than the bare input inside it. */}
+          <div className="ui-field flex items-center gap-2 px-2.5 py-1.5 focus-within:border-blue-600 focus-within:ring-2 focus-within:ring-blue-600/25 dark:focus-within:border-blue-500 dark:focus-within:ring-blue-500/25">
+            <SearchIcon className="h-3.5 w-3.5 shrink-0 text-gray-400" />
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search notes..."
-              className="w-full bg-transparent text-sm text-gray-800 outline-none placeholder:text-gray-500 dark:text-gray-200"
+              className="w-full bg-transparent text-sm text-gray-800 outline-none placeholder:text-gray-400 dark:text-gray-200 dark:placeholder:text-gray-500"
             />
             {query && (
               <button
                 onClick={() => setQuery("")}
                 title="Clear search"
-                className="shrink-0 rounded px-1 text-xs text-gray-500 hover:bg-black/5 dark:hover:bg-white/10"
+                className="ui-icon-btn h-5 w-5 text-xs"
               >
                 ✕
               </button>
@@ -265,12 +267,12 @@ export default function AppShell() {
           <RecentFiles entries={recent} selected={selected} onSelect={onSelect} />
         )}
 
-        <div className="flex items-center justify-between px-3 py-2">
+        <div className="flex items-center justify-between px-3 pb-1 pt-4">
           <span className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-500">
             {query.trim() ? "Results" : "Folders"}
           </span>
           {!query.trim() && !readOnly && (
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-0.5">
               {/* Generating needs a Claude Code session, so when there isn't
                   one the button that starts one takes its place — offering
                   Generate first would only lead to a run that fails on auth. */}
@@ -278,7 +280,7 @@ export default function AppShell() {
                 <button
                   onClick={() => setShowSignIn(true)}
                   title="Claude Code is signed out — generating notes needs a session"
-                  className="rounded border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-xs font-medium text-amber-800 hover:bg-amber-100 dark:border-amber-700/60 dark:bg-amber-950/40 dark:text-amber-300 dark:hover:bg-amber-950/70"
+                  className="ui-btn ui-btn-xs rounded border border-amber-500/30 bg-amber-500/10 font-medium text-amber-700 hover:bg-amber-500/20 focus-visible:ring-amber-500/70 dark:text-amber-300"
                 >
                   Sign in
                 </button>
@@ -286,7 +288,7 @@ export default function AppShell() {
                 <button
                   onClick={() => setShowGenerate(true)}
                   title="Generate a lesson or quiz from a file (runs local Claude Code)"
-                  className="flex h-5 w-5 items-center justify-center rounded text-gray-600 hover:bg-black/5 dark:text-gray-300 dark:hover:bg-white/10"
+                  className="ui-icon-btn h-6 w-6"
                 >
                   <UploadIcon className="h-3.5 w-3.5" />
                 </button>
@@ -294,14 +296,14 @@ export default function AppShell() {
               <a
                 href="/discover"
                 title="Discover folders shared by other people"
-                className="flex h-5 w-5 items-center justify-center rounded text-gray-600 hover:bg-black/5 dark:text-gray-300 dark:hover:bg-white/10"
+                className="ui-icon-btn h-6 w-6"
               >
                 <SearchIcon className="h-3.5 w-3.5" />
               </a>
               <button
                 onClick={() => setShowNewFolder(true)}
                 title="New Folder"
-                className="flex h-5 w-5 items-center justify-center rounded text-gray-600 hover:bg-black/5 dark:text-gray-300 dark:hover:bg-white/10"
+                className="ui-icon-btn h-6 w-6 text-base leading-none"
               >
                 +
               </button>
@@ -343,7 +345,7 @@ export default function AppShell() {
         <button
           onClick={() => setSidebarOpen(true)}
           title="Show sidebar"
-          className="fixed left-3 top-3 z-30 flex h-8 w-8 items-center justify-center rounded-full border border-black/10 bg-white text-gray-500 shadow-sm hover:bg-black/5 hover:text-blue-600 dark:border-white/10 dark:bg-[#161b22] dark:text-gray-400 dark:hover:bg-white/10 dark:hover:text-blue-400"
+          className="ui-icon-btn fixed left-3 top-3 z-30 h-8 w-8 rounded-full border border-black/10 bg-white shadow-sm hover:text-blue-600 dark:border-white/10 dark:bg-[#161b22] dark:hover:text-blue-400"
         >
           <MenuIcon className="h-4 w-4" />
         </button>
@@ -352,7 +354,7 @@ export default function AppShell() {
       <button
         onClick={() => setShowChat(true)}
         title="Ask My Notes — chat over your lessons (local model)"
-        className="fixed right-5 top-3 z-40 flex h-8 w-8 items-center justify-center rounded-full border border-black/10 bg-white text-gray-500 shadow-sm hover:bg-black/5 hover:text-blue-600 dark:border-white/10 dark:bg-[#161b22] dark:text-gray-400 dark:hover:bg-white/10 dark:hover:text-blue-400"
+        className="ui-icon-btn fixed right-5 top-3 z-40 h-8 w-8 rounded-full border border-black/10 bg-white shadow-sm hover:text-blue-600 dark:border-white/10 dark:bg-[#161b22] dark:hover:text-blue-400"
       >
         <ChatIcon className="h-4 w-4" />
       </button>

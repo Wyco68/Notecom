@@ -92,7 +92,9 @@ export default function SearchResults({
     return (
       <p className="px-2 py-2 text-sm text-gray-500">
         Search index is offline. Start it with{" "}
-        <code className="rounded bg-black/20 px-1 text-xs">node scripts/ensure-indexd.mjs</code>
+        <code className="rounded border border-black/10 bg-black/[0.04] px-1 py-0.5 text-xs dark:border-white/10 dark:bg-white/[0.06]">
+          node scripts/ensure-indexd.mjs
+        </code>
       </p>
     );
   }
@@ -119,7 +121,7 @@ export default function SearchResults({
               headingIndex: r.headingIndex,
             })
           }
-          className="block w-full rounded px-2 py-1.5 text-left hover:bg-black/5 dark:hover:bg-white/5"
+          className="ui-row block w-full px-2 py-1.5 text-left"
         >
           <span className="block truncate text-sm text-gray-800 dark:text-gray-200">
             {highlight(r.heading, query)}
