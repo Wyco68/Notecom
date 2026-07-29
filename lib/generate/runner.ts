@@ -36,6 +36,18 @@ export function getJob(id: string): Job | undefined {
   return jobs.get(id);
 }
 
+/**
+ * Every job this server process knows about, newest first, without the log or
+ * the child handle — enough for a reloaded client to spot a run still in flight
+ * and re-attach to its stream. The log itself comes from the tail, which replays
+ * from the beginning anyway.
+ */
+export function listJobs(): Array<Omit<Job, "log" | "child">> {
+  return [...jobs.values()]
+    .sort((a, b) => b.startedAt - a.startedAt)
+    .map(({ log: _log, child: _child, ...rest }) => rest);
+}
+
 export function startJob(
   folder: string,
   kind: "lect" | "quiz",
@@ -182,8 +194,13 @@ export function startJob(
   });
   child.on("error", (err) => {
     job.log.push(
+      // The common cause is not a broken install but the wrong machine: a
+      // server has no CLI because a subscription authenticates where its owner
+      // is. Say that, rather than only "install it".
       err.message.includes("ENOENT")
-        ? "Claude Code CLI not found — install it and make sure `claude` is on PATH."
+        ? "Claude Code CLI not found — generation runs on your own Claude subscription, " +
+          "so it needs `claude` installed and signed in on this machine. On a server there is none: " +
+          "generate from the desktop app (or your own checkout) instead."
         : `Error: ${err.message}`
     );
     job.status = "error";

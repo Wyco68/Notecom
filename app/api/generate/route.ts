@@ -2,17 +2,21 @@ import { NextRequest, NextResponse } from "next/server";
 import { writeFile, mkdir } from "fs/promises";
 import { tmpdir } from "os";
 import path from "path";
-import { startJob } from "@/lib/generate/runner";
+import { listJobs, startJob } from "@/lib/generate/runner";
 
 const KINDS = new Set(["lect", "quiz"]);
 // Same segment guard as vaultd's safeName — folder lands in a CLI prompt
 // and a filesystem path.
 const SAFE = /^[A-Za-z0-9][A-Za-z0-9-]*$/;
 
+// Jobs this server process is tracking. A generation run outlives the dialog
+// that started it and even a page reload, so the client needs a way to find one
+// still in flight and re-attach to its stream instead of orphaning it.
+export async function GET() {
+  return NextResponse.json({ jobs: listJobs() });
+}
+
 export async function POST(req: NextRequest) {
-  if (process.env.READ_ONLY === "1") {
-    return NextResponse.json({ error: "generation disabled on this server" }, { status: 403 });
-  }
   const form = await req.formData();
   const file = form.get("file");
   const folder = String(form.get("folder") ?? "");
