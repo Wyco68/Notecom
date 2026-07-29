@@ -23,8 +23,24 @@ Loaded by `/feat` only. Source of truth is the route files themselves
 
 Error shape is always `{ error: string }` with a non-2xx status.
 
-There is no lesson- or quiz-generation route. Content creation happens via
-Claude Code (`/lect` for lessons, `/quiz` for quizzes), not the web app.
+There is no route that *generates* anything itself. Content creation happens via
+Claude Code (`/lect` for lessons, `/quiz` for quizzes); these routes only start
+and observe that local CLI run — see `lib/generate/runner.ts`.
+
+| Route | Method | Body/params | Response |
+|---|---|---|---|
+| `/api/generate` | GET | — | `{ jobs }` — every job this server process knows, newest first, without log bodies. Lets a reloaded client find a run still in flight and re-attach instead of orphaning it |
+| `/api/generate` | POST | multipart `file`, `folder`, `kind` | `{ jobId }` — spawns the CLI and returns immediately |
+| `/api/generate/[id]` | GET | — | SSE tail: `line`, `tokens`, then `end` with `{ status, tokens, needsAuth }`. Replays the log from the beginning, so attaching late loses nothing |
+| `/api/generate/[id]` | DELETE | — | `{ ok }` — force-stop (the log view's Ctrl+C) |
+
+**Generation is a background job.** The run belongs to the server process, not to
+the dialog: `GenerateJobsProvider` (mounted above `AppShell` in
+`app/vault/page.tsx`) owns the job list and the SSE follow, so closing the dialog
+leaves the run going, the sidebar keeps a live row, the completion toast still
+fires and the tree still refreshes when the file lands. At most
+`MAX_CONCURRENT_JOBS` (3) run at once — each is a real CLI process spending real
+tokens, so background must not also mean unbounded.
 
 ## Collaboration (`app/api/collab/`)
 
@@ -37,7 +53,8 @@ the boundary. Model: [collaboration.md](collaboration.md).
 |---|---|---|---|
 | `/api/collab/discover` | GET | `?q&limit&offset` | `{ folders: [...] }` — `notes_search_folders`; returns public folders plus the caller's own, never a private one they don't belong to. **No tag filter**: tags are access grants, so looking up what a tag opens is not offered |
 | `/api/collab/my-folders` | GET | — | `{ folders: [...] }` — the caller's own folders with tags/role, used to group the sidebar |
-| `/api/collab/me/profile` | GET·POST | `{ username?, avatarUrl? }` | `{ profile }` / `{ ok }` — email and password are **not** changed here, they go through `/auth/reset` |
+| `/api/collab/me/profile` | GET·POST | `{ username }` | `{ profile }` / `{ ok }` — GET adds `avatarUrl` (a signed URL, not the stored path), `usernameChangeableAt` and `usernameCooldownDays`. POST takes the username only: the rename cooldown is a trigger on `profiles`, so an early attempt comes back 400 with the database's message. Email, password and the photo are **not** changed here — those go through `/auth/reset` and `me/avatar` |
+| `/api/collab/me/avatar` | POST·DELETE | multipart `file` | `{ avatarUrl }` / `{ ok }` — uploads to the `profile-avatars` bucket at `{user_id}/avatar.{jpg\|png\|webp}` (JPEG/PNG/WebP, ≤2 MB) and stores that path on the profile. Storage RLS pins the object to the caller's own prefix; the checks in the handler only fail fast with a readable message |
 | `/api/collab/me/tags` | GET·DELETE | `?tag` | `{ tags }` / `{ ok }` — **no POST**: a tag cannot be self-assigned, only accepted from a grant |
 | `/api/collab/me/grants` | GET·POST·DELETE | `{ username, tag }` / `{ grantId, accept }` / `?username&tag` | GET returns `{ grants, given }`; POST offers a tag to a follower or answers an offer; DELETE revokes a tag you gave, closing every folder it opened |
 | `/api/collab/me/follows` | GET·POST·DELETE | `?direction=following\|followers&q&limit&offset` / `{ username }` / `?userId&direction` | GET returns one paged, searchable direction as `{ direction, people, total }` — never the whole graph. Following someone lets **them** tag or invite you |
@@ -62,9 +79,14 @@ matches — `/api/*`, `/vault/*`, `/discover`, `/account` — with `/api/auth/*`
 exempt because that is how a session is obtained; a signed-out page request
 redirects to `/auth/sign-in?next=…` and an API request gets 401. On an install
 with no Supabase configured the gate stands down, so a purely local vault still
-works. Then `READ_ONLY=1` blocks non-GET `/api/*`; `/api/collab/` and
-`/api/auth/collab` are allowlisted, since these write membership and sessions
-rather than note content.
+works.
+
+That is the **only** gate — there is no read-only mode. Every instance is
+writable by whoever runs it, because generation spawns that person's own Claude
+Code CLI on their own subscription; there is no shared resource for a server-wide
+flag to protect. What an instance can do is decided by what it has: a box with no
+`stored` sidecar and no vault on disk fails a content write because the write has
+nowhere to go, not because a flag refused it.
 
 ## vaultd (Go helper, default `127.0.0.1:4321`)
 
@@ -176,8 +198,9 @@ There is deliberately no API-key field.
 | `/api/auth` | DELETE | — | cancels the in-flight login |
 | `/api/auth/stream` | GET | — | SSE: `line`, `meta` (OAuth url, awaitingCode), `end` |
 
-Blocked by `READ_ONLY=1` like the generate routes. Success is confirmed by
-re-reading `auth status`, not by the login process's exit code.
+Never gated: signing the CLI in is how a user makes generation work on their own
+machine. Success is confirmed by re-reading `auth status`, not by the login
+process's exit code.
 
 ## stored (Go primary datastore + sync service, default `127.0.0.1:4323`)
 

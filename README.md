@@ -204,8 +204,6 @@ npx tsc --noEmit        # type check
 | `INDEXD_URL` | Next.js | `http://127.0.0.1:4322` | Where the app reaches indexd |
 | `INDEXD_TOKEN` | indexd, Next.js | unset | Shared secret, same behaviour as `VAULTD_TOKEN` |
 | `STORED_URL` | Next.js | `http://127.0.0.1:4323` | Where the app reaches stored |
-| `READ_ONLY` | Next.js (server) | unset | `1` blocks every vault-mutating API route |
-| `NEXT_PUBLIC_READ_ONLY` | Next.js (client) | unset | `1` hides Generate / New Folder in the UI |
 | `REPO_ROOT` | Next.js | `process.cwd()` | Checkout the packaged app runs the `claude` CLI from |
 | `CLAUDE_BIN` | Next.js | `claude` | Override the Claude Code binary |
 | `GENERATE_MODEL` | Next.js | `sonnet` | Model passed to `claude --model` for in-app generation |
@@ -213,17 +211,25 @@ npx tsc --noEmit        # type check
 Supabase sync credentials for `stored` live in `<vault>/.data/sync.env`, not in
 the app's environment.
 
-### Read-only remote viewer
+### Generation is local, and it is everyone's
 
-To browse from another device without exposing note generation:
+There is no read-only mode and no server-side generation. Every instance is fully
+writable by whoever runs it, because generating a lesson spawns **that person's
+own Claude Code CLI** on **their own Claude subscription** — the same
+`/lect` or `/quiz` they could run in a terminal, at no charge beyond the
+subscription they already pay for. The app orchestrates; it holds no API key and
+never bills anyone.
 
-```bash
-READ_ONLY=1 NEXT_PUBLIC_READ_ONLY=1 npm run build && npm run start
-```
+That is also the limit. A subscription authenticates on the machine it belongs
+to, so a hosted server cannot generate on a visitor's behalf: to generate, run
+the app where your CLI is (the desktop app, or `npm run dev` on your own
+machine). A deployment with no `stored` sidecar and no vault on disk — the thin
+Vercel reader, `VAULT_SOURCE=supabase` — can still read shared notes, but a write
+there fails because it has nowhere to go, not because a flag forbade it.
 
-Write controls disappear from the UI and `middleware.ts` refuses every
-vault-mutating request — membership and sign-in routes stay open, since those
-write sessions rather than notes.
+Generation runs in the **background**: start it and keep reading. The sidebar
+keeps a live row per run, the log is reachable from it, and the tree refreshes
+itself when the file lands. Up to three runs at once.
 
 ### Deeper documentation
 

@@ -16,18 +16,36 @@ background (see "Primary datastore" below). The former filesystem-based cloud
 reader channels (`VAULT_SOURCE=gcs`/`worker`) were retired in favour of this —
 see git history for their setup docs.
 
-A hosted read-only reader is still supported through the same Supabase data,
-selected by **`VAULT_SOURCE=supabase`** (e.g. the Vercel deployment). In that
-mode the Next.js read helpers (`lib/vault/supabase.ts`) query the
-`notes_folders`/`notes_documents` tables directly over PostgREST instead of a
-local `stored` — a serverless box has no sidecar, SQLite, or vault on disk.
-It is read-only for *content* (run it with `READ_ONLY=1`, which the middleware
-enforces and `/api/tree` also forces on for this source); search, which needs
-the local `indexd`, is unavailable there. Collaboration actions are
-the deliberate exception the middleware allowlists — they are writes to
-membership, not to notes. Reads carry the signed-in user's JWT and are scoped by
-RLS, so a hosted reader shows exactly the folders that user owns, belongs to, or
-may discover.
+A hosted reader is still supported through the same Supabase data, selected by
+**`VAULT_SOURCE=supabase`** (e.g. the Vercel deployment). In that mode the Next.js
+read helpers (`lib/vault/supabase.ts`) query the `notes_folders`/`notes_documents`
+tables directly over PostgREST instead of a local `stored` — a serverless box has
+no sidecar, SQLite, or vault on disk. Search, which needs the local `indexd`, is
+unavailable there. Reads carry the signed-in user's JWT and are scoped by RLS, so
+a hosted reader shows exactly the folders that user owns, belongs to, or may
+discover.
+
+## There is no read-only mode
+
+Retired 2026-07, along with `READ_ONLY` / `NEXT_PUBLIC_READ_ONLY`, the middleware
+gate and `/api/tree`'s `readOnly` flag. Every instance is writable by whoever runs
+it, and the reason is billing: generating a lesson spawns **that user's own Claude
+Code CLI** on **their own Claude subscription** (`lib/generate/runner.ts`), so
+there is no shared, chargeable resource for a server-wide flag to protect. The app
+holds no API key and bills no one.
+
+That is also the boundary, and it is a hard one. A consumer subscription
+authenticates on the machine it belongs to, so a hosted server cannot generate on
+a visitor's behalf — an instance can generate exactly when it has a local `claude`
+on PATH. **Don't** add server-side generation, a shared API key, or a relay that
+serves several people from one subscription: the first two mean per-token charges
+on top of a subscription the user already pays for, and the third breaks
+Anthropic's terms for consumer subscriptions.
+
+Capability, not configuration, decides the rest. A `VAULT_SOURCE=supabase` box
+fails a content write because it has no `stored` and no vault to write to — the
+error names the missing dependency, which is the truth, instead of a flag
+restating it.
 
 ## Access control
 

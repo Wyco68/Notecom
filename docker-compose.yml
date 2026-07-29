@@ -10,7 +10,6 @@
 #
 # Config comes from Dokploy env vars (a .env alongside this file works too):
 #   INTERNAL_TOKEN         shared secret the services require from each other
-#   READ_ONLY              1 = public read-only reader (recommended); unset to allow delete/rename
 #   SUPABASE_URL / _KEY    optional: sync with the same Supabase as the desktop app
 
 name: notecom
@@ -68,9 +67,6 @@ services:
       STORED_TOKEN: ${INTERNAL_TOKEN}
       INDEXD_URL: http://indexd:4322
       INDEXD_TOKEN: ${INTERNAL_TOKEN}
-      # Public reader: 1 hides/blocks note-content writes (middleware enforces
-      # it). Collaboration routes stay open — they write membership, not notes.
-      READ_ONLY: ${READ_ONLY:-1}
       # Collaboration + the hosted reader both query Supabase as the signed-in
       # user. Publishable key: it is meant to reach the browser, and every
       # table it can touch is guarded by RLS.

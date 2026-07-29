@@ -47,8 +47,9 @@ changing one, stop and say so instead of doing it:
 6. **Folders are the unit of sharing**, documents inherit folder permissions,
    and files are members-only regardless of visibility. Discoverability and
    join policy are retired — do not reintroduce them.
-7. **Sign-in is required** for the matched routes in `middleware.ts`, and
-   `READ_ONLY=1` keeps its existing allowlist. Don't scatter new exceptions.
+7. **Sign-in is required** for the matched routes in `middleware.ts`, and that is
+   the only gate there — the read-only mode is retired. Don't reintroduce a
+   server-wide write flag; what an instance can do follows from what it has.
 
 ## CRUD: the shape of a good change
 

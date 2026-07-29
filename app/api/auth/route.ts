@@ -5,19 +5,16 @@ import { readStatus, startLogin, submitCode, cancelLogin, logout } from "@/lib/a
 // around the CLI's own auth commands — see lib/auth/cli.ts for why the app
 // never holds the credential itself.
 
-// A read-only box has no business starting a login flow on the machine it
-// runs on; same guard the generate routes use.
-const writesDisabled = () => process.env.READ_ONLY === "1";
+// Signing the CLI in is how a user makes generation work on their own machine,
+// so it is never gated: an instance either has a local CLI to sign in (and the
+// flow works) or it does not (and the CLI's own commands fail, with a message
+// saying so). A server-wide flag added nothing that reality doesn't already say.
 
 export async function GET() {
   return NextResponse.json(await readStatus());
 }
 
 export async function POST(req: NextRequest) {
-  if (writesDisabled()) {
-    return NextResponse.json({ error: "sign-in disabled on this server" }, { status: 403 });
-  }
-
   const body = await req.json().catch(() => ({}));
   const action = String(body.action ?? "login");
 
@@ -42,9 +39,6 @@ export async function POST(req: NextRequest) {
 }
 
 export async function DELETE() {
-  if (writesDisabled()) {
-    return NextResponse.json({ error: "sign-in disabled on this server" }, { status: 403 });
-  }
   return cancelLogin()
     ? NextResponse.json({ ok: true })
     : NextResponse.json({ error: "no login in progress" }, { status: 409 });

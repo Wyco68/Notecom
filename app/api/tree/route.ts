@@ -11,17 +11,9 @@ export async function GET() {
   // just-generated lesson appears in this very response. Best-effort:
   // stored being briefly down must not take the tree with it.
   await syncFromVault().catch(() => {});
-  // Runtime read-only signal so the client hides write controls; sent on the
-  // error path too so a momentarily-unreachable backend can't leak the write
-  // buttons. A Supabase-backed deployment is inherently read-only (no local
-  // stored to write through), so it forces the flag on regardless of READ_ONLY.
-  const flags = {
-    readOnly: process.env.READ_ONLY === "1" || process.env.VAULT_SOURCE === "supabase",
-  };
   try {
-    const tree = await listTree();
-    return NextResponse.json({ ...tree, ...flags });
+    return NextResponse.json(await listTree());
   } catch (err: any) {
-    return NextResponse.json({ error: err.message, ...flags }, { status: 502 });
+    return NextResponse.json({ error: err.message }, { status: 502 });
   }
 }

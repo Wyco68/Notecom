@@ -315,6 +315,8 @@ Writing a note happens separately, via Claude Code in a terminal, using the
 - No per-document permissions — folders are the unit of sharing and
   documents inherit them (see docs/collaboration.md).
 - No generation *logic* inside the application — the app only delegates to
-  the local Claude Code CLI (lessons/quizzes).
+  the local Claude Code CLI (lessons/quizzes), which runs on the subscription of
+  the person at that machine. No server-side generation, no shared API key, no
+  relay serving several people from one subscription.
 - No reading or writing Supabase from the app/UI — sync lives only inside
   the stored worker; Supabase is never a runtime database.

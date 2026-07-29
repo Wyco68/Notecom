@@ -98,9 +98,9 @@ flags (unindexed foreign keys, RLS gaps, mutable search paths).
 - Route handlers under `app/api/collab/` follow the existing house style: named
   `GET`/`POST`/`DELETE`, `catch (err: any)`, `NextResponse.json({ error })` with
   a non-2xx status.
-- `middleware.ts` blocks non-GET `/api/*` when `READ_ONLY=1`. Collaboration
-  actions are legitimate writes on a read-only *content* box, so they live under
-  the allowlisted `/api/collab/` prefix. Don't scatter new exceptions.
+- `middleware.ts` gates on sign-in only; the read-only mode is retired, so
+  collaboration routes need no allowlist exception. Don't reintroduce a
+  server-wide write flag to protect them.
 - Regenerate types with `mcp__supabase__generate_typescript_types` after a schema
   change rather than hand-writing row interfaces.
 
