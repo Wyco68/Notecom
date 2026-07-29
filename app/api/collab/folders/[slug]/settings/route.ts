@@ -2,12 +2,16 @@ import { NextRequest, NextResponse } from "next/server";
 import { updateFolderSettings } from "@/lib/collab/folders";
 import { errorResponse, isResponse, requireFolder, requireUser } from "../../../route-helpers";
 
-// Visibility, discoverability, join policy and description. The update policy
-// on notes_folders is what restricts this to managers; an editor reaching this
-// route gets a refusal from Postgres, not from an if-statement here.
+// Visibility and description — the whole of a folder's settings now. The
+// update policy on notes_folders is what restricts this to managers; an editor
+// reaching this route gets a refusal from Postgres, not from an if-statement
+// here.
+//
+// Discoverability and join policy are deliberately not accepted any more:
+// "public" already means listed, and the only way in is a request the owner
+// approves.
 
 const VISIBILITY = ["public", "private"];
-const JOIN_POLICY = ["open", "request", "invite_only"];
 
 export async function POST(req: NextRequest, ctx: { params: Promise<{ slug: string }> }) {
   const user = await requireUser();
@@ -22,14 +26,8 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ slug: stri
     if (body.visibility !== undefined && !VISIBILITY.includes(body.visibility)) {
       return NextResponse.json({ error: "invalid visibility" }, { status: 400 });
     }
-    if (body.joinPolicy !== undefined && !JOIN_POLICY.includes(body.joinPolicy)) {
-      return NextResponse.json({ error: "invalid join policy" }, { status: 400 });
-    }
-
     await updateFolderSettings(folder.id, {
       visibility: body.visibility,
-      discoverable: body.discoverable,
-      joinPolicy: body.joinPolicy,
       description: body.description,
     });
     return NextResponse.json({ ok: true });

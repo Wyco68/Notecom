@@ -15,7 +15,6 @@ import type {
   FolderTag,
   FollowEdge,
   Invitation,
-  JoinPolicy,
   JoinRequest,
   Member,
   GrantedTag,
@@ -33,7 +32,6 @@ function toSummary(row: any): FolderSummary {
     name: row.name,
     description: row.description,
     visibility: row.visibility,
-    joinPolicy: row.join_policy,
     ownerId: row.owner_id,
     ownerUsername: row.owner_username,
     ownerAvatar: row.owner_avatar ?? null,
@@ -47,7 +45,7 @@ function toSummary(row: any): FolderSummary {
 }
 
 /**
- * Discovery. The RPC hides non-discoverable folders from non-members, and
+ * Discovery. The RPC lists public folders plus the caller's own, and
  * deliberately cannot filter or match on tags — a tag is a credential now, so
  * looking up which folders it opens is not a capability this offers.
  */
@@ -82,38 +80,49 @@ export async function getFolder(
   slug: string,
   ownerUsername?: string
 ): Promise<FolderDetail | null> {
-  const supabase = await createClient();
   const matches = (await searchFolders(slug, 50, 0)).filter(
     (f) => f.slug === slug && (!ownerUsername || f.ownerUsername === ownerUsername)
   );
   // Prefer a folder the caller belongs to: searching by slug can legitimately
   // match someone else's public folder of the same name.
-  const hit = matches.find((f) => f.myRole) ?? matches[0];
-  if (!hit) return null;
-
-  const { data } = await supabase
-    .from("notes_folders")
-    .select("discoverable")
-    .eq("id", hit.id)
-    .maybeSingle();
-  return { ...hit, discoverable: !!data?.discoverable };
+  return matches.find((f) => f.myRole) ?? matches[0] ?? null;
 }
 
-export async function listMembers(folderId: string): Promise<Member[]> {
+/**
+ * One page of a folder's members. Paged and searchable rather than fetched
+ * whole: a popular folder's member list is unbounded, and the UI only ever
+ * shows a handful at a time.
+ */
+export async function listMembers(
+  folderId: string,
+  opts: { q?: string; limit?: number; offset?: number } = {}
+): Promise<{ members: Member[]; total: number }> {
   const supabase = await createClient();
-  const { data, error } = await supabase
+  const limit = Math.min(Math.max(opts.limit ?? 10, 1), 50);
+  const offset = Math.max(opts.offset ?? 0, 0);
+  const q = opts.q?.trim();
+
+  // `!inner` so the username filter can reach the joined profile row.
+  let query = supabase
     .from("notes_folder_members")
-    .select("user_id, role, joined_at, profiles(username, avatar_url)")
-    .eq("folder_id", folderId)
-    .order("joined_at");
+    .select("user_id, role, joined_at, profiles!inner(username, avatar_url)", { count: "exact" })
+    .eq("folder_id", folderId);
+  if (q) query = query.ilike("profiles.username", `%${q}%`);
+
+  const { data, error, count } = await query
+    .order("joined_at")
+    .range(offset, offset + limit - 1);
   if (error) throw new Error(error.message);
-  return (data ?? []).map((row: any) => ({
-    userId: row.user_id,
-    username: row.profiles?.username ?? "unknown",
-    avatarUrl: row.profiles?.avatar_url ?? null,
-    role: row.role,
-    joinedAt: row.joined_at,
-  }));
+  return {
+    members: (data ?? []).map((row: any) => ({
+      userId: row.user_id,
+      username: row.profiles?.username ?? "unknown",
+      avatarUrl: row.profiles?.avatar_url ?? null,
+      role: row.role,
+      joinedAt: row.joined_at,
+    })),
+    total: count ?? 0,
+  };
 }
 
 export async function listFolderTags(folderId: string): Promise<FolderTag[]> {
@@ -237,16 +246,12 @@ export async function updateFolderSettings(
   folderId: string,
   patch: {
     visibility?: Visibility;
-    discoverable?: boolean;
-    joinPolicy?: JoinPolicy;
     description?: string | null;
   }
 ): Promise<void> {
   const supabase = await createClient();
   const row: Record<string, unknown> = {};
   if (patch.visibility !== undefined) row.visibility = patch.visibility;
-  if (patch.discoverable !== undefined) row.discoverable = patch.discoverable;
-  if (patch.joinPolicy !== undefined) row.join_policy = patch.joinPolicy;
   if (patch.description !== undefined) row.description = patch.description;
   if (!Object.keys(row).length) return;
 
@@ -429,32 +434,51 @@ export async function unfollow(userId: string, direction: "following" | "followe
   if (error) throw new Error(error.message);
 }
 
-/** Who the caller follows, and who follows them. RLS returns only their edges. */
-export async function myFollows(): Promise<{ following: FollowEdge[]; followers: FollowEdge[] }> {
+/**
+ * One page of the caller's follow edges in a single direction. RLS returns
+ * only their own edges, so this needs no ownership filter beyond the side
+ * being asked for. Paged and searchable for the same reason members are: the
+ * UI shows a handful, and the list has no natural ceiling.
+ */
+export async function listFollows(
+  direction: "following" | "followers",
+  opts: { q?: string; limit?: number; offset?: number } = {}
+): Promise<{ people: FollowEdge[]; total: number }> {
   const supabase = await createClient();
   const { data: user } = await supabase.auth.getUser();
-  if (!user.user) return { following: [], followers: [] };
+  if (!user.user) return { people: [], total: 0 };
 
-  const [out, back] = await Promise.all([
-    supabase
-      .from("notes_follows")
-      .select("created_at, profiles!notes_follows_followee_id_fkey(id, username, avatar_url)")
-      .eq("follower_id", user.user.id),
-    supabase
-      .from("notes_follows")
-      .select("created_at, profiles!notes_follows_follower_id_fkey(id, username, avatar_url)")
-      .eq("followee_id", user.user.id),
-  ]);
+  const limit = Math.min(Math.max(opts.limit ?? 10, 1), 50);
+  const offset = Math.max(opts.offset ?? 0, 0);
+  const q = opts.q?.trim();
 
-  const toEdge = (row: any): FollowEdge => ({
-    userId: row.profiles?.id ?? "",
-    username: row.profiles?.username ?? "unknown",
-    avatarUrl: row.profiles?.avatar_url ?? null,
-    since: row.created_at,
-  });
+  // The joined profile is the other person: the followee when listing who the
+  // caller follows, the follower when listing who follows them.
+  const join =
+    direction === "following"
+      ? "profiles!notes_follows_followee_id_fkey!inner(id, username, avatar_url)"
+      : "profiles!notes_follows_follower_id_fkey!inner(id, username, avatar_url)";
+  const own = direction === "following" ? "follower_id" : "followee_id";
+
+  let query = supabase
+    .from("notes_follows")
+    .select(`created_at, ${join}`, { count: "exact" })
+    .eq(own, user.user.id);
+  if (q) query = query.ilike("profiles.username", `%${q}%`);
+
+  const { data, error, count } = await query
+    .order("created_at", { ascending: false })
+    .range(offset, offset + limit - 1);
+  if (error) throw new Error(error.message);
+
   return {
-    following: (out.data ?? []).map(toEdge),
-    followers: (back.data ?? []).map(toEdge),
+    people: (data ?? []).map((row: any) => ({
+      userId: row.profiles?.id ?? "",
+      username: row.profiles?.username ?? "unknown",
+      avatarUrl: row.profiles?.avatar_url ?? null,
+      since: row.created_at,
+    })),
+    total: count ?? 0,
   };
 }
 

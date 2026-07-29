@@ -6,9 +6,8 @@ import RoleBadge from "./RoleBadge";
 import TagChip from "./TagChip";
 import type { FolderSummary } from "@/lib/collab/types";
 
-// A discovery result. The join affordance is chosen from join_policy, but the
-// server decides what actually happens — the button text is a prediction, the
-// toast reports the truth.
+// A discovery result. There is one way in — ask the owner — so the button says
+// so; the server still decides what actually happens and the toast reports it.
 export default function FolderCard({
   folder,
   onJoined,
@@ -39,8 +38,6 @@ export default function FolderCard({
       setBusy(false);
     }
   }
-
-  const joinable = !folder.myRole && folder.joinPolicy !== "invite_only";
 
   return (
     <div className="rounded-lg border border-black/10 bg-white p-4 dark:border-white/10 dark:bg-[#161b22]">
@@ -77,16 +74,14 @@ export default function FolderCard({
         >
           Open
         </a>
-      ) : joinable ? (
+      ) : (
         <button
           onClick={join}
           disabled={busy}
           className="rounded bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-500 disabled:opacity-50"
         >
-          {busy ? "Working..." : folder.joinPolicy === "open" ? "Join" : "Request to join"}
+          {busy ? "Working..." : "Request to join"}
         </button>
-      ) : (
-        <span className="text-xs text-gray-400">Invite only</span>
       )}
     </div>
   );

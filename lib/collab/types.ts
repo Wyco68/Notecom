@@ -3,7 +3,6 @@
 
 export type FolderRole = "owner" | "editor" | "viewer";
 export type Visibility = "public" | "private";
-export type JoinPolicy = "open" | "request" | "invite_only";
 
 export interface FolderSummary {
   id: string;
@@ -11,7 +10,6 @@ export interface FolderSummary {
   name: string;
   description: string | null;
   visibility: Visibility;
-  joinPolicy: JoinPolicy;
   ownerId: string;
   ownerUsername: string;
   ownerAvatar: string | null;
@@ -25,9 +23,12 @@ export interface FolderSummary {
   createdAt: string;
 }
 
-export interface FolderDetail extends FolderSummary {
-  discoverable: boolean;
-}
+/**
+ * Same shape as a summary. Discoverability and join policy used to live here;
+ * both are gone — a public folder is listed, a private one is not, and the one
+ * way in is a request the owner approves.
+ */
+export type FolderDetail = FolderSummary;
 
 export interface UserTag {
   slug: string;
