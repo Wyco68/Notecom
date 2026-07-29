@@ -1,25 +1,35 @@
 # Notecom
 
-Turns slides/PDFs into plain-language study notes, readable in a clean
-code-editor-style reader. Works for any subject. The app, the note-writing
-commands, the templates, and your notes all live in this one repo.
+Turn lecture slides and PDFs into clear, plain-language study notes you can
+read, search, and share with classmates.
 
-Content creation happens entirely outside the web app: **Claude Code** (the
-CLI, on your own subscription) is the sole author of lesson/quiz content.
-The Next.js app only reads, browses, and manages what's already in
-`vault/` — see [SPECIFICATION.md](SPECIFICATION.md) for the full contract.
+You hand Notecom a lecture file. It writes the notes — in ordinary language,
+with the technical terms kept correct — and files them under the subject they
+belong to. Your notes live on your own machine and sync to your account, so
+the same vault opens on your laptop and your phone.
 
-## Features
+![The reader](docs/images/web-app-vault.png)
 
-- Plain-language lesson notes generated from uploaded slides/PDFs/images
-- Quiz generation alongside lessons
-- Hybrid search (keyword + semantic) and "Ask My Notes" chat over your own
-  vault, fully local (Ollama) — nothing leaves your machine
-- Native desktop app (Tauri) or plain browser tab — same `vault/`, your choice
-- Optional read-only remote viewer (iPad/laptop access) with no code changes
-  to the writer machine — see [Remote access](#remote-access-readonly)
+---
 
-## Quick start
+## What you need
+
+| | Why | Where |
+|---|---|---|
+| **Node.js 20+** | runs the app | [nodejs.org](https://nodejs.org) — pick the "LTS" download |
+| **A Claude subscription** | writes the notes | [claude.ai](https://claude.ai) |
+| **A Notecom account** | signing in, and sharing folders with classmates | created in the app, first run |
+
+Nothing else is required. There is no API key to buy and no model to install:
+the note-writing runs on the Claude subscription you already have, and search
+runs entirely on your own machine.
+
+---
+
+## Install it once
+
+Open a terminal in the folder where you keep projects, then run these four
+lines. Copy them one at a time.
 
 ```bash
 git clone <this-repo-url>
@@ -28,115 +38,201 @@ npm install
 npm run setup
 ```
 
-Then install Claude Code and log in once:
+`npm run setup` checks everything and prints a short list if something is
+missing. Then install the note writer and sign in to it once:
 
 ```bash
 npm install -g @anthropic-ai/claude-code
 claude
 ```
 
-Full walkthrough (tools, first note, optional AI extras):
+The first `claude` opens a browser window to log in. You only do this once.
+
+Want a proper app with a Start Menu / Applications icon instead of a terminal?
+
+```bash
+npm run install:desktop
+```
+
+That builds an installer for this machine and opens the folder holding it. Run
+it, and Notecom launches like any other program. (Takes a while the first time
+— it compiles the desktop shell.)
+
+Step-by-step version with screenshots:
 **[docs/GETTING_STARTED.md](docs/GETTING_STARTED.md)**.
 
-## Write a note
+---
 
-1. Open `claude` in this folder (or this repo in Claude Desktop / the VS
-   Code extension).
-2. Attach your slide/PDF.
-3. Type:
+## Your first note
+
+1. Open a terminal in this folder and type `claude`.
+2. Drag your lecture slides or PDF into the terminal window to attach it.
+3. Type this and press Enter:
+
    ```
    /lect Wireless Network
    ```
-4. Claude writes the note and saves it to `vault/`.
 
-## Read your notes
+   ("Wireless Network" is the subject folder — use whatever your course is
+   called. If the folder doesn't exist yet, it gets created.)
+4. Wait. Claude reads the file, writes the notes, and saves them.
+
+![Writing a note](docs/images/claude-code-lect.png)
+
+Now open the app to read them:
 
 ```bash
-npm run dev            # browser: http://localhost:3000/vault
-npm run dev:desktop    # native window (needs Rust — docs/desktop.md)
+npm run dev
 ```
 
-Prefer a Start-Menu app with no terminal? `npm run install:desktop` builds a
-native installer for this machine — it reads the same `vault/` as everything
-else.
+Then visit **http://localhost:3000** in your browser. Sign in, and your
+subject folders are in the sidebar. (If you installed the desktop app, just
+open Notecom instead — no terminal needed.)
 
-## Make a quiz
+### Make a quiz from the same material
 
 ```
 /quiz Wireless Network — what's the difference between TDMA and FDMA?
 ```
 
-Claude reasons through it, saves the answer next to your notes. Repeat
-`/quiz` without a folder to keep appending to the same quiz.
+The quiz is saved next to your notes. Ask `/quiz` again in the same subject to
+keep adding questions to it.
 
-## Change the app itself
+---
 
-Type a request starting with `/feat`, e.g.:
+## Using the app day to day
+
+- **Find something** — the search box at the top of the sidebar searches
+  inside every note, not just the titles.
+- **Star a note** — the ☆ on a row keeps it in Favourites at the top.
+- **Generate without the terminal** — the upload button in the sidebar takes a
+  file and runs the same note-writing, from inside the app.
+- **Hide the sidebar** — the ☰ button in the top-left, at any window size.
+- **Dark or light** — the sun/moon button in the sidebar header.
+
+---
+
+## Sharing with classmates
+
+Every folder belongs to you and starts **private**. You decide who else sees
+it, from the share button on a folder row.
+
+- **Public** means *listed*: other signed-in people can find the folder by
+  name and ask to join. It never means the notes are readable — only members
+  read the files, always.
+- **Joining is by approval.** Someone asks, you approve or reject in the
+  folder's console. There is no automatic join.
+- **Invite someone directly** — you can invite people who follow you. That is
+  what stops strangers from spamming invitations.
+- **Roles**: *viewer* reads, *editor* reads and writes, *owner* is you.
+- **Tags** are a shortcut for groups: give a classmate a tag like `ISNE3RD`,
+  and every folder you mark with that tag opens for them at once. Take the tag
+  back and all of it closes again.
+
+Your notes also sync to your account in the background, so the same vault
+appears on every device you sign in to.
+
+---
+
+## Signing in
+
+Notecom uses your email and a password, plus a code emailed to you:
+
+1. Enter your email and password.
+2. Check your inbox for an 8-digit code and type it in.
+
+Both steps are required every time — knowing the password alone is not enough
+to get in.
+
+**Forgot your password?** Use "Forgot password?" on the sign-in page. You get
+a link by email; open it *in the same browser you asked from*, and it takes
+you straight to a page where you choose a new password.
+
+---
+
+## If something goes wrong
+
+| What you see | What to do |
+|---|---|
+| `claude: command not found` | Close the terminal and open a new one, then try again |
+| The app shows no notes | Make sure `/lect` wrote into *this* folder's `vault/`; the app only reads this one |
+| Search finds nothing | Stop the app and run `npm run dev` again — it restarts the search service |
+| The email code never arrives | Check spam. Codes expire after an hour; ask for a new one |
+| A reset link says it was opened in a different browser | Request a new link and open it in the browser you asked from |
+| Notes not appearing on another device | Sign in with the same account, and give the sync a minute |
+
+---
+
+## Updating
+
+After pulling new changes:
+
+```bash
+npm run setup
+npm run install:desktop   # only if you use the installed desktop app
 ```
-/feat add a delete button next to each lesson
+
+---
+
+## For developers
+
+Notes are authored by **Claude Code** (`/lect`, `/quiz`) and stored as HTML in
+`vault/`. The Next.js app reads and manages them; it never generates content
+and holds no API key. A Go sidecar (`stored`) owns the live SQLite database
+and syncs it to Supabase, mirroring every change back to `vault/` so the file
+tree stays a working export. A second Go service (`indexd`) builds the
+keyword search index. Access control is entirely Postgres Row Level Security —
+there is no service-role key anywhere in this app.
+
+```bash
+npm run dev             # app + Go services, http://localhost:3000
+npm run dev:desktop     # native window (needs Rust)
+npx tsc --noEmit        # type check
 ```
 
-**Rule:** lesson content → `/lect`. Quiz content → `/quiz`. App/code →
-`/feat`. Never mix two of these in one request.
+### Environment variables
 
-## Remote access (read-only)
+| Variable | Used by | Default | Purpose |
+|---|---|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL` | Next.js | unset | Supabase project for accounts and sharing; unset = fully local, no sign-in |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Next.js | unset | Public anon key for the same project |
+| `VAULT_ROOT` | vaultd, indexd, stored | `./vault` | Vault directory the services read and write |
+| `VAULTD_ADDR` | vaultd | `127.0.0.1:4321` | Listen address |
+| `VAULTD_URL` | stored | `http://127.0.0.1:4321` | Where stored mirrors file writes |
+| `VAULTD_TOKEN` | vaultd, Next.js | unset | Shared secret; vaultd requires `X-Auth-Token` once set |
+| `INDEXD_ADDR` | indexd | `127.0.0.1:4322` | Listen address |
+| `INDEXD_URL` | Next.js | `http://127.0.0.1:4322` | Where the app reaches indexd |
+| `INDEXD_TOKEN` | indexd, Next.js | unset | Shared secret, same behaviour as `VAULTD_TOKEN` |
+| `STORED_URL` | Next.js | `http://127.0.0.1:4323` | Where the app reaches stored |
+| `READ_ONLY` | Next.js (server) | unset | `1` blocks every vault-mutating API route |
+| `NEXT_PUBLIC_READ_ONLY` | Next.js (client) | unset | `1` hides Generate / New Folder in the UI |
+| `REPO_ROOT` | Next.js | `process.cwd()` | Checkout the packaged app runs the `claude` CLI from |
+| `CLAUDE_BIN` | Next.js | `claude` | Override the Claude Code binary |
+| `GENERATE_MODEL` | Next.js | `sonnet` | Model passed to `claude --model` for in-app generation |
 
-Want to browse your notes from an iPad or another laptop, without exposing
-generation (which needs your local Claude Code CLI and can't run remotely)?
-Run a second, read-only instance of the same app:
+Supabase sync credentials for `stored` live in `<vault>/.data/sync.env`, not in
+the app's environment.
+
+### Read-only remote viewer
+
+To browse from another device without exposing note generation:
 
 ```bash
 READ_ONLY=1 NEXT_PUBLIC_READ_ONLY=1 npm run build && npm run start
 ```
 
-This hides Generate/New Folder in the UI and blocks every vault-mutating API
-route at the middleware layer (`middleware.ts`) — 403 on anything but GET and
-`/api/chat`. Point it at your vault via `VAULT_ROOT`, and if `vaultd`/`indexd`
-are reachable over a public tunnel, set `VAULTD_TOKEN`/`INDEXD_TOKEN` (shared
-secrets, both services reject requests without a matching `X-Auth-Token`
-header once the env var is set — no-op for local-only setups). See
-[Environment variables](#environment-variables) for the full list, and
-`docs/desktop.md` for the underlying single-vault design this builds on.
+Write controls disappear from the UI and `middleware.ts` refuses every
+vault-mutating request — membership and sign-in routes stay open, since those
+write sessions rather than notes.
 
-## Updating after pulling changes
+### Deeper documentation
 
-```bash
-npm run setup          # rebuilds services if needed
-npm run install:desktop   # only if you use the installed desktop app
-```
-
-## Environment variables
-
-| Variable | Used by | Default | Purpose |
-|---|---|---|---|
-| `VAULT_ROOT` | vaultd, indexd | `./vault` | Vault directory both services read/write |
-| `VAULTD_ADDR` | vaultd | `127.0.0.1:4321` | Listen address |
-| `VAULTD_URL` | Next.js | `http://127.0.0.1:4321` | Where the app reaches vaultd |
-| `VAULTD_TOKEN` | vaultd, Next.js | unset | Shared secret; vaultd requires `X-Auth-Token` on every request once set |
-| `INDEXD_ADDR` | indexd | `127.0.0.1:4322` | Listen address |
-| `INDEXD_URL` | Next.js | `http://127.0.0.1:4322` | Where the app reaches indexd |
-| `INDEXD_TOKEN` | indexd, Next.js | unset | Shared secret, same behavior as `VAULTD_TOKEN` |
-| `OLLAMA_URL` | indexd | `http://127.0.0.1:11434` | Local Ollama server for embeddings/chat |
-| `EMBED_MODEL` | indexd | `nomic-embed-text` | Ollama embedding model |
-| `CHAT_MODEL` | indexd | `llama3.2` | Ollama chat model for "Ask My Notes" |
-| `READ_ONLY` | Next.js (server) | unset | `1` blocks all vault-mutating API routes |
-| `NEXT_PUBLIC_READ_ONLY` | Next.js (client) | unset | `1` hides Generate/New Folder buttons in the UI |
-| `REPO_ROOT` | Next.js | `process.cwd()` | Checkout path the packaged/standalone app runs the `claude` CLI from |
-| `CLAUDE_BIN` | Next.js | `claude` | Override the Claude Code binary (tests substitute a stub) |
-| `GENERATE_MODEL` | Next.js | `sonnet` | Model passed to `claude --model` for in-app generation |
-
-## Tech stack
-
-Next.js 15 (App Router) + React 18 + TypeScript, Tailwind CSS, two small Go
-HTTP services (`vaultd` for filesystem CRUD, `indexd` for hybrid search/RAG
-over SQLite FTS5 + vector BLOBs), Tauri for the desktop shell. No database as
-source of truth, no Anthropic API key stored anywhere, no user accounts. Full
-breakdown: [SPECIFICATION.md §8](SPECIFICATION.md#8-tech-stack).
-
----
-
-Details: [SPECIFICATION.md](SPECIFICATION.md) (architecture),
-[specification.json](specification.json) (machine-readable project spec),
-[docs/desktop.md](docs/desktop.md) (desktop app internals),
-[docs/api-contract.md](docs/api-contract.md) (full endpoint reference),
-[docs/GETTING_STARTED.md](docs/GETTING_STARTED.md) (full setup).
+| Document | What's in it |
+|---|---|
+| [SPECIFICATION.md](SPECIFICATION.md) | the two-layer contract, end to end |
+| [docs/architecture.md](docs/architecture.md) | services, data flow, the rules that must not break |
+| [docs/api-contract.md](docs/api-contract.md) | every endpoint |
+| [docs/collaboration.md](docs/collaboration.md) | sharing model and RLS |
+| [docs/ui-guidelines.md](docs/ui-guidelines.md) | design system and motion |
+| [docs/desktop.md](docs/desktop.md) | the Tauri shell and packaging |
+| [docs/deploy-vps-dokploy.md](docs/deploy-vps-dokploy.md) | self-hosting the reader |

@@ -16,9 +16,8 @@ Loaded by `/feat` only. Source of truth is the route files themselves
 | `/api/quiz/[folder]/[id]` | GET | — | `{ html, title }` |
 | `/api/quiz/[folder]/[id]` | DELETE | — | `{ ok }` |
 | `/api/quiz/[folder]/[id]` | POST | `{ newTitle }` | `{ ok }` (rename) |
-| `/api/search` | GET | `?q&folder&kind&limit` | `{ mode: "hybrid"\|"keyword", results: [chunk hits] }` — proxies indexd |
+| `/api/search` | GET | `?q&folder&kind&limit` | `{ mode: "keyword", results: [chunk hits] }` — proxies indexd |
 | `/api/related/[folder]/[id]` | GET | `?kind` | `{ results: [{folder,id,kind,title,score}] }` — proxies indexd |
-| `/api/chat` | POST | `{ message, history }` | SSE passthrough of indexd `/chat` (sources → deltas → done) |
 | `/api/generate` | POST | multipart `file, folder, kind(lect\|quiz)` | `{ jobId }` — saves upload, spawns local Claude Code CLI |
 | `/api/generate/[id]` | GET | — | SSE job log (`line` events, then `end` with status) |
 
@@ -64,8 +63,8 @@ exempt because that is how a session is obtained; a signed-out page request
 redirects to `/auth/sign-in?next=…` and an API request gets 401. On an install
 with no Supabase configured the gate stands down, so a purely local vault still
 works. Then `READ_ONLY=1` blocks non-GET `/api/*`; `/api/collab/` and
-`/api/auth/collab` are allowlisted alongside `/api/chat`, since these write
-membership and sessions rather than note content.
+`/api/auth/collab` are allowlisted, since these write membership and sessions
+rather than note content.
 
 ## vaultd (Go helper, default `127.0.0.1:4321`)
 
@@ -97,9 +96,9 @@ callers are Claude Code (`/lect`, `/quiz` save content as files) and stored
 (which replays every DB mutation to disk through these endpoints). Don't
 `fetch()` vaultd from TypeScript.
 
-## indexd (Go search/RAG service, default `127.0.0.1:4322`)
+## indexd (Go search service, default `127.0.0.1:4322`)
 
-Owns `vault/.index/index.db` (SQLite: metadata + FTS5 + embedding BLOBs).
+Owns `vault/.index/index.db` (SQLite: metadata + FTS5).
 `lib/search/indexd.ts` is the only TypeScript caller. Claude Code may call
 it directly over HTTP for retrieval. See
 [architecture.md](architecture.md#search-layer-indexd-toolsindexd).
@@ -109,20 +108,17 @@ it directly over HTTP for retrieval. See
 | `/index` | POST | `{ folder, id, kind }` | (re)index one document from disk |
 | `/index/{folder}/{id}` | DELETE | `?kind=` | remove one document from the index |
 | `/reindex` | POST | — | async full vault scan, answers 202 |
-| `/search` | GET | `?q&folder&kind&limit&html=1` | hybrid FTS5+vector, RRF-merged; `html=1` includes chunk HTML |
-| `/related/{folder}/{id}` | GET | `?kind&limit` | related documents by embedding centroid (keyword fallback) |
+| `/search` | GET | `?q&folder&kind&limit&html=1` | FTS5 keyword search; `html=1` includes chunk HTML |
+| `/related/{folder}/{id}` | GET | `?kind&limit` | related documents by an FTS query built from this document's keywords |
 | `/topics` | GET | `?q&limit` | matching (topic, document) pairs for a query |
-| `/chat` | POST | `{ message, history }` | grounded chat: retrieves top chunks, streams a local Ollama chat model (`CHAT_MODEL`, default `llama3.2`) as SSE; 503 without Ollama |
-| `/status` | GET | — | `{ documents, chunks, embedded, ollama, model, scanning, lastScan }` |
+| `/status` | GET | — | `{ documents, chunks, scanning, lastScan }` |
 
 `kind` is `lesson` (default) or `quiz`. Search result chunk
 shape: `{ folder, id, kind, title, topic, heading, summary, keywords, seq,
 headingIndex, score, html? }` — `headingIndex` is the 0-based occurrence of
 the heading text within its document (headings repeat), used by the viewer
-to scroll to the matched section. Embeddings come from a local Ollama server
-(`OLLAMA_URL`, model `EMBED_MODEL`, default `nomic-embed-text`); without
-Ollama, `/search` serves `mode: "keyword"` (FTS5-only) and embeddings
-backfill on a later scan.
+to scroll to the matched section. `/search` always answers
+`mode: "keyword"`; the field stays because callers already read it.
 
 ## Collaboration account sign-in (`/api/auth/collab`)
 

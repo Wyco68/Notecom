@@ -22,8 +22,8 @@ mode the Next.js read helpers (`lib/vault/supabase.ts`) query the
 `notes_folders`/`notes_documents` tables directly over PostgREST instead of a
 local `stored` — a serverless box has no sidecar, SQLite, or vault on disk.
 It is read-only for *content* (run it with `READ_ONLY=1`, which the middleware
-enforces and `/api/tree` also forces on for this source); search and chat, which
-need the local `indexd`/Ollama, are unavailable there. Collaboration actions are
+enforces and `/api/tree` also forces on for this source); search, which needs
+the local `indexd`, is unavailable there. Collaboration actions are
 the deliberate exception the middleware allowlists — they are writes to
 membership, not to notes. Reads carry the signed-in user's JWT and are scoped by
 RLS, so a hosted reader shows exactly the folders that user owns, belongs to, or
@@ -55,16 +55,15 @@ Don't move logic across the layers when fixing or extending the app:
   `app/api/collab/**`), which manages folder membership, invitations, join
   requests, tags and search. Neither touches lesson content persistence.
 - Don't add any AI generation logic or Anthropic API calls to the Next.js
-  app. Two delegations are the sanctioned exception (2026-07): the chat
-  proxy (`/api/chat` → indexd `/chat` → local Ollama) and the generation
+  app. One delegation is the sanctioned exception (2026-07): the generation
   job runner (`lib/generate/runner.ts` spawns the local Claude Code CLI to
   run `/lect`/`/quiz`). The app orchestrates; it never implements
-  generation, never embeds, never stores an API key.
+  generation and never stores an API key.
 - Don't add business logic to `desktop/` (the Tauri shell). It only
   starts/stops vaultd and Next, shows the splash/main window, and cleans up
   on exit — it has no opinion on vault content, naming, or UI.
-- Don't add chunking, embedding, or ranking logic to vaultd or to Next.js
-  — search/retrieval intelligence lives only in `indexd` (below).
+- Don't add chunking or ranking logic to vaultd or to Next.js — search
+  intelligence lives only in `indexd` (below).
 
 ## Primary datastore: stored (`tools/stored/`)
 
@@ -100,18 +99,18 @@ stores arrives fully resolved from the app, same rule as vaultd.
 ## Search layer: indexd (`tools/indexd/`)
 
 A second Go service (default `127.0.0.1:4322`) that turns the vault into a
-searchable knowledge base — the RAG backend. It chunks lesson HTML by
-educational sections (h2/h3), embeds chunks via a local Ollama server when
-one is available, and serves hybrid retrieval (SQLite FTS5 keyword + vector
-cosine, merged with reciprocal-rank fusion).
+searchable knowledge base. It chunks lesson HTML by educational sections
+(h2/h3) and serves SQLite FTS5 keyword retrieval over those chunks. There is
+no model and no external service behind it: search is local and offline by
+construction.
 
 Division of responsibility, in one line each:
 - **vaultd** stays dumb filesystem I/O — it knows nothing about search.
 - **indexd** owns all indexing/retrieval intelligence and its own storage:
-  one SQLite file at `vault/.index/index.db` (metadata + FTS5 + embedding
-  BLOBs). Derived data — deleting it is safe; a reindex rebuilds it.
+  one SQLite file at `vault/.index/index.db` (metadata + FTS5). Derived data
+  — deleting it is safe; a reindex rebuilds it.
 - **Next.js** only proxies queries (`/api/search`, `/api/related/...` →
-  `lib/search/indexd.ts`) and never chunks or embeds anything.
+  `lib/search/indexd.ts`) and never chunks or ranks anything.
 - **Claude Code** can query indexd over HTTP to retrieve only the relevant
   sections of a lesson instead of whole files (token reduction).
 
@@ -121,7 +120,4 @@ load, window focus, refresh button), so the index follows vault changes
 without a file watcher. Scans are hash-based and near-free when nothing
 changed.
 
-Degradation is by design: without Ollama (not installed / not running),
-indexing and FTS5 keyword search work fully; vector search activates and
-backfills automatically once Ollama + the embedding model
-(`nomic-embed-text`) appear. Endpoints: [api-contract.md](api-contract.md).
+Endpoints: [api-contract.md](api-contract.md).

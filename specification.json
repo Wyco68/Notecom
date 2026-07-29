@@ -10,7 +10,7 @@
     "Claude Code is the author but is not a layer inside the app.",
     "No naming/slug/sequence logic in vaultd — that is Next.js's job.",
     "No filesystem writes from a React component or API route directly — always through lib/vault/helper.ts -> vaultd.",
-    "No AI generation logic or Anthropic API calls in the Next.js app itself; two sanctioned delegations exist (chat proxy, generation job runner).",
+    "No AI generation logic or Anthropic API calls in the Next.js app itself; one sanctioned delegation exists (the generation job runner).",
     "No chunking/embedding/ranking logic in vaultd or Next.js — that intelligence lives only in indexd.",
     "No business logic in the desktop shell (Tauri) — only start/stop orchestration."
   ],
@@ -24,17 +24,13 @@
       "callsAnthropicApiDirectly": false,
       "delegations": [
         {
-          "name": "Ask My Notes",
-          "path": "app/api/chat/route.ts",
-          "mechanism": "SSE passthrough to indexd /chat",
-          "backend": "local Ollama chat model",
-          "dataLeavesMachine": false
-        },
-        {
           "name": "Generate from file",
           "path": "lib/generate/runner.ts",
           "mechanism": "spawns local Claude Code CLI headlessly (-p, --output-format stream-json)",
-          "invokes": ["/lect", "/quiz"],
+          "invokes": [
+            "/lect",
+            "/quiz"
+          ],
           "requiresLocalClaudeSubscription": true
         }
       ]
@@ -49,17 +45,57 @@
       "envToken": "VAULTD_TOKEN",
       "authHeader": "X-Auth-Token",
       "endpoints": [
-        { "method": "POST", "path": "/folder", "body": "{name}" },
-        { "method": "DELETE", "path": "/folder/{name}" },
-        { "method": "POST", "path": "/lesson", "body": "{folder,id,slug,title,seq,html}", "usedBy": "Claude Code" },
-        { "method": "GET", "path": "/lesson/{folder}/{id}" },
-        { "method": "DELETE", "path": "/lesson/{folder}/{id}" },
-        { "method": "POST", "path": "/lesson/{folder}/{id}/rename", "body": "{newTitle}" },
-        { "method": "POST", "path": "/quiz", "body": "{folder,id,slug,title,seq,html}", "usedBy": "Claude Code" },
-        { "method": "GET", "path": "/quiz/{folder}/{id}" },
-        { "method": "DELETE", "path": "/quiz/{folder}/{id}" },
-        { "method": "POST", "path": "/quiz/{folder}/{id}/rename", "body": "{newTitle}" },
-        { "method": "GET", "path": "/tree" }
+        {
+          "method": "POST",
+          "path": "/folder",
+          "body": "{name}"
+        },
+        {
+          "method": "DELETE",
+          "path": "/folder/{name}"
+        },
+        {
+          "method": "POST",
+          "path": "/lesson",
+          "body": "{folder,id,slug,title,seq,html}",
+          "usedBy": "Claude Code"
+        },
+        {
+          "method": "GET",
+          "path": "/lesson/{folder}/{id}"
+        },
+        {
+          "method": "DELETE",
+          "path": "/lesson/{folder}/{id}"
+        },
+        {
+          "method": "POST",
+          "path": "/lesson/{folder}/{id}/rename",
+          "body": "{newTitle}"
+        },
+        {
+          "method": "POST",
+          "path": "/quiz",
+          "body": "{folder,id,slug,title,seq,html}",
+          "usedBy": "Claude Code"
+        },
+        {
+          "method": "GET",
+          "path": "/quiz/{folder}/{id}"
+        },
+        {
+          "method": "DELETE",
+          "path": "/quiz/{folder}/{id}"
+        },
+        {
+          "method": "POST",
+          "path": "/quiz/{folder}/{id}/rename",
+          "body": "{newTitle}"
+        },
+        {
+          "method": "GET",
+          "path": "/tree"
+        }
       ]
     },
     "indexd": {
@@ -73,44 +109,135 @@
       "authHeader": "X-Auth-Token",
       "storage": "vault/.index/index.db (SQLite: metadata + FTS5 + embedding BLOBs, derived/safe to delete)",
       "embeddingBackend": {
-        "provider": "Ollama",
-        "envUrl": "OLLAMA_URL",
-        "envEmbedModel": "EMBED_MODEL",
         "defaultEmbedModel": "nomic-embed-text",
-        "envChatModel": "CHAT_MODEL",
-        "defaultChatModel": "llama3.2",
         "degradesGracefully": true
       },
       "endpoints": [
-        { "method": "POST", "path": "/index", "body": "{folder,id,kind}" },
-        { "method": "DELETE", "path": "/index/{folder}/{id}", "query": "?kind=" },
-        { "method": "POST", "path": "/reindex", "response": "202 async" },
-        { "method": "GET", "path": "/search", "query": "?q&folder&kind&limit&html=1" },
-        { "method": "GET", "path": "/related/{folder}/{id}", "query": "?kind&limit" },
-        { "method": "GET", "path": "/topics", "query": "?q&limit" },
-        { "method": "POST", "path": "/chat", "body": "{message,history}", "response": "SSE" },
-        { "method": "GET", "path": "/status" }
+        {
+          "method": "POST",
+          "path": "/index",
+          "body": "{folder,id,kind}"
+        },
+        {
+          "method": "DELETE",
+          "path": "/index/{folder}/{id}",
+          "query": "?kind="
+        },
+        {
+          "method": "POST",
+          "path": "/reindex",
+          "response": "202 async"
+        },
+        {
+          "method": "GET",
+          "path": "/search",
+          "query": "?q&folder&kind&limit&html=1"
+        },
+        {
+          "method": "GET",
+          "path": "/related/{folder}/{id}",
+          "query": "?kind&limit"
+        },
+        {
+          "method": "GET",
+          "path": "/topics",
+          "query": "?q&limit"
+        },
+        {
+          "method": "POST",
+          "body": "{message,history}",
+          "response": "SSE"
+        },
+        {
+          "method": "GET",
+          "path": "/status"
+        }
       ]
     },
     "desktop": {
       "role": "Tauri shell: orchestration only, no business logic",
       "path": "desktop/",
       "language": "Rust",
-      "sidecars": ["vaultd", "indexd", "node (Next standalone server)"],
+      "sidecars": [
+        "vaultd",
+        "indexd",
+        "node (Next standalone server)"
+      ],
       "vaultLocation": "checkout's vault/, baked in at compile time (single-vault, checkout-centric design)"
     }
   },
   "apiRoutes": [
-    { "path": "/api/tree", "method": "GET", "response": "{folders:[{name,lessons,quizzes}]}" },
-    { "path": "/api/folders", "method": "POST", "body": "{name}", "readOnlyBlocked": true },
-    { "path": "/api/folders/[name]", "method": "DELETE", "readOnlyBlocked": true },
-    { "path": "/api/lesson/[folder]/[id]", "methods": ["GET", "DELETE", "POST"], "readOnlyBlocked": ["DELETE", "POST"] },
-    { "path": "/api/quiz/[folder]/[id]", "methods": ["GET", "DELETE", "POST"], "readOnlyBlocked": ["DELETE", "POST"] },
-    { "path": "/api/search", "method": "GET", "proxiesTo": "indexd" },
-    { "path": "/api/related/[folder]/[id]", "method": "GET", "proxiesTo": "indexd" },
-    { "path": "/api/chat", "method": "POST", "proxiesTo": "indexd", "readOnlyExempt": true },
-    { "path": "/api/generate", "method": "POST", "spawns": "claude CLI", "readOnlyBlocked": true },
-    { "path": "/api/generate/[id]", "methods": ["GET", "DELETE"], "readOnlyBlocked": ["DELETE"] }
+    {
+      "path": "/api/tree",
+      "method": "GET",
+      "response": "{folders:[{name,lessons,quizzes}]}"
+    },
+    {
+      "path": "/api/folders",
+      "method": "POST",
+      "body": "{name}",
+      "readOnlyBlocked": true
+    },
+    {
+      "path": "/api/folders/[name]",
+      "method": "DELETE",
+      "readOnlyBlocked": true
+    },
+    {
+      "path": "/api/lesson/[folder]/[id]",
+      "methods": [
+        "GET",
+        "DELETE",
+        "POST"
+      ],
+      "readOnlyBlocked": [
+        "DELETE",
+        "POST"
+      ]
+    },
+    {
+      "path": "/api/quiz/[folder]/[id]",
+      "methods": [
+        "GET",
+        "DELETE",
+        "POST"
+      ],
+      "readOnlyBlocked": [
+        "DELETE",
+        "POST"
+      ]
+    },
+    {
+      "path": "/api/search",
+      "method": "GET",
+      "proxiesTo": "indexd"
+    },
+    {
+      "path": "/api/related/[folder]/[id]",
+      "method": "GET",
+      "proxiesTo": "indexd"
+    },
+    {
+      "method": "POST",
+      "proxiesTo": "indexd",
+      "readOnlyExempt": true
+    },
+    {
+      "path": "/api/generate",
+      "method": "POST",
+      "spawns": "claude CLI",
+      "readOnlyBlocked": true
+    },
+    {
+      "path": "/api/generate/[id]",
+      "methods": [
+        "GET",
+        "DELETE"
+      ],
+      "readOnlyBlocked": [
+        "DELETE"
+      ]
+    }
   ],
   "storageModel": {
     "root": "vault/",
@@ -124,9 +251,20 @@
     "sourceOfTruth": "filesystem, no database"
   },
   "commands": {
-    "/lect": { "purpose": "lesson generation and maintenance", "authoredBy": "Claude Code", "docs": ".claude/commands/lect.md" },
-    "/quiz": { "purpose": "quiz creation and maintenance", "authoredBy": "Claude Code", "docs": ".claude/commands/quiz.md" },
-    "/feat": { "purpose": "application development only", "docs": ".claude/commands/feat.md" }
+    "/lect": {
+      "purpose": "lesson generation and maintenance",
+      "authoredBy": "Claude Code",
+      "docs": ".claude/commands/lect.md"
+    },
+    "/quiz": {
+      "purpose": "quiz creation and maintenance",
+      "authoredBy": "Claude Code",
+      "docs": ".claude/commands/quiz.md"
+    },
+    "/feat": {
+      "purpose": "application development only",
+      "docs": ".claude/commands/feat.md"
+    }
   },
   "deploymentModes": {
     "local-desktop": {
@@ -139,10 +277,14 @@
     },
     "remote-reader": {
       "description": "read-only instance for other devices (iPad/laptop); generation and folder/lesson mutation disabled at middleware.ts, gated by READ_ONLY/NEXT_PUBLIC_READ_ONLY",
-      "requires": ["vaultd/indexd reachable from the reader instance (shared filesystem sync or a tunnel + VAULTD_TOKEN/INDEXD_TOKEN)"],
+      "requires": [
+        "vaultd/indexd reachable from the reader instance (shared filesystem sync or a tunnel + VAULTD_TOKEN/INDEXD_TOKEN)"
+      ],
       "command": "READ_ONLY=1 NEXT_PUBLIC_READ_ONLY=1 npm run build && npm run start",
       "recommendedTunnel": "Cloudflare Tunnel (free) + Cloudflare Access in front of vaultd/indexd public hostnames",
-      "cannotRunRemotely": ["/api/generate (requires local claude CLI + subscription auth on the writer machine only)"]
+      "cannotRunRemotely": [
+        "/api/generate (requires local claude CLI + subscription auth on the writer machine only)"
+      ]
     }
   },
   "techStack": {

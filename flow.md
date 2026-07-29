@@ -159,7 +159,7 @@ app/api/search/route.ts
   │  search() → indexd GET /search?q=...
   ▼
 indexd
-  │  FTS5 keyword ranks + (if Ollama up) vector cosine ranks
+  │  FTS5 keyword ranks
   │  reciprocal-rank fusion → top chunks with metadata
   ▼
 SearchResults renders heading/lesson/summary per hit
@@ -181,4 +181,4 @@ current — so search follows both local edits and pulled remote changes.
 | **Next.js** | `app/api/*`, `lib/vault/*`, `lib/search/*`, `components/*` | Read and manage via stored; proxy search; never touches Supabase |
 | **stored** | `tools/stored/*.go` | Source of truth (SQLite), sync queue + Supabase worker, vault import, disk mirror orchestration. Zero naming logic |
 | **vaultd** | `tools/vaultd/main.go` | Pure filesystem I/O over HTTP (Claude Code saves; stored mirrors). Zero naming logic, zero content logic |
-| **indexd** | `tools/indexd/*.go` | Chunking, embeddings (via Ollama), hybrid search over `vault/.index/index.db` |
+| **indexd** | `tools/indexd/*.go` | Chunking and FTS5 keyword search over `vault/.index/index.db` |

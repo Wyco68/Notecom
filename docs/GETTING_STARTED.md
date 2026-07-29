@@ -75,15 +75,6 @@ app uses it.
 
 ## 6. Optional extras
 
-- **Ask My Notes chat + semantic search** — install
-  [Ollama](https://ollama.com), then:
-  ```bash
-  ollama pull llama3.2
-  ollama pull nomic-embed-text
-  ```
-  Chat and smarter search switch on automatically. Everything runs locally;
-  nothing leaves your machine. Without Ollama, keyword search still works
-  and the chat button tells you what's missing.
 - **`/quiz <Subject>`** — turn questions into a saved quiz.
 - **Generate button in the app** — same as `/lect`/`/quiz`, but from an
   upload dialog inside the reader. Uses your local Claude Code login.
@@ -102,6 +93,6 @@ app uses it.
   checkout; if you have several checkouts, make sure you're running the app
   from the one `/lect` wrote into. All run modes read this checkout's
   `vault/` — there is no second notes location.
-- **Search/chat offline message** — `npm run dev` starts both backend
+- **Search returns nothing** — `npm run dev` starts both backend
   services automatically; if one died, re-run `npm run dev` (or
   `node scripts/ensure-vaultd.mjs` / `node scripts/ensure-indexd.mjs`).

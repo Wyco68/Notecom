@@ -43,8 +43,8 @@ on a background thread:
 
 Four sidecars in the release build (`bundle.externalBin`): `vaultd` (files),
 `indexd` (search/RAG), `stored` (SQLite datastore + sync), and `node` (runs
-the Next standalone `server.js`). indexd's Ollama dependency is optional —
-without it, search falls back to keyword mode and chat is unavailable, both
+the Next standalone `server.js`). indexd needs nothing external — keyword
+search is served from its own SQLite index, both
 handled in the app. stored's Supabase credentials are optional the same way
 — without `vault/.data/sync.env` it runs fully local and skips sync.
 

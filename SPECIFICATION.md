@@ -32,8 +32,8 @@ sense below.
 The Next.js app **contains no generation logic of its own**. Two narrow,
 deliberate delegations exist (added 2026-07):
 
-- **Ask My Notes** — a chat panel proxied to indexd's `/chat`, which answers
-  from retrieved chunks via a *local Ollama model*. No Claude involved, no
+- ~~Ask My Notes~~ — the chat panel and its local model were removed; the
+  app searches, it does not converse. No
   data leaves the machine, context is capped at a handful of sections.
 - **Generate from file** — an upload modal that spawns the *local Claude
   Code CLI* headlessly (`lib/generate/runner.ts`) to run the same `/lect` /
@@ -74,10 +74,10 @@ sequence-number generation, no content logic.
 
 A second Go service (`tools/indexd/`, default `127.0.0.1:4322`) that makes
 the vault searchable (the RAG backend): chunks lesson HTML by educational
-sections, embeds chunks via local Ollama when available, and serves hybrid
+sections and serves keyword
 search (SQLite FTS5 + vector cosine, RRF-merged). Its entire state is one
 derived SQLite file, `vault/.index/index.db` — safe to delete, rebuilt by a
-reindex. Without Ollama it runs in keyword-only mode. It never generates
+reindex. It never generates
 content and never calls Claude. See
 [docs/architecture.md](docs/architecture.md) and
 [docs/api-contract.md](docs/api-contract.md).
@@ -188,8 +188,8 @@ Folder Name
 ```
 
 There is no auth UI. The header has a Generate button (upload a lecture
-file → local Claude Code CLI runs `/lect` or `/quiz`) and an Ask My Notes
-chat toggle (local Ollama over retrieved sections) — see §2.1.
+file → local Claude Code CLI runs `/lect` or `/quiz`) and a search box over
+the indexed sections — see §2.1.
 
 ---
 
@@ -253,11 +253,11 @@ used by Claude Code (`/lect`, `/quiz`). See
 | Primary datastore | Go HTTP service (`stored`) + SQLite | Source of truth: folder/document CRUD, sync queue, Supabase sync worker |
 | Cloud sync | Supabase Postgres (`notes_*` tables, RLS-enforced) | Cross-device synchronization, backup and folder sharing; never a runtime database |
 | Filesystem helper | Go HTTP service (`vaultd`) | Legacy-format disk mirror + Claude Code's save path |
-| Search/RAG | Go HTTP service (`indexd`) + SQLite (FTS5 + vector BLOBs) | Section chunking, hybrid retrieval; Ollama embeddings when present |
+| Search | Go HTTP service (`indexd`) + SQLite (FTS5) | Section chunking, keyword retrieval |
 | Notes storage | `.html` + `index.json` under `vault/` | Live legacy-format mirror/export; gitignored |
 | Desktop shell | Tauri (Rust) | Native window, startup orchestration, splash screen, packaging |
 
-No AI SDK, no Anthropic API key. Chat = Ollama via indexd; generation =
+No AI SDK, no Anthropic API key. Generation =
 local Claude Code CLI subprocess. No authentication.
 
 ---
@@ -297,8 +297,7 @@ user credential (`SUPABASE_REFRESH_TOKEN`, or `SUPABASE_EMAIL` +
 `SUPABASE_PASSWORD` once) in `vault/.data/sync.env`; without them the app is
 fully local.
 
-Semantic search (optional): install [Ollama](https://ollama.com) and run
-`ollama pull nomic-embed-text`. Without it, search runs in keyword (FTS5)
+Search runs in keyword (FTS5)
 mode; with it, indexd embeds automatically on the next scan.
 
 Writing a note happens separately, via Claude Code in a terminal, using the
@@ -316,6 +315,6 @@ Writing a note happens separately, via Claude Code in a terminal, using the
 - No per-document permissions — folders are the unit of sharing and
   documents inherit them (see docs/collaboration.md).
 - No generation *logic* inside the application — the app only delegates to
-  the local Claude Code CLI (lessons/quizzes) or local Ollama (chat).
+  the local Claude Code CLI (lessons/quizzes).
 - No reading or writing Supabase from the app/UI — sync lives only inside
   the stored worker; Supabase is never a runtime database.

@@ -6,46 +6,15 @@ implementation details — those live in the two command files and `docs/`.
 ## Repo purpose
 Lesson notes generated from uploaded slides/PDFs/images, rewritten in plain
 high-school-level language, technical terms kept correct (Information
-Systems & Network Engineering program). Architecture: `docs/architecture.md`
-(read via `/feat`). Repo rules for humans: [README.md](README.md).
-
-## Command Gatekeeper (strict)
-This repository operates in strict command mode. Every user request must
-begin with exactly one of:
-
-- `/lect`
-- `/quiz`
-- `/feat`
-
-If a prompt does not begin with one of these commands:
-
-1. Do not analyze the request.
-2. Do not inspect the repository.
-3. Do not read project files.
-4. Do not propose solutions.
-5. Do not perform any work.
-
-Immediately reply with:
-
-```
-Invalid command.
-
-Start your request with one of:
-
-/lect
-- Lesson generation and lesson maintenance.
-
-/quiz
-- Quiz creation and maintenance (questions, reasoning, answers).
-
-/feat
-- Application development and project improvements.
-```
-
-Do not make exceptions. Do not infer which command the user intended. Wait
-until a valid command is provided before proceeding.
+Systems & Network Engineering program). Architecture: `docs/architecture.md`.
+Repo rules for humans: [README.md](README.md).
 
 ## The three commands
+Optional, not required: a request works without one. Each command loads a
+focused doc set, so naming one is the fast path when the work clearly belongs
+to it. Without a command, work out from the request which set applies and load
+that — the split below still says which docs belong to which kind of work.
+
 - **`/lect`** — [.claude/commands/lect.md](.claude/commands/lect.md).
   Lesson generation and maintenance only. Loads only
   `docs/teaching-guidelines.md`, `docs/html-output-contract.md`,
@@ -59,19 +28,18 @@ until a valid command is provided before proceeding.
   permissions or RLS.
 
 ## Never mix responsibilities (strict)
-Each command is self-contained and loads only its own docs. A request that
-needs content changes (lesson or quiz) and application changes must be
-split into separate turns under the matching command — never mixed under
-one command.
+Content work and application work stay separate changes. Lesson/quiz
+generation follows the teaching docs; application work follows the
+architecture docs. Doing both in one pass mixes two contracts that disagree
+about what the vault is — split them.
 
 Generated lesson/quiz files (`vault/**/*.html`, `vault/**/index.json`,
 `vault/.quiz-state.json`) are **application data**, not application source.
-`/feat` never edits them except for an explicit, requested migration or
-format conversion.
+Application work never edits them except for an explicit, requested migration
+or format conversion.
 
 ## Collaboration and access control
-Folders are the unit of sharing: owner, members with roles, visibility,
-discoverability, tags. Documents inherit folder permissions and never carry
-their own. Access is enforced by Supabase Row Level Security — no
+Folders are the unit of sharing: owner, members with roles, visibility, tags.
+Documents inherit folder permissions and never carry their own. Access is enforced by Supabase Row Level Security — no
 service-role key exists in this app, and a frontend check is never the
 protection. Contract: [docs/collaboration.md](docs/collaboration.md).
