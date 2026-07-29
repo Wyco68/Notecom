@@ -3,6 +3,7 @@
 import type { Folder, LessonRef } from "@/lib/vault/types";
 import FileTreeNode from "./FileTreeNode";
 import TagGroup from "./TagGroup";
+import { SkeletonRows } from "../layout/Skeleton";
 
 // The tree itself comes from stored/SQLite (/api/tree) and knows nothing about
 // tags — tags are collaboration state and live in Supabase. AppShell fetches
@@ -20,6 +21,7 @@ export default function FileTree({
   onSelect,
   onToggleFavorite,
   onChanged,
+  onManage,
 }: {
   folders: Folder[] | null;
   selected: LessonRef | null;
@@ -30,25 +32,36 @@ export default function FileTree({
   onSelect: (ref: LessonRef) => void;
   onToggleFavorite: (ref: LessonRef, title: string) => void;
   onChanged: () => void;
+  /** Show a folder's sharing console in place. Absent → navigate to its page. */
+  onManage?: (slug: string) => void;
 }) {
   if (!folders) {
-    return <p className="px-2 py-1 text-sm text-gray-500 dark:text-gray-500">Loading...</p>;
+    return <SkeletonRows rows={6} />;
   }
 
   if (folders.length === 0) {
     return <p className="px-2 py-1 text-sm text-gray-500 dark:text-gray-500">No folders yet.</p>;
   }
 
-  const node = (folder: Folder) => (
-    <FileTreeNode
+  // Wrapped so the top-level folders can stagger in as the tree arrives. The
+  // delay is capped: past the first handful the wait would cost readability
+  // rather than buying any sense of sequence.
+  const node = (folder: Folder, i: number) => (
+    <div
       key={folder.name}
-      folder={folder}
-      selected={selected}
-      favorites={favorites}
-      onSelect={onSelect}
-      onToggleFavorite={onToggleFavorite}
-      onChanged={onChanged}
-    />
+      style={{ animationDelay: `${Math.min(i, 8) * 25}ms` }}
+      className="ui-rise"
+    >
+      <FileTreeNode
+        folder={folder}
+        selected={selected}
+        favorites={favorites}
+        onSelect={onSelect}
+        onToggleFavorite={onToggleFavorite}
+        onChanged={onChanged}
+        onManage={onManage}
+      />
+    </div>
   );
 
   // A folder carrying several tags appears under each of them: the sidebar is

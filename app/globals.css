@@ -88,10 +88,14 @@ body {
     @apply focus-visible:ring-red-600/70 dark:focus-visible:ring-red-500/70;
   }
 
-  /* A row that tints on hover. Colour only — never size, never layout. */
+  /* A row that tints on hover, and nudges a hair toward the reader. Colour and
+     transform only — never size, never layout, so the fixed-width sidebar can't
+     reflow on hover. */
   .ui-row {
-    @apply rounded transition-colors duration-150 ease-out outline-none;
-    @apply hover:bg-black/[0.04] focus-visible:ring-2 focus-visible:ring-blue-600/70;
+    @apply rounded outline-none;
+    @apply transition-[color,background-color,transform] duration-150 ease-out;
+    @apply hover:translate-x-0.5 hover:bg-black/[0.04];
+    @apply focus-visible:ring-2 focus-visible:ring-blue-600/70;
     @apply dark:hover:bg-white/[0.06];
   }
 
@@ -108,6 +112,33 @@ body {
     transition-duration: 150ms;
     transition-timing-function: cubic-bezier(0, 0, 0.2, 1);
   }
+
+  /* A list or pane that scrolls. Momentum-free smooth scrolling so a jump to a
+     row or a heading glides instead of teleporting; the reduced-motion block
+     below turns it back into an instant jump. */
+  .ui-scroll {
+    @apply overflow-y-auto;
+    scroll-behavior: smooth;
+    overscroll-behavior: contain;
+  }
+
+  /* Enter animation for a row or card arriving in a list. Pair it with an
+     inline `animationDelay` to stagger a short list — never a long one, since
+     the last item would wait for its turn to become readable. */
+  .ui-rise {
+    animation: ui-rise 240ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+}
+
+@keyframes ui-rise {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
 /* One rule for the whole app: someone who asked their OS for less motion gets
@@ -122,6 +153,35 @@ body {
     transition-delay: 0ms !important;
     scroll-behavior: auto !important;
   }
+}
+
+/* ── Native controls follow the theme ───────────────────────────────────────
+   A <select>'s drop-down list is painted by the OS, not by the page, so it
+   ignores `.ui-field`'s translucent `dark:bg-white/[0.04]` and used the
+   system's default (white) popup — while still inheriting the near-white
+   `dark:text-gray-100`. That left every folder/role/member dropdown as white
+   text on white in dark mode.
+
+   `color-scheme` is the real fix: it tells the browser to draw native widgets
+   (select popups, scrollbars, checkboxes, focus rings) in the matching scheme.
+   It has to be declared per theme rather than once, because the theme is a
+   class on <html> that can be toggled at runtime. */
+:root {
+  color-scheme: light;
+}
+
+.dark {
+  color-scheme: dark;
+}
+
+/* And the options themselves, explicitly: not every engine derives an option's
+   colours from `color-scheme` alone, and a translucent background is never a
+   safe thing for one to inherit. `#161b22` is the panel background from
+   docs/ui-guidelines.md, so an open dropdown matches the modal it sits in. */
+.dark .ui-field option,
+.dark .ui-field optgroup {
+  background-color: #161b22;
+  color: #e6edf3;
 }
 
 /* Custom scrollbars (horizontal + vertical), app-wide. Colors swap with the

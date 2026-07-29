@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { LessonRef } from "@/lib/vault/types";
-import SpinnerIcon from "../icons/SpinnerIcon";
+import { SkeletonRows } from "../layout/Skeleton";
 
 interface Result {
   folder: string;
@@ -81,11 +81,9 @@ export default function SearchResults({
   }, [query]);
 
   if (state.status === "loading") {
-    return (
-      <div className="flex justify-center py-6">
-        <SpinnerIcon className="h-5 w-5 text-gray-400" />
-      </div>
-    );
+    // A result is a heading over a subtitle, so the placeholder is too — the
+    // list doesn't jump when the real hits replace it.
+    return <SkeletonRows rows={5} lines={2} />;
   }
 
   if (state.status === "offline") {
@@ -121,7 +119,8 @@ export default function SearchResults({
               headingIndex: r.headingIndex,
             })
           }
-          className="ui-row block w-full px-2 py-1.5 text-left"
+          style={{ animationDelay: `${Math.min(i, 8) * 25}ms` }}
+          className="ui-rise ui-row block w-full px-2 py-1.5 text-left"
         >
           <span className="block truncate text-sm text-gray-800 dark:text-gray-200">
             {highlight(r.heading, query)}

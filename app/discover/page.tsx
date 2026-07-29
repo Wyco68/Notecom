@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import FolderCard from "@/components/collab/FolderCard";
 import SearchIcon from "@/components/icons/SearchIcon";
-import SpinnerIcon from "@/components/icons/SpinnerIcon";
+import { SkeletonCard } from "@/components/layout/Skeleton";
 import type { FolderSummary } from "@/lib/collab/types";
 
 // Folder discovery. Search covers name, description and owner username — not
@@ -89,8 +89,12 @@ export default function DiscoverPage() {
           </a>
         </div>
       ) : loading ? (
-        <div className="flex justify-center py-16 text-gray-400">
-          <SpinnerIcon className="h-6 w-6" />
+        // Placeholder cards in the real grid, so results drop into the layout
+        // they were already occupying.
+        <div className="grid animate-pulse gap-4 sm:grid-cols-2" role="status" aria-label="Loading">
+          {[0, 1, 2, 3].map((i) => (
+            <SkeletonCard key={i} lines={2} />
+          ))}
         </div>
       ) : folders.length === 0 ? (
         <p className="py-16 text-center text-sm text-gray-500 dark:text-gray-400">

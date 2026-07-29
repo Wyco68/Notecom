@@ -37,6 +37,7 @@ export default function FileTreeNode({
   onSelect,
   onToggleFavorite,
   onChanged,
+  onManage,
 }: {
   folder: Folder;
   selected: LessonRef | null;
@@ -45,6 +46,8 @@ export default function FileTreeNode({
   onSelect: (ref: LessonRef) => void;
   onToggleFavorite: (ref: LessonRef, title: string) => void;
   onChanged: () => void;
+  /** Show the sharing console in place. Absent → navigate to its own page. */
+  onManage?: (slug: string) => void;
 }) {
   // Folders start collapsed so a vault with many files reads as a tidy index
   // — click a folder to reveal its files.
@@ -107,23 +110,44 @@ export default function FileTreeNode({
           onClick={() => setOpen((o) => !o)}
           className="ui-row flex min-w-0 flex-1 items-start gap-1.5 px-2 py-1.5 text-left text-sm text-gray-800 dark:text-gray-200"
         >
-          <span className="text-gray-500 transition-colors duration-150 ease-out">
-            {open ? "▾" : "▸"}
+          {/* One glyph that rotates, rather than two that swap: a transform
+              animates, a different character can only cut. */}
+          <span
+            className={`inline-block text-gray-500 transition-transform duration-150 ease-out ${
+              open ? "rotate-90" : ""
+            }`}
+          >
+            ▸
           </span>
           {/* Wraps rather than truncates: a folder name is how you find the
               folder, and the sidebar never scrolls sideways. */}
           <span className="break-words font-medium">{folder.name.replace(/-/g, " ")}</span>
         </button>
-        {COLLAB_ENABLED && (
-          <a
-            href={`/vault/${encodeURIComponent(folder.name)}/manage`}
-            title="Manage sharing"
-            onClick={(e) => e.stopPropagation()}
-            className="ui-icon-btn ui-reveal mr-1 h-5 w-5"
-          >
-            <ShareIcon className="h-3.5 w-3.5" />
-          </a>
-        )}
+        {/* Opens the sharing console in the content column when the shell
+            offers that, and navigates only as a fallback — a button that
+            navigates and a link that doesn't are both lies about what happens. */}
+        {COLLAB_ENABLED &&
+          (onManage ? (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onManage(folder.name);
+              }}
+              title="Manage sharing"
+              className="ui-icon-btn ui-reveal mr-1 h-5 w-5"
+            >
+              <ShareIcon className="h-3.5 w-3.5" />
+            </button>
+          ) : (
+            <a
+              href={`/vault/${encodeURIComponent(folder.name)}/manage`}
+              title="Manage sharing"
+              onClick={(e) => e.stopPropagation()}
+              className="ui-icon-btn ui-reveal mr-1 h-5 w-5"
+            >
+              <ShareIcon className="h-3.5 w-3.5" />
+            </a>
+          ))}
         <button
           onClick={(e) => {
             e.stopPropagation();
@@ -136,18 +160,26 @@ export default function FileTreeNode({
         </button>
       </div>
 
+      {/* Opening fades and lifts the contents in; the rows themselves stagger a
+          little so a long folder reads as unfolding rather than appearing. The
+          animation is opacity and transform only — animating the height here
+          would reflow every row below it. */}
       {open && (
-        <div className="ml-4 border-l border-black/10 pl-2 dark:border-white/10">
+        <div className="ui-rise ml-4 border-l border-black/10 pl-2 dark:border-white/10">
           {lessons.length === 0 && (
             <p className="px-2 py-1 text-xs text-gray-500">No lessons yet</p>
           )}
-          {lessons.map((lesson) => {
+          {lessons.map((lesson, i) => {
             const isActive =
               selected?.folder === folder.name &&
               selected?.id === lesson.id &&
               selected?.kind === "lesson";
             return (
-              <div key={lesson.id} className="group flex items-center">
+              <div
+                key={lesson.id}
+                style={{ animationDelay: `${Math.min(i, 8) * 20}ms` }}
+                className="ui-rise group flex items-center"
+              >
                 <button
                   onClick={() => onSelect({ folder: folder.name, id: lesson.id, kind: "lesson" })}
                   className={`ui-row flex min-w-0 flex-1 items-start gap-1.5 px-2 py-1 text-left text-sm ${
@@ -203,13 +235,17 @@ export default function FileTreeNode({
               Quizzes
             </p>
           )}
-          {quizzes.map((quiz) => {
+          {quizzes.map((quiz, i) => {
             const isActive =
               selected?.folder === folder.name &&
               selected?.id === quiz.id &&
               selected?.kind === "quiz";
             return (
-              <div key={quiz.id} className="group flex items-center">
+              <div
+                key={quiz.id}
+                style={{ animationDelay: `${Math.min(i, 8) * 20}ms` }}
+                className="ui-rise group flex items-center"
+              >
                 <button
                   onClick={() => onSelect({ folder: folder.name, id: quiz.id, kind: "quiz" })}
                   className={`ui-row flex min-w-0 flex-1 items-start gap-1.5 px-2 py-1 text-left text-sm ${
