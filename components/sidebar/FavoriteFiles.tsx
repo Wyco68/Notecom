@@ -25,14 +25,18 @@ export default function FavoriteFiles({
       <p className="px-2 pb-1 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-500">
         Favorites
       </p>
-      {entries.map((entry) => {
+      {entries.map((entry, i) => {
         const ref: LessonRef = { folder: entry.folder, id: entry.id, kind: entry.kind };
         const isActive =
           selected?.folder === entry.folder &&
           selected?.id === entry.id &&
           selected?.kind === entry.kind;
         return (
-          <div key={`${entry.kind}:${entry.folder}:${entry.id}`} className="group flex items-center">
+          <div
+            key={`${entry.kind}:${entry.folder}:${entry.id}`}
+            style={{ animationDelay: `${Math.min(i, 8) * 25}ms` }}
+            className="ui-rise group flex items-center"
+          >
             <button
               onClick={() => onSelect(ref)}
               title={`${entry.title} — ${entry.folder.replace(/-/g, " ")}`}

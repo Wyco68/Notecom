@@ -4,6 +4,10 @@
 // not shared knowledge, so it needs no table, no sync and no RLS. Storing it
 // server-side would also make it readable history, which this app has no
 // reason to keep.
+//
+// An entry is recorded when the reader *leaves* a document, not when they open
+// it — see AppShell. "Recent" then means "finished with", so the file you are
+// currently reading is never also listed above the tree as history.
 
 import type { LessonRef } from "./types";
 

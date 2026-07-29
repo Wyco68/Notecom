@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { Folder, LessonRef, VaultTree } from "@/lib/vault/types";
 import { pruneRecent, pushRecent, type RecentEntry } from "@/lib/vault/recent";
 import {
@@ -17,26 +17,34 @@ import LessonViewer from "../viewer/LessonViewer";
 import NewFolderModal from "../modals/NewFolderModal";
 import GenerateModal from "../modals/GenerateModal";
 import SignInModal from "../modals/SignInModal";
+import GenerateJobList from "../generate/GenerateJobList";
+import { useGenerateJobs } from "../generate/GenerateJobsProvider";
 import InvitationsInbox from "../collab/InvitationsInbox";
 import TagGrantsInbox from "../collab/TagGrantsInbox";
 import AccountControl from "../collab/AccountControl";
+import AccountPanel from "../account/AccountPanel";
+import FolderManagePanel from "../collab/FolderManagePanel";
 import ThemeToggle from "../theme/ThemeToggle";
 import RefreshIcon from "../icons/RefreshIcon";
 import SearchIcon from "../icons/SearchIcon";
 import MenuIcon from "../icons/MenuIcon";
 import UploadIcon from "../icons/UploadIcon";
 
-// Which write affordances the UI exposes: NEXT_PUBLIC_READ_ONLY covers a
-// read-only reader box; the runtime readOnly flag from /api/tree covers a
-// build where the env var was missing.
-const READ_ONLY_UI = process.env.NEXT_PUBLIC_READ_ONLY === "1";
-
 export default function AppShell() {
   const [folders, setFolders] = useState<Folder[] | null>(null);
   const [selected, setSelected] = useState<LessonRef | null>(null);
   const [showNewFolder, setShowNewFolder] = useState(false);
-  const [showGenerate, setShowGenerate] = useState(false);
+  // `true` opens the form; a job id opens that run's log instead.
+  const [showGenerate, setShowGenerate] = useState<boolean | string>(false);
   const [showSignIn, setShowSignIn] = useState(false);
+  // What the content column is showing instead of the document. The account
+  // editor and the sharing console both take it over rather than navigating
+  // away, so opening either doesn't tear down the workspace and closing it puts
+  // the reader back on the document they left. One value, not a boolean each:
+  // two panes cannot be open at once, and this is what says so.
+  const [overlay, setOverlay] = useState<
+    { kind: "profile" } | { kind: "manage"; slug: string } | null
+  >(null);
   // undefined until the first status check answers — avoids flashing a
   // "signed out" warning during the initial load.
   const [signedIn, setSignedIn] = useState<boolean | undefined>(undefined);
@@ -51,10 +59,9 @@ export default function AppShell() {
   const [tagsByFolder, setTagsByFolder] = useState<Record<string, string[]>>({});
   const [recent, setRecent] = useState<RecentEntry[]>([]);
   const [favorites, setFavorites] = useState<FavoriteEntry[]>([]);
-  // Seed from the build-time env (fast path), then trust the runtime flag
-  // /api/tree returns — so a read-only box hides controls even if the
-  // client build was missing NEXT_PUBLIC_READ_ONLY.
-  const [readOnly, setReadOnly] = useState(READ_ONLY_UI);
+  // Generation jobs are owned above this component so they survive the dialog
+  // closing; this only reads them.
+  const { completedTick } = useGenerateJobs();
 
   const currentTitle = (() => {
     if (!selected || !folders) return null;
@@ -86,7 +93,6 @@ export default function AppShell() {
     const data: VaultTree = await res.json();
     const list = data.folders ?? [];
     setFolders(list);
-    if (typeof data.readOnly === "boolean") setReadOnly(data.readOnly);
     // Drop recents and favourites whose file was deleted (here or on another
     // device) so neither list can offer a link that 404s.
     const stillExists = (e: { folder: string; id: string; kind: string }) => {
@@ -99,11 +105,40 @@ export default function AppShell() {
     refreshTags();
   }, [refreshTags]);
 
-  // Record what the user opens, once the title is known. Runs on selection
-  // change rather than inside onSelect because the title comes from the tree.
+  // The document on screen, held so it can be filed under "Recent" when the
+  // reader leaves it. A ref, not state: it must not trigger a render, and the
+  // unload handler below has to read the latest value without re-subscribing.
+  const openDoc = useRef<{ ref: LessonRef; title: string } | null>(null);
+
+  const refKey = (r: { kind: string; folder: string; id: string }) =>
+    `${r.kind}:${r.folder}:${r.id}`;
+
+  // Recent means "finished with", not "opened": an entry is written when the
+  // open document is replaced or closed, so the file being read is never also
+  // listed as history. The title comes from the tree, which is why this runs on
+  // selection change rather than inside onSelect.
   useEffect(() => {
-    if (selected && currentTitle) setRecent(pushRecent(selected, currentTitle));
+    const next = selected && currentTitle ? { ref: selected, title: currentTitle } : null;
+    const open = openDoc.current;
+    if ((open && next && refKey(open.ref) === refKey(next.ref)) || (!open && !next)) return;
+    if (open) setRecent(pushRecent(open.ref, open.title));
+    openDoc.current = next;
   }, [selected, currentTitle]);
+
+  // Closing the window or tab is also leaving the document. `pagehide` fires in
+  // cases `beforeunload` misses (a mobile background, a back-forward cache), and
+  // only the localStorage write matters here — the component is going away, so
+  // there is nothing to re-render.
+  useEffect(() => {
+    const flush = () => {
+      if (openDoc.current) {
+        pushRecent(openDoc.current.ref, openDoc.current.title);
+        openDoc.current = null;
+      }
+    };
+    window.addEventListener("pagehide", flush);
+    return () => window.removeEventListener("pagehide", flush);
+  }, []);
 
   // localStorage is not readable during render (no server equivalent), so the
   // first paint has no favourites and this fills them in after mount.
@@ -121,11 +156,23 @@ export default function AppShell() {
   }, []);
 
   // On a narrow screen the drawer covers the document it just opened, so it
-  // closes with the selection; a static sidebar stays put.
+  // closes with the selection; a static sidebar stays put. Picking a document is
+  // also how the reader dismisses the account editor.
   const onSelect = useCallback((ref: LessonRef) => {
     setSelected(ref);
+    setOverlay(null);
     if (!window.matchMedia("(min-width: 1024px)").matches) setSidebarOpen(false);
   }, []);
+
+  // Both overlays are opened from the sidebar, which on a narrow screen is
+  // covering the column they render into.
+  const openOverlay = useCallback(
+    (next: { kind: "profile" } | { kind: "manage"; slug: string }) => {
+      setOverlay(next);
+      if (!window.matchMedia("(min-width: 1024px)").matches) setSidebarOpen(false);
+    },
+    []
+  );
 
   // Membership test the tree rows use, precomputed once per render.
   const favoriteKeys = new Set(favorites.map((f) => `${f.kind}:${f.folder}:${f.id}`));
@@ -143,18 +190,25 @@ export default function AppShell() {
     refreshTree();
   }, [refreshTree]);
 
+  // A finished run wrote a file into vault/; the next tree fetch is what ingests
+  // it into SQLite. The dialog used to trigger this, which meant closing it lost
+  // the refresh — the job itself announces completion now, wherever the reader
+  // happens to be.
+  useEffect(() => {
+    if (completedTick) refreshTree();
+  }, [completedTick, refreshTree]);
+
   // Generating runs the local Claude Code CLI, so a signed-out session is a
   // dead end the user should see before they upload a file, not after a run
   // burns a few minutes and fails.
   const refreshAuth = useCallback(async () => {
-    if (readOnly) return;
     try {
       const res = await fetch("/api/auth");
       setSignedIn(res.ok ? (await res.json()).loggedIn : false);
     } catch {
       setSignedIn(false);
     }
-  }, [readOnly]);
+  }, []);
 
   useEffect(() => {
     refreshAuth();
@@ -251,6 +305,11 @@ export default function AppShell() {
             grants access to the folders carrying it. */}
         <TagGrantsInbox onChanged={refreshTree} />
 
+        {/* Generation runs in the background, so this row is what a closed
+            dialog leaves behind: proof the run is alive, and the way back into
+            its log. Renders nothing when nothing is running. */}
+        <GenerateJobList onOpen={(jobId) => setShowGenerate(jobId)} />
+
         {!query.trim() && (
           <FavoriteFiles
             entries={favorites}
@@ -260,81 +319,131 @@ export default function AppShell() {
           />
         )}
 
-        {!query.trim() && (
-          <RecentFiles entries={recent} selected={selected} onSelect={onSelect} />
-        )}
-
-        <div className="flex items-center justify-between px-3 pb-1 pt-4">
-          <span className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-500">
-            {query.trim() ? "Results" : "Folders"}
-          </span>
-          {!query.trim() && !readOnly && (
-            <div className="flex items-center gap-0.5">
-              {/* Generating needs a Claude Code session, so when there isn't
-                  one the button that starts one takes its place — offering
-                  Generate first would only lead to a run that fails on auth. */}
-              {signedIn === false ? (
-                <button
-                  onClick={() => setShowSignIn(true)}
-                  title="Claude Code is signed out — generating notes needs a session"
-                  className="ui-btn ui-btn-xs rounded border border-amber-500/30 bg-amber-500/10 font-medium text-amber-700 hover:bg-amber-500/20 focus-visible:ring-amber-500/70 dark:text-amber-300"
-                >
-                  Sign in
-                </button>
-              ) : (
-                <button
-                  onClick={() => setShowGenerate(true)}
-                  title="Generate a lesson or quiz from a file (runs local Claude Code)"
-                  className="ui-icon-btn h-6 w-6"
-                >
-                  <UploadIcon className="h-3.5 w-3.5" />
-                </button>
+        {/* Folders takes whatever height is left; Recent sits under it at a
+            fixed height — exactly the eight rows its history is capped at
+            (h-56 = 8 × 1.75rem), so it neither grows with the list nor leaves a
+            gap when the list is short. A long file name truncates inside its
+            row rather than widening it, which is what keeps the fixed-width
+            sidebar from scrolling sideways. While a search is running the
+            results take the whole area, since Recent is hidden then anyway. */}
+        <div className="flex min-h-0 flex-1 flex-col">
+          <div className="flex min-h-0 flex-1 flex-col">
+            <div className="flex items-center justify-between px-3 pb-1 pt-4">
+              <span className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-500">
+                {query.trim() ? "Results" : "Folders"}
+              </span>
+              {!query.trim() && (
+                <div className="flex items-center gap-0.5">
+                  {/* Generating needs a Claude Code session, so when there isn't
+                      one the button that starts one takes its place — offering
+                      Generate first would only lead to a run that fails on auth. */}
+                  {signedIn === false ? (
+                    <button
+                      onClick={() => setShowSignIn(true)}
+                      title="Claude Code is signed out — generating notes needs a session"
+                      className="ui-btn ui-btn-xs rounded border border-amber-500/30 bg-amber-500/10 font-medium text-amber-700 hover:bg-amber-500/20 focus-visible:ring-amber-500/70 dark:text-amber-300"
+                    >
+                      Sign in
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => setShowGenerate(true)}
+                      title="Generate a lesson or quiz from a file (runs local Claude Code)"
+                      className="ui-icon-btn h-6 w-6"
+                    >
+                      <UploadIcon className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                  <a
+                    href="/discover"
+                    title="Discover folders shared by other people"
+                    className="ui-icon-btn h-6 w-6"
+                  >
+                    <SearchIcon className="h-3.5 w-3.5" />
+                  </a>
+                  <button
+                    onClick={() => setShowNewFolder(true)}
+                    title="New Folder"
+                    className="ui-icon-btn h-6 w-6 text-base leading-none"
+                  >
+                    +
+                  </button>
+                </div>
               )}
-              <a
-                href="/discover"
-                title="Discover folders shared by other people"
-                className="ui-icon-btn h-6 w-6"
-              >
-                <SearchIcon className="h-3.5 w-3.5" />
-              </a>
-              <button
-                onClick={() => setShowNewFolder(true)}
-                title="New Folder"
-                className="ui-icon-btn h-6 w-6 text-base leading-none"
-              >
-                +
-              </button>
             </div>
-          )}
-        </div>
 
-        <div className="flex-1 overflow-y-auto px-2 pb-2">
-          {query.trim() ? (
-            <SearchResults query={query.trim()} onSelect={onSelect} />
-          ) : (
-            <FileTree
-              folders={folders}
-              selected={selected}
-              tagsByFolder={tagsByFolder}
-              favorites={favoriteKeys}
-              onSelect={onSelect}
-              onToggleFavorite={onToggleFavorite}
-              onChanged={refreshTree}
-            />
+            <div className="ui-scroll flex-1 px-2 pb-2">
+              {query.trim() ? (
+                <SearchResults query={query.trim()} onSelect={onSelect} />
+              ) : (
+                <FileTree
+                  folders={folders}
+                  selected={selected}
+                  tagsByFolder={tagsByFolder}
+                  favorites={favoriteKeys}
+                  onSelect={onSelect}
+                  onToggleFavorite={onToggleFavorite}
+                  onChanged={refreshTree}
+                  onManage={(slug) => openOverlay({ kind: "manage", slug })}
+                />
+              )}
+            </div>
+          </div>
+
+          {!query.trim() && (
+            <div className="flex shrink-0 flex-col border-t border-black/10 pb-2 dark:border-white/10">
+              <span className="px-3 pb-1 pt-3 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-500">
+                Recent
+              </span>
+              {/* h-56 (14rem) is exactly the eight rows recent.ts caps the list
+                  at — 8 × 1.75rem, a row being text-sm's 1.25rem line plus py-1.
+                  No padding inside the box, or it would eat a row. Still
+                  scrollable, so a longer list left in localStorage by an older
+                  build stays reachable rather than clipped; and while the list
+                  is empty the box collapses instead of holding open eight rows
+                  of blank space. */}
+              <div className={`px-2 ${recent.length ? "ui-scroll h-56" : ""}`}>
+                <RecentFiles entries={recent} selected={selected} onSelect={onSelect} />
+              </div>
+            </div>
           )}
         </div>
 
         {/* Sidebar foot: collaboration account. Renders nothing when the app
             isn't configured for collaboration. */}
-        <AccountControl />
+        <AccountControl
+          onOpenProfile={() => openOverlay({ kind: "profile" })}
+          active={overlay?.kind === "profile"}
+        />
       </aside>
 
       <main
-        className={`relative flex-1 overflow-y-auto bg-white dark:bg-[#0d1117] ${
+        className={`ui-scroll relative flex-1 bg-white dark:bg-[#0d1117] ${
           sidebarOpen ? "pt-12 lg:pt-0" : "pt-12"
         }`}
       >
-        <LessonViewer lesson={selected} />
+        {/* The account editor and the sharing console live here rather than at
+            /account and /vault/[folder]/manage: the reader keeps their place,
+            and closing either returns to the same document. Keyed by slug so
+            switching folders remounts the console instead of showing the
+            previous folder's state while the new one loads. */}
+        {overlay?.kind === "profile" ? (
+          <AccountPanel onClose={() => setOverlay(null)} />
+        ) : overlay?.kind === "manage" ? (
+          <FolderManagePanel
+            key={overlay.slug}
+            slug={overlay.slug}
+            onClose={() => setOverlay(null)}
+            onDeleted={() => {
+              setOverlay(null);
+              // The deleted folder may be holding the open document.
+              if (selected?.folder === overlay.slug) setSelected(null);
+              refreshTree();
+            }}
+          />
+        ) : (
+          <LessonViewer lesson={selected} />
+        )}
       </main>
 
       {/* The only way back to a hidden sidebar, at every width. */}
@@ -358,8 +467,8 @@ export default function AppShell() {
       {showGenerate && (
         <GenerateModal
           folders={folders ?? []}
+          watchJobId={typeof showGenerate === "string" ? showGenerate : undefined}
           onClose={() => setShowGenerate(false)}
-          onGenerated={refreshTree}
           onSignIn={() => {
             setShowGenerate(false);
             setShowSignIn(true);
