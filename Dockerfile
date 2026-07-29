@@ -16,6 +16,15 @@ ENV NEXT_TELEMETRY_DISABLED=1
 # ceiling the box OOMs and every parallel build dies with it. Raise this if the
 # build reports heap exhaustion on a larger machine.
 ENV NODE_OPTIONS=--max-old-space-size=1536
+# Next inlines NEXT_PUBLIC_* into the client bundle at build time, so these
+# have to arrive here rather than at run time — without them the deployed app
+# ships with collaboration disabled and no browser Supabase client. Both are
+# publishable values (the anon key is meant to reach the browser; RLS is what
+# protects the data), so baking them into the image is safe.
+ARG NEXT_PUBLIC_SUPABASE_URL
+ARG NEXT_PUBLIC_SUPABASE_ANON_KEY
+ENV NEXT_PUBLIC_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL \
+    NEXT_PUBLIC_SUPABASE_ANON_KEY=$NEXT_PUBLIC_SUPABASE_ANON_KEY
 # This project ships no public/ dir; create it so the run-stage COPY never
 # fails (and still picks up assets if one is added later).
 RUN npm run build && mkdir -p public
