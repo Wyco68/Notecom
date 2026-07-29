@@ -12,7 +12,6 @@
 #   INTERNAL_TOKEN         shared secret the services require from each other
 #   READ_ONLY              1 = public read-only reader (recommended); unset to allow delete/rename
 #   SUPABASE_URL / _KEY    optional: sync with the same Supabase as the desktop app
-#   OLLAMA_URL             optional: enable vector search + chat (see the ollama profile)
 
 name: notecom
 
@@ -33,11 +32,6 @@ services:
       INDEXD_ADDR: 0.0.0.0:4322
       VAULT_ROOT: /vault
       INDEXD_TOKEN: ${INTERNAL_TOKEN}
-      # Points at the optional ollama service; unresolved/unreachable → indexd
-      # serves keyword-only search and 503s chat, by design.
-      OLLAMA_URL: ${OLLAMA_URL:-http://ollama:11434}
-      EMBED_MODEL: ${EMBED_MODEL:-nomic-embed-text}
-      CHAT_MODEL: ${CHAT_MODEL:-llama3.2}
     volumes:
       - vault:/vault
     restart: unless-stopped
@@ -95,19 +89,8 @@ services:
       - dokploy-network
     restart: unless-stopped
 
-  # Optional vector search + "Ask my notes" chat. Enable with:
-  #   docker compose --profile search up -d
-  # then pull models once (see the guide). Heavy: needs 4GB+ RAM.
-  ollama:
-    image: ollama/ollama:latest
-    profiles: ["search"]
-    volumes:
-      - ollama:/root/.ollama
-    restart: unless-stopped
-
 volumes:
   vault:
-  ollama:
 
 networks:
   # Dokploy creates this; its Traefik proxy joins it to route your domain to

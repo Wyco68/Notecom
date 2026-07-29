@@ -2,9 +2,7 @@ package main
 
 import (
 	"database/sql"
-	"encoding/binary"
 	"fmt"
-	"math"
 	"strings"
 
 	_ "modernc.org/sqlite"
@@ -42,8 +40,7 @@ CREATE TABLE IF NOT EXISTS chunks (
   summary   TEXT NOT NULL,
   keywords  TEXT NOT NULL,
   text      TEXT NOT NULL,
-  html      TEXT NOT NULL,
-  embedding BLOB
+  html      TEXT NOT NULL
 );
 
 CREATE INDEX IF NOT EXISTS chunks_doc ON chunks(doc_id);
@@ -65,52 +62,6 @@ func openDatabase(path string) (*database, error) {
 		return nil, fmt.Errorf("apply schema: %w", err)
 	}
 	return &database{sql: db}, nil
-}
-
-// --- embedding blob encoding (float32 little-endian, L2-normalized) ---
-
-func encodeVec(v []float32) []byte {
-	buf := make([]byte, 4*len(v))
-	for i, f := range v {
-		binary.LittleEndian.PutUint32(buf[i*4:], math.Float32bits(f))
-	}
-	return buf
-}
-
-func decodeVec(b []byte) []float32 {
-	v := make([]float32, len(b)/4)
-	for i := range v {
-		v[i] = math.Float32frombits(binary.LittleEndian.Uint32(b[i*4:]))
-	}
-	return v
-}
-
-func normalize(v []float32) []float32 {
-	var sum float64
-	for _, f := range v {
-		sum += float64(f) * float64(f)
-	}
-	n := math.Sqrt(sum)
-	if n == 0 {
-		return v
-	}
-	out := make([]float32, len(v))
-	for i, f := range v {
-		out[i] = float32(float64(f) / n)
-	}
-	return out
-}
-
-// dot of two normalized vectors = cosine similarity.
-func dot(a, b []float32) float64 {
-	if len(a) != len(b) {
-		return 0
-	}
-	var sum float64
-	for i := range a {
-		sum += float64(a[i]) * float64(b[i])
-	}
-	return sum
 }
 
 // --- document/chunk persistence ---
@@ -161,14 +112,10 @@ func (d *database) replaceDocument(folder, id, kind, title, hash string, chunks 
 	}
 
 	for i, c := range chunks {
-		var emb any
-		if len(c.Embedding) > 0 {
-			emb = encodeVec(normalize(c.Embedding))
-		}
 		res, err := tx.Exec(
-			`INSERT INTO chunks(doc_id, seq, topic, heading, summary, keywords, text, html, embedding)
-			 VALUES(?,?,?,?,?,?,?,?,?)`,
-			docID, i+1, c.Topic, c.Heading, c.Summary, c.Keywords, c.Text, c.HTML, emb)
+			`INSERT INTO chunks(doc_id, seq, topic, heading, summary, keywords, text, html)
+			 VALUES(?,?,?,?,?,?,?,?)`,
+			docID, i+1, c.Topic, c.Heading, c.Summary, c.Keywords, c.Text, c.HTML)
 		if err != nil {
 			return err
 		}
@@ -224,34 +171,11 @@ func (d *database) allDocuments() (map[docKey]string, error) {
 	return out, rows.Err()
 }
 
-// docsMissingEmbeddings lists documents that have at least one chunk
-// without a vector — the backfill set once Ollama becomes available.
-func (d *database) docsMissingEmbeddings() ([]docKey, error) {
-	rows, err := d.sql.Query(
-		`SELECT DISTINCT dc.folder, dc.id, dc.kind
-		   FROM documents dc JOIN chunks c ON c.doc_id = dc.doc_id
-		  WHERE c.embedding IS NULL`)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var out []docKey
-	for rows.Next() {
-		var k docKey
-		if err := rows.Scan(&k.Folder, &k.ID, &k.Kind); err != nil {
-			return nil, err
-		}
-		out = append(out, k)
-	}
-	return out, rows.Err()
-}
-
-func (d *database) stats() (docs, chunks, embedded int, err error) {
+func (d *database) stats() (docs, chunks int, err error) {
 	err = d.sql.QueryRow(`SELECT
 		(SELECT COUNT(*) FROM documents),
-		(SELECT COUNT(*) FROM chunks),
-		(SELECT COUNT(*) FROM chunks WHERE embedding IS NOT NULL)`).
-		Scan(&docs, &chunks, &embedded)
+		(SELECT COUNT(*) FROM chunks)`).
+		Scan(&docs, &chunks)
 	return
 }
 
@@ -268,9 +192,7 @@ type hit struct {
 // must appear in the chunk. This is deliberately strict: an OR match lets
 // a single shared filler word ("how", "to") pull in dozens of unrelated
 // chunks once the query has more than a couple of words, since the
-// candidate cap is reached by sheer volume rather than relevance. Recall
-// for paraphrased/loosely-worded questions comes from the vector leg
-// (embeddings), not from loosening this to OR.
+// candidate cap is reached by sheer volume rather than relevance.
 func ftsQuery(q string) string {
 	fields := strings.FieldsFunc(q, func(r rune) bool {
 		return !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9')
@@ -322,44 +244,6 @@ func (d *database) ftsMatch(match, folder, kind, docID string, limit int) ([]hit
 	return out, rows.Err()
 }
 
-// vectorSearch brute-forces cosine over stored embeddings. qv must be
-// normalized.
-func (d *database) vectorSearch(qv []float32, folder, kind string, limit int) ([]hit, error) {
-	return d.vectorSearchDoc(qv, folder, kind, "", limit)
-}
-
-func (d *database) vectorSearchDoc(qv []float32, folder, kind, docID string, limit int) ([]hit, error) {
-	rows, err := d.sql.Query(
-		`SELECT c.chunk_id, c.embedding
-		   FROM chunks c JOIN documents dc ON dc.doc_id = c.doc_id
-		  WHERE c.embedding IS NOT NULL
-		    AND (? = '' OR dc.folder = ?)
-		    AND (? = '' OR dc.kind = ?)
-		    AND (? = '' OR dc.id = ?)`,
-		folder, folder, kind, kind, docID, docID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var out []hit
-	for rows.Next() {
-		var id int64
-		var blob []byte
-		if err := rows.Scan(&id, &blob); err != nil {
-			return nil, err
-		}
-		out = append(out, hit{ChunkID: id, Score: dot(qv, decodeVec(blob))})
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	sortHits(out)
-	if len(out) > limit {
-		out = out[:limit]
-	}
-	return out, nil
-}
-
 func sortHits(hs []hit) {
 	// insertion sort — candidate sets here are tiny.
 	for i := 1; i < len(hs); i++ {
@@ -370,15 +254,15 @@ func sortHits(hs []hit) {
 }
 
 type chunkRow struct {
-	Folder   string  `json:"folder"`
-	ID       string  `json:"id"`
-	Kind     string  `json:"kind"`
-	Title    string  `json:"title"`
-	Topic    string  `json:"topic"`
-	Heading  string  `json:"heading"`
-	Summary  string  `json:"summary"`
-	Keywords string  `json:"keywords"`
-	Seq      int     `json:"seq"`
+	Folder   string `json:"folder"`
+	ID       string `json:"id"`
+	Kind     string `json:"kind"`
+	Title    string `json:"title"`
+	Topic    string `json:"topic"`
+	Heading  string `json:"heading"`
+	Summary  string `json:"summary"`
+	Keywords string `json:"keywords"`
+	Seq      int    `json:"seq"`
 	// HeadingIndex = 0-based occurrence of this heading text within the
 	// document — headings like "How it Works" repeat per concept, so the
 	// viewer needs "the Nth one" to scroll to the right section.
@@ -429,51 +313,4 @@ func (d *database) loadChunkRows(ids []int64, withHTML bool) (map[int64]chunkRow
 		out[id] = r
 	}
 	return out, rows.Err()
-}
-
-// docCentroids returns each document's mean chunk vector (normalized),
-// keyed by "folder|id|kind" — the basis for related-lesson scoring.
-func (d *database) docCentroids() (map[docKey][]float32, map[docKey]string, error) {
-	rows, err := d.sql.Query(
-		`SELECT dc.folder, dc.id, dc.kind, dc.title, c.embedding
-		   FROM chunks c JOIN documents dc ON dc.doc_id = c.doc_id
-		  WHERE c.embedding IS NOT NULL`)
-	if err != nil {
-		return nil, nil, err
-	}
-	defer rows.Close()
-	sums := map[docKey][]float64{}
-	counts := map[docKey]int{}
-	titles := map[docKey]string{}
-	for rows.Next() {
-		var k docKey
-		var title string
-		var blob []byte
-		if err := rows.Scan(&k.Folder, &k.ID, &k.Kind, &title, &blob); err != nil {
-			return nil, nil, err
-		}
-		v := decodeVec(blob)
-		s := sums[k]
-		if s == nil {
-			s = make([]float64, len(v))
-		}
-		for i, f := range v {
-			s[i] += float64(f)
-		}
-		sums[k] = s
-		counts[k]++
-		titles[k] = title
-	}
-	if err := rows.Err(); err != nil {
-		return nil, nil, err
-	}
-	out := map[docKey][]float32{}
-	for k, s := range sums {
-		v := make([]float32, len(s))
-		for i, f := range s {
-			v[i] = float32(f / float64(counts[k]))
-		}
-		out[k] = normalize(v)
-	}
-	return out, titles, nil
 }

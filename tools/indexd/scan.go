@@ -12,11 +12,9 @@ import (
 )
 
 // scan reconciles the index with the vault on disk: new/changed documents
-// are re-chunked (and embedded when Ollama is up), vanished ones are
-// dropped, and chunks that were indexed while Ollama was down get their
-// embeddings backfilled. Hash comparison makes the no-change case nearly
-// free, so callers can trigger scans liberally (startup, /reindex, tree
-// refresh).
+// are re-chunked and vanished ones are dropped. Hash comparison makes the
+// no-change case nearly free, so callers can trigger scans liberally
+// (startup, /reindex, tree refresh).
 func (s *server) scan() {
 	s.scanMu.Lock()
 	s.scanning = true
@@ -57,19 +55,6 @@ func (s *server) scan() {
 			}
 		}
 	}
-
-	if s.embed.available() {
-		missing, err := s.db.docsMissingEmbeddings()
-		if err != nil {
-			log.Printf("scan: backfill query: %v", err)
-			return
-		}
-		for _, key := range missing {
-			if err := s.indexOne(key.Folder, key.ID, key.Kind); err != nil {
-				log.Printf("scan: backfill %s/%s (%s): %v", key.Folder, key.ID, key.Kind, err)
-			}
-		}
-	}
 }
 
 // indexOne (re)indexes a single document straight from disk.
@@ -90,20 +75,6 @@ func (s *server) indexDocument(key docKey, src, hash string) error {
 	title, chunks := chunkHTML(src)
 	if title == "" {
 		title = indexTitle(key)
-	}
-	if s.embed.available() && len(chunks) > 0 {
-		inputs := make([]string, len(chunks))
-		for i := range chunks {
-			inputs[i] = chunks[i].embedInput()
-		}
-		vecs, err := s.embed.embedBatch(inputs)
-		if err != nil {
-			log.Printf("embed %s/%s: %v (indexing without vectors)", key.Folder, key.ID, err)
-		} else {
-			for i := range chunks {
-				chunks[i].Embedding = vecs[i]
-			}
-		}
 	}
 	return s.db.replaceDocument(key.Folder, key.ID, key.Kind, title, hash, chunks)
 }

@@ -2,7 +2,7 @@
 //
 // Checks every tool the project needs, installs what it can (the
 // markitdown MCP server), builds both Go services, and prints exactly
-// what's left to do by hand (claude login, optional Ollama). Safe to
+// what's left to do by hand (claude login). Safe to
 // re-run any time — every step is a check-then-act.
 
 import { spawnSync } from "child_process";
@@ -80,22 +80,6 @@ if (goV) {
     run("go", ["build", "-o", exe, "."], { cwd: path.join(ROOT, "tools", name) });
     ok(`${name} built`, `tools/${name}/${exe}`);
   }
-}
-
-// --- optional: Ollama for chat + semantic search ---
-const ollama = tryRun("ollama", ["--version"]);
-if (ollama) {
-  ok("Ollama (optional: chat + semantic search)", ollama);
-  const tags = tryRun("curl", ["-s", "--max-time", "2", "http://127.0.0.1:11434/api/tags"]);
-  const models = tags ? (JSON.parse(tags).models ?? []).map((m) => m.name) : [];
-  for (const model of ["llama3.2", "nomic-embed-text"]) {
-    if (!models.some((m) => m.startsWith(model))) {
-      todo.push(`Optional (chat/search): \`ollama pull ${model}\``);
-    }
-  }
-} else {
-  results.push("  [skip] Ollama not installed — chat + semantic search stay off (keyword search still works).");
-  todo.push("Optional (chat/search): install https://ollama.com then `ollama pull llama3.2` and `ollama pull nomic-embed-text`.");
 }
 
 console.log(results.join("\n"));

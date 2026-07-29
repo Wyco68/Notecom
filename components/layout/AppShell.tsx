@@ -17,14 +17,12 @@ import LessonViewer from "../viewer/LessonViewer";
 import NewFolderModal from "../modals/NewFolderModal";
 import GenerateModal from "../modals/GenerateModal";
 import SignInModal from "../modals/SignInModal";
-import ChatPanel from "../chat/ChatPanel";
 import InvitationsInbox from "../collab/InvitationsInbox";
 import TagGrantsInbox from "../collab/TagGrantsInbox";
 import AccountControl from "../collab/AccountControl";
 import ThemeToggle from "../theme/ThemeToggle";
 import RefreshIcon from "../icons/RefreshIcon";
 import SearchIcon from "../icons/SearchIcon";
-import ChatIcon from "../icons/ChatIcon";
 import MenuIcon from "../icons/MenuIcon";
 import UploadIcon from "../icons/UploadIcon";
 
@@ -39,7 +37,6 @@ export default function AppShell() {
   const [showNewFolder, setShowNewFolder] = useState(false);
   const [showGenerate, setShowGenerate] = useState(false);
   const [showSignIn, setShowSignIn] = useState(false);
-  const [showChat, setShowChat] = useState(false);
   // undefined until the first status check answers — avoids flashing a
   // "signed out" warning during the initial load.
   const [signedIn, setSignedIn] = useState<boolean | undefined>(undefined);
@@ -349,22 +346,6 @@ export default function AppShell() {
         >
           <MenuIcon className="h-4 w-4" />
         </button>
-      )}
-
-      <button
-        onClick={() => setShowChat(true)}
-        title="Ask My Notes — chat over your lessons (local model)"
-        className="ui-icon-btn fixed right-5 top-3 z-40 h-8 w-8 rounded-full border border-black/10 bg-white shadow-sm hover:text-blue-600 dark:border-white/10 dark:bg-[#161b22] dark:hover:text-blue-400"
-      >
-        <ChatIcon className="h-4 w-4" />
-      </button>
-
-      {showChat && (
-        <ChatPanel
-          current={selected}
-          currentTitle={currentTitle}
-          onClose={() => setShowChat(false)}
-        />
       )}
 
       {showNewFolder && (

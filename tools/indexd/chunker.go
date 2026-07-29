@@ -7,13 +7,12 @@ import (
 )
 
 type chunk struct {
-	Topic     string
-	Heading   string
-	Summary   string
-	Keywords  string
-	Text      string
-	HTML      string
-	Embedding []float32
+	Topic    string
+	Heading  string
+	Summary  string
+	Keywords string
+	Text     string
+	HTML     string
 }
 
 // chunkHTML splits a lesson document into educational sections: every <h2>
@@ -152,15 +151,4 @@ func extractKeywords(chunkHTML string) string {
 		out = out[:15]
 	}
 	return strings.Join(out, ", ")
-}
-
-// embedInput is the text a chunk is embedded from: heading context plus
-// body, capped so one oversized section can't blow the model's window.
-func (c *chunk) embedInput() string {
-	s := c.Topic + " — " + c.Heading + "\n" + c.Keywords + "\n" + c.Text
-	r := []rune(s)
-	if len(r) > 6000 {
-		return string(r[:6000])
-	}
-	return s
 }

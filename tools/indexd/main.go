@@ -1,21 +1,15 @@
-// Command indexd is the search/retrieval service for Notes (RAG backend).
+// Command indexd is the search service for Notes.
 //
 // It is the *only* place with indexing intelligence: it chunks lesson HTML
-// into educational sections, generates embeddings (via a local Ollama
-// server when available), and answers hybrid search queries (FTS5 keyword
-// + vector cosine, merged with reciprocal-rank fusion). vaultd stays a dumb
-// filesystem helper and the Next.js app never generates embeddings — it
-// only proxies queries here (see docs/architecture.md).
+// into educational sections and answers FTS5 keyword queries over those
+// chunks. vaultd stays a dumb filesystem helper and the Next.js app never
+// chunks or ranks anything — it only proxies queries here (see
+// docs/architecture.md).
 //
 // All index state lives in one SQLite file, <vault>/.index/index.db —
-// derived data, safe to delete (a reindex rebuilds it from the HTML).
-// Embeddings are stored as float32 BLOBs and compared brute-force; at
-// personal-vault scale (hundreds of chunks) this outperforms running a
-// separate vector-database server and needs zero extra processes.
-//
-// Degradation is deliberate: without Ollama, indexing still runs and
-// search still works in keyword (FTS5) mode; embeddings backfill on the
-// next scan after Ollama appears.
+// derived data, safe to delete (a reindex rebuilds it from the HTML). No
+// model, no embeddings, no external service: search is local and offline
+// by construction.
 //
 // Endpoints:
 //
@@ -25,7 +19,6 @@
 //	GET    /search?q&folder&kind&limit&html=1
 //	GET    /related/{folder}/{id}?kind&limit
 //	GET    /topics?q&limit
-//	POST   /chat                         grounded chat over the vault (SSE)
 //	GET    /status
 package main
 
@@ -42,7 +35,6 @@ import (
 
 type server struct {
 	db     *database
-	embed  *embedder
 	scanMu sync.Mutex // one scan at a time
 	// lastScan/scanning are read by /status only; guarded by scanMu.
 	lastScan time.Time
@@ -64,7 +56,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	s := &server{db: db, embed: newEmbedder()}
+	s := &server{db: db}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/index", s.handleIndex)
@@ -73,7 +65,6 @@ func main() {
 	mux.HandleFunc("/search", s.handleSearch)
 	mux.HandleFunc("/related/", s.handleRelated)
 	mux.HandleFunc("/topics", s.handleTopics)
-	mux.HandleFunc("/chat", s.handleChat)
 	mux.HandleFunc("/status", s.handleStatus)
 
 	// Startup scan so a fresh DB (or lessons written while indexd was down)
@@ -209,7 +200,7 @@ func (s *server) handleStatus(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusMethodNotAllowed, "use GET")
 		return
 	}
-	docs, chunks, embedded, err := s.db.stats()
+	docs, chunks, err := s.db.stats()
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
@@ -224,9 +215,6 @@ func (s *server) handleStatus(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"documents": docs,
 		"chunks":    chunks,
-		"embedded":  embedded,
-		"ollama":    s.embed.available(),
-		"model":     s.embed.model,
 		"scanning":  scanning,
 		"lastScan":  last,
 	})

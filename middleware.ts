@@ -9,8 +9,7 @@ import { createServerClient } from "@supabase/ssr";
 //    obtained. On an install with no Supabase configured there are no accounts
 //    to demand, so the gate stands down and the app stays purely local.
 // 2. READ_ONLY=1 blocks every vault-mutating request, so gating doesn't have to
-//    be repeated per route file. Three exceptions:
-//      - /api/chat: a read-only box may still run Ollama.
+//    be repeated per route file. Two exceptions:
 //      - /api/collab: these write membership, not note content.
 //      - /api/auth/collab: signing in writes a session, not a note.
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -43,11 +42,7 @@ export async function middleware(req: NextRequest) {
 
   if (process.env.READ_ONLY !== "1" || !isApi) return NextResponse.next();
   if (req.method === "GET" || req.method === "HEAD") return NextResponse.next();
-  if (
-    path === "/api/chat" ||
-    path === "/api/auth/collab" ||
-    path.startsWith("/api/collab/")
-  ) {
+  if (path === "/api/auth/collab" || path.startsWith("/api/collab/")) {
     return NextResponse.next();
   }
   return NextResponse.json({ error: "read-only server" }, { status: 403 });

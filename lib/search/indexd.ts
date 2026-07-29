@@ -1,8 +1,8 @@
-// Client for the indexd Go search/retrieval service (RAG backend).
+// Client for the indexd Go search service.
 //
-// The Next.js app never chunks or embeds anything — it only forwards
-// queries here. See docs/architecture.md. This is the only TypeScript
-// caller of indexd endpoints; don't fetch() indexd from anywhere else.
+// The Next.js app never chunks or ranks anything — it only forwards queries
+// here. See docs/architecture.md. This is the only TypeScript caller of
+// indexd endpoints; don't fetch() indexd from anywhere else.
 
 const INDEXD_URL = process.env.INDEXD_URL || "http://127.0.0.1:4322";
 const INDEXD_TOKEN = process.env.INDEXD_TOKEN;
@@ -52,7 +52,7 @@ export function search(params: {
   folder?: string;
   kind?: string;
   limit?: number;
-}): Promise<{ mode: "hybrid" | "keyword"; results: SearchResult[] }> {
+}): Promise<{ mode: "keyword"; results: SearchResult[] }> {
   const qs = new URLSearchParams({ q: params.q });
   if (params.folder) qs.set("folder", params.folder);
   if (params.kind) qs.set("kind", params.kind);
