@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { collabAuth, safeNext } from "@/lib/auth/collab";
 
 // Create a collaboration account: email + password, then confirm ownership of
-// the inbox with the 6-digit code Supabase emails. The account exists after
+// the inbox with the 8-digit code Supabase emails. The account exists after
 // this; from then on sign-in is password + emailed code (see the sign-in page
 // and app/api/auth/collab/route.ts).
 
@@ -94,7 +94,7 @@ function SignUpForm() {
       ) : (
         <>
           <p className="mb-3 text-sm text-gray-500 dark:text-gray-400">
-            Enter the 6-digit code we emailed to {email} to confirm your account.
+            Enter the 8-digit code we emailed to {email} to confirm your account.
           </p>
           <input
             autoFocus
@@ -103,7 +103,7 @@ function SignUpForm() {
             value={code}
             onChange={(e) => setCode(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && submitCode()}
-            placeholder="123456"
+            placeholder="12345678"
             className="mb-3 w-full rounded border border-black/10 bg-gray-50 px-3 py-2 text-center font-mono text-lg tracking-widest text-gray-900 outline-none focus:border-blue-500 dark:border-white/10 dark:bg-[#0d1117] dark:text-gray-100"
           />
           {error && <p className="mb-3 text-xs text-red-400">{error}</p>}

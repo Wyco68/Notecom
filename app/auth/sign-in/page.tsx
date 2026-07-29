@@ -8,11 +8,12 @@ import { collabAuth, safeNext } from "@/lib/auth/collab";
 // sign-in in components/modals/SignInModal.tsx: that one authorises the local
 // generation tool, this one identifies a person to other people.
 //
-// Two factors, always: password proves who you are, then a 6-digit code
+// Two factors, always: password proves who you are, then an 8-digit code
 // emailed to the account proves you hold the inbox. The password never mints a
 // session on its own — only verifying the emailed code does (see
 // app/api/auth/collab/route.ts). The code is typed, so no email link is
-// followed and no redirect to the project's Site URL happens.
+// followed and no redirect to the project's Site URL happens. The one
+// link-based flow is password recovery, on /auth/reset.
 
 function SignInForm() {
   const params = useSearchParams();
@@ -98,7 +99,7 @@ function SignInForm() {
       ) : (
         <>
           <p className="mb-3 text-sm text-gray-500 dark:text-gray-400">
-            Enter the 6-digit code we emailed to {email}.
+            Enter the 8-digit code we emailed to {email}.
           </p>
           <input
             autoFocus
@@ -107,7 +108,7 @@ function SignInForm() {
             value={code}
             onChange={(e) => setCode(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && submitCode()}
-            placeholder="123456"
+            placeholder="12345678"
             className="mb-3 w-full rounded border border-black/10 bg-gray-50 px-3 py-2 text-center font-mono text-lg tracking-widest text-gray-900 outline-none focus:border-blue-500 dark:border-white/10 dark:bg-[#0d1117] dark:text-gray-100"
           />
           {error && <p className="mb-3 text-xs text-red-400">{error}</p>}

@@ -1,13 +1,15 @@
 // Thin client for /api/auth/collab. The security lives on the server (see the
-// route): the browser only drives a two-step flow — password/email → 6-digit
-// code — and never holds a session until the code is verified.
+// route): the browser only drives a two-step flow — password/email → the
+// emailed 8-digit code — and never holds a session until the code is verified.
+// Password recovery is the one link-based flow: `reset` emails it, the link
+// lands on /auth/callback, and `set-password` finishes there.
 
 export type CollabAction =
   | "signup"
   | "password"
   | "verify"
   | "reset"
-  | "reset-verify";
+  | "set-password";
 
 export async function collabAuth(
   action: CollabAction,
