@@ -75,14 +75,15 @@ rollback;
 | # | Check | Expected |
 |---|---|---|
 | 1 | non-member SELECT `notes_documents` of a private folder | 0 rows |
-| 2 | non-member SELECT `notes_folders` where `discoverable = false` | 0 rows |
-| 3 | non-member SELECT `notes_folders` where `discoverable = true`, private | metadata row, and its documents still 0 rows |
+| 2 | non-member SELECT `notes_folders` where `visibility = 'private'` | 0 rows |
+| 3 | non-member SELECT `notes_folders` where `visibility = 'public'` | metadata row, and its documents still 0 rows |
 | 4 | viewer INSERT/UPDATE/DELETE on `notes_documents` | 0 rows affected |
 | 5 | non-owner INSERT into `notes_folder_members` | rejected |
 | 6 | non-owner UPDATE of `notes_folder_join_requests.status` | 0 rows affected |
 | 7 | non-member SELECT `notes_folder_invitations` / `notes_folder_join_requests` | 0 rows |
 | 8 | member UPDATE `notes_folders` setting a different `owner_id` | rejected |
-| 9 | `notes_search_folders` as non-member | never returns a non-discoverable folder |
+| 9 | `notes_search_folders` as non-member | never returns a private folder |
+| 9b | `notes_request_join` as non-member on a public folder | returns `requested`, creates **no** membership row |
 | 10 | repeat 1–9 as `role anon` | 0 rows / rejected everywhere |
 
 Then `mcp__supabase__get_advisors` with `type: "security"` and resolve what it

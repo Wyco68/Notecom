@@ -36,17 +36,17 @@ the boundary. Model: [collaboration.md](collaboration.md).
 
 | Route | Method | Body/params | Response |
 |---|---|---|---|
-| `/api/collab/discover` | GET | `?q&limit&offset` | `{ folders: [...] }` — `notes_search_folders`; never returns a non-discoverable folder to a non-member. **No tag filter**: tags are access grants, so looking up what a tag opens is not offered |
+| `/api/collab/discover` | GET | `?q&limit&offset` | `{ folders: [...] }` — `notes_search_folders`; returns public folders plus the caller's own, never a private one they don't belong to. **No tag filter**: tags are access grants, so looking up what a tag opens is not offered |
 | `/api/collab/my-folders` | GET | — | `{ folders: [...] }` — the caller's own folders with tags/role, used to group the sidebar |
 | `/api/collab/me/profile` | GET·POST | `{ username?, avatarUrl? }` | `{ profile }` / `{ ok }` — email and password are **not** changed here, they go through `/auth/reset` |
 | `/api/collab/me/tags` | GET·DELETE | `?tag` | `{ tags }` / `{ ok }` — **no POST**: a tag cannot be self-assigned, only accepted from a grant |
 | `/api/collab/me/grants` | GET·POST·DELETE | `{ username, tag }` / `{ grantId, accept }` / `?username&tag` | GET returns `{ grants, given }`; POST offers a tag to a follower or answers an offer; DELETE revokes a tag you gave, closing every folder it opened |
-| `/api/collab/me/follows` | GET·POST·DELETE | `{ username }` / `?userId&direction` | one-sided follow edges; following someone lets **them** tag or invite you |
-| `/api/collab/folders/[slug]` | GET | — | `{ folder, role, members, tags }` — 404 when RLS hides it |
-| `/api/collab/folders/[slug]/settings` | POST | `{ visibility?, discoverable?, joinPolicy?, description? }` | `{ ok }` — manage-level |
+| `/api/collab/me/follows` | GET·POST·DELETE | `?direction=following\|followers&q&limit&offset` / `{ username }` / `?userId&direction` | GET returns one paged, searchable direction as `{ direction, people, total }` — never the whole graph. Following someone lets **them** tag or invite you |
+| `/api/collab/folders/[slug]` | GET | — | `{ folder, role, members, memberTotal, tags }` — `members` is the first page of 10; 404 when RLS hides it |
+| `/api/collab/folders/[slug]/settings` | POST | `{ visibility?, description? }` | `{ ok }` — manage-level; written once by the console's "Save changes", not per keystroke. `discoverable`/`joinPolicy` are retired and rejected as unknown fields |
 | `/api/collab/folders/[slug]/tags` | POST | `{ tag, grantsJoin }` | `{ ok }` |
 | `/api/collab/folders/[slug]/tags` | DELETE | `?tag` | `{ ok }` |
-| `/api/collab/folders/[slug]/members` | GET | — | `{ members: [{userId,username,avatarUrl,role,joinedAt}] }` |
+| `/api/collab/folders/[slug]/members` | GET | `?q&limit&offset` | `{ members: [{userId,username,avatarUrl,role,joinedAt}], total }` — paged (default 10, max 50) and searchable by username |
 | `/api/collab/folders/[slug]/members` | POST | `{ userId, role }` | `{ ok }` — role change |
 | `/api/collab/folders/[slug]/members` | DELETE | `?userId` | `{ ok }` — remove, or leave when it's the caller |
 | `/api/collab/folders/[slug]/owner` | POST | `{ userId }` | `{ status }` — transfer ownership; target must already be a member |
@@ -54,13 +54,18 @@ the boundary. Model: [collaboration.md](collaboration.md).
 | `/api/collab/folders/[slug]/invitations` | POST | `{ username, role }` | `{ ok }` |
 | `/api/collab/folders/[slug]/requests` | GET | — | `{ requests: [...] }` — manage-level |
 | `/api/collab/folders/[slug]/requests` | POST | `{ requestId, approve }` | `{ ok }` |
-| `/api/collab/join` | POST | `{ slug, owner?, message? }` | `{ status: "joined"\|"requested" }` — the tag path is retired; holding a tag grants access directly |
+| `/api/collab/join` | POST | `{ slug, owner?, message? }` | `{ status: "joined"\|"requested" }` — always `requested` for a non-member now that join policies are gone; `joined` only means "already a member". Holding a tag grants access without either |
 | `/api/collab/invitations` | GET | — | `{ invitations: [...] }` — the caller's inbox |
 | `/api/collab/invitations` | POST | `{ invitationId, accept }` | `{ ok }` |
 
-`READ_ONLY=1` blocks non-GET `/api/*` in `middleware.ts`; `/api/collab/` is
-allowlisted alongside `/api/chat`, since these are membership writes rather
-than note-content writes. Unauthenticated callers get 401.
+`middleware.ts` holds two gates. **Sign-in is required for everything** it
+matches — `/api/*`, `/vault/*`, `/discover`, `/account` — with `/api/auth/*`
+exempt because that is how a session is obtained; a signed-out page request
+redirects to `/auth/sign-in?next=…` and an API request gets 401. On an install
+with no Supabase configured the gate stands down, so a purely local vault still
+works. Then `READ_ONLY=1` blocks non-GET `/api/*`; `/api/collab/` and
+`/api/auth/collab` are allowlisted alongside `/api/chat`, since these write
+membership and sessions rather than note content.
 
 ## vaultd (Go helper, default `127.0.0.1:4321`)
 
@@ -124,23 +129,39 @@ backfill on a later scan.
 Identifies a person to other people (the account behind folder sharing) —
 separate from the Claude Code CLI sign-in below. Password with a mandatory
 email second factor: the password is checked server-side against an in-memory
-cookie jar so it never mints a session, and only `verifyOtp` on the 6-digit
+cookie jar so it never mints a session, and only `verifyOtp` on the 8-digit
 emailed code mints one. So a session needs both factors, structurally — there
 is no `mfa_ok` flag to forge and no middleware gate. Codes are typed, not
 clicked, so no email link is followed and the project's Auth Site URL is never
 hit. Pairs with `app/auth/{sign-in,sign-up,reset}` and `lib/auth/collab.ts`.
 
+Password recovery is the one link-based flow, because there is no password left
+to prove with: `reset` emails a link whose `redirectTo` is this app's
+`/auth/callback`, that route exchanges it for a session, and `set-password`
+writes the new password with it. `reset` therefore runs on the **cookie-bound**
+client, unlike every other pre-session step — the PKCE code verifier has to
+survive in the caller's browser or the exchange fails, which is also why the
+link must be opened in the browser that requested it.
+
 | Endpoint | Method | Body | Response |
 |---|---|---|---|
 | `/api/auth/collab` | POST | `{ action: "signup", email, password }` | `{ ok, factor: "signup" }` — creates the account, emails a confirm code |
 | `/api/auth/collab` | POST | `{ action: "password", email, password }` | `{ ok, factor: "email" }` — verifies the password (no session), emails a login code; `401` on bad creds |
-| `/api/auth/collab` | POST | `{ action: "verify", email, token, factor }` | `{ ok }` — `verifyOtp` mints the session (`factor` `"email"`\|`"signup"`) |
-| `/api/auth/collab` | POST | `{ action: "reset", email }` | `{ ok, factor: "recovery" }` — emails a recovery code; never reveals if the email exists |
-| `/api/auth/collab` | POST | `{ action: "reset-verify", email, token, password }` | `{ ok }` — verifies the code, sets the new password, signs in |
+| `/api/auth/collab` | POST | `{ action: "verify", email, token, factor }` | `{ ok }` — `verifyOtp` on the 8-digit `token` mints the session (`factor` `"email"`\|`"signup"`); a non-numeric token is rejected |
+| `/api/auth/collab` | POST | `{ action: "reset", email }` | `{ ok, factor: "recovery" }` — emails a recovery **link** pointing at `/auth/callback`; never reveals if the email exists |
+| `/api/auth/collab` | POST | `{ action: "set-password", password }` | `{ ok }` — sets the password on the session `/auth/callback` just created; `401` if that link expired |
 
-Needs `NEXT_PUBLIC_SUPABASE_URL`/`_ANON_KEY` (else `501`). Requires the Supabase
-email templates ("Confirm signup", "Magic Link", "Reset Password") to expose
-`{{ .Token }}`, or no code is sent.
+Needs `NEXT_PUBLIC_SUPABASE_URL`/`_ANON_KEY` (else `501`). Supabase template
+requirements follow the split: **"Confirm signup" and "Magic Link" must expose
+`{{ .Token }}`** (they carry the sign-up and sign-in codes — on the default
+templates no code is sent and neither flow can complete), while **"Reset
+Password" keeps the default `{{ .ConfirmationURL }}` link**. "Confirm email"
+must stay ON, and every origin the app is served from needs `/auth/callback` in
+the project's Redirect URLs — the deployment's URL for a hosted reader, and a
+port wildcard (`http://127.0.0.1:*/auth/callback`) for the desktop build, which
+starts Next on a free port chosen at launch (`desktop/src/lib.rs`). Without a
+matching entry Supabase ignores `redirectTo` and sends the user to the
+project's Site URL instead, so recovery would land in another app.
 
 ## Claude Code sign-in (`/api/auth`)
 

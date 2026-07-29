@@ -23,6 +23,35 @@ base body color).
 | Success toast | `border-emerald-800/60 bg-emerald-950/90 text-emerald-200` |
 | Error toast | `border-red-800/60 bg-red-950/90 text-red-200` |
 
+## Layout and breakpoints
+The shell ([components/layout/AppShell.tsx](../components/layout/AppShell.tsx))
+is a two-column workspace. The sidebar hides and returns at **every** width via
+the hamburger in the top-left: below `lg` (1024px) it is an off-canvas drawer
+(`fixed` + `-translate-x-full`, dismissed by the backdrop, its ✕, or by opening
+a document), and from `lg` up the same element is `lg:static` and simply leaves
+the layout when closed. One sidebar, two behaviours, not two components. It
+opens by default only on wide screens, decided after mount since the server
+render doesn't know the viewport.
+
+Its width is **fixed** (`w-80`, capped at `85vw` while it is a drawer): it never
+reflows with its contents, because a sidebar that resizes as rows open or hover
+drags the reader sideways for nothing. Folder and file names **wrap** onto as
+many lines as they need rather than truncating — the sidebar must never scroll
+sideways to read a name.
+
+Content follows the same rule: reader padding and prose sizes step up at `sm`,
+and anything that can be wider than the column (tables) scrolls inside its own
+`overflow-x-auto` box rather than pushing the page sideways.
+
+## App icon
+[app/icon.svg](../app/icon.svg) is the master mark (a page + lens on the
+project blue, `#2563eb`). Everything else is generated from it and should be
+regenerated, never hand-edited: `app/favicon.ico` and `app/apple-icon.png`
+(Next.js serves both from `app/` automatically) and `desktop/icons/*` via
+`npx tauri icon <png> -o desktop/icons`. The splash screen
+([desktop/assets/splash.html](../desktop/assets/splash.html)) inlines the same
+paths.
+
 ## Components
 - **Modals**: every modal wraps [components/modals/Modal.tsx](../components/modals/Modal.tsx)
   (dimmed backdrop, centered panel, click-outside-to-close). Don't build a
@@ -39,6 +68,9 @@ base body color).
   [components/sidebar/FileTreeNode.tsx](../components/sidebar/FileTreeNode.tsx)
   for the pattern (`group` on the row, `hidden group-hover:flex` on the
   icon button).
+- **File rows**: lesson/quiz rows in the tree carry the vault's own sequence
+  number (`seq` from `index.json`, rendered `01`, `02`, …) before the title, so
+  the sidebar reads in the same order as the folder on disk.
 - **Icons**: hand-rolled inline SVG components under
   [components/icons/](../components/icons/) (e.g. `TrashIcon`), no icon
   library dependency.

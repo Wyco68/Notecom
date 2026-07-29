@@ -7,11 +7,11 @@ membership, or Supabase RLS. This is the contract; the SQL in
 ## The model in one paragraph
 
 A **folder is the unit of collaboration**. It has one owner, a member list with
-roles, a visibility setting, a discoverability setting, a join policy, and tags.
-Documents (lessons and quizzes) inherit their folder's permissions completely —
-there is no per-document permission column and there must never be one. Users
-find folders through search, and reach them by invitation (owner → user), by
-request (user → owner), or by **holding a tag the folder carries**.
+roles, a visibility setting, and tags. Documents (lessons and quizzes) inherit
+their folder's permissions completely — there is no per-document permission
+column and there must never be one. Users find folders through search, and
+reach them by invitation (owner → user), by request (user → owner, always
+approved by the owner), or by **holding a tag the folder carries**.
 
 Two rules override everything below, and are the reason the rest is shaped as it
 is:
@@ -57,28 +57,33 @@ Every folder has exactly one `owner` member row, kept in step with
 `notes_folders.owner_id` by a trigger. Owners cannot be removed or demoted; they
 transfer ownership or delete the folder.
 
-## Visibility and discoverability are two axes
+## Visibility is one axis, and it is not file access
 
-Collapsing them into one flag is the mistake to avoid. Neither axis controls
-file access — that is membership, and only membership.
+`visibility` decides who can see that a folder *exists*:
 
-| | `discoverable = true` | `discoverable = false` |
-|---|---|---|
-| `visibility = 'public'` | in search, metadata visible to anyone signed in | invisible except to members |
-| `visibility = 'private'` | in search as metadata only | invisible except to members |
+| | who sees the folder |
+|---|---|
+| `visibility = 'public'` | anyone signed in — in search, metadata only |
+| `visibility = 'private'` | members only |
 
-New folders default to `visibility = 'public'`, which is safe precisely because
-"public" now means *listed*, not *readable*. Existing folders keep whatever
-their owner chose — a migration must never publish retroactively.
+"Public" means *listed*, never *readable*: the files inside are gated by
+`notes_is_folder_member()` either way. A migration must never publish
+retroactively — a folder that was hidden stays hidden.
+
+Two settings used to sit beside it and are **retired** (0012): `discoverable`
+restated what `visibility` already said, and `join_policy` offered instant and
+invite-only variants nobody wanted. Both columns survive in the table because
+`stored` still ships them in its sync payload, but nothing reads them; don't
+reintroduce either as a product concept.
 
 ## Joining
 
-`join_policy` on the folder:
-
-- `open` — any signed-in user who can see the folder joins instantly as `viewer`.
-- `request` — user files a `notes_folder_join_requests` row; owner approves or
-  rejects.
-- `invite_only` — no self-service path; the owner invites.
+One path: the user files a `notes_folder_join_requests` row through
+`notes_request_join()` and the owner approves or rejects it. Requesting a
+folder you cannot see raises "no such folder" rather than confirming it exists,
+and an approved request is what creates the `viewer` membership row — the RPC
+never joins anyone outright. The other way in is holding a `grants_join` tag,
+which bypasses requests entirely (below).
 
 Invitations are `notes_folder_invitations` rows
 (`pending` → `accepted` | `declined` | `revoked`). Requests are
@@ -126,7 +131,7 @@ Existing tables are extended in preference to new ones.
 | Table | Why |
 |---|---|
 | `profiles` | *(existing)* the one identity pool, shared with BookCommunity |
-| `notes_folders` | *(existing, extended)* gains `owner_id`, `description`, `visibility`, `discoverable`, `join_policy`, `search_tsv` |
+| `notes_folders` | *(existing, extended)* gains `owner_id`, `description`, `visibility`, `search_tsv`. `discoverable`/`join_policy` are retired leftovers kept only for `stored`'s sync payload |
 | `notes_documents` | *(existing, unchanged)* permissions are inherited from the folder — adding a permission column here is a design error |
 | `notes_folder_roles` | makes roles data instead of code, so the set is extensible |
 | `notes_folder_members` | the membership edge; composite PK `(folder_id, user_id)` |
@@ -178,7 +183,7 @@ Predicates used by policies (`STABLE SECURITY DEFINER`):
 |---|---|
 | `notes_folder_role(folder)` | returns the caller's role text, or NULL |
 | `notes_is_folder_member(folder)` | member row ∨ holds a `grants_join` tag the folder carries — **the gate on files** |
-| `notes_can_read_folder(folder)` | owner ∨ member ∨ tag-implied ∨ `visibility = 'public'` — folder metadata only |
+| `notes_can_read_folder(folder)` | owner ∨ member ∨ tag-implied ∨ `visibility = 'public'` — folder metadata only, and the only axis discovery consults |
 | `notes_follows_me(user)` | that user follows the caller |
 | `notes_can_write_folder(folder)` | the caller's role has `can_write` |
 | `notes_can_manage_folder(folder)` | the caller's role has `can_manage` |
