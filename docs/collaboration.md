@@ -35,6 +35,23 @@ table BookCommunity uses in this Supabase project. There is exactly one identity
 pool. Never create a second profile table, never duplicate `username` or
 `avatar_url`.
 
+Because the table is shared, its two triggers are shared rules, not this app's
+preferences — changing either changes BookCommunity too:
+
+- `enforce_profiles_username` lowercases and validates the name, and refuses a
+  rename within **15 days** of the last one (`username_updated_at`). Set in
+  `0014_notes_profile_username_cooldown.sql`; the app mirrors the number only to
+  label the next allowed date.
+- `enforce_profiles_avatar_url` accepts either an absolute `http(s)` URL
+  (historical rows) or exactly `{profiles.id}/avatar.{jpg|jpeg|png|webp}` — a
+  path in the private `profile-avatars` bucket. This app writes only the path
+  form, and a row can therefore never point at another user's object.
+
+The bucket is private, so a stored path is not a usable `src`: reads go through a
+short-lived signed URL minted with the caller's own JWT (`lib/collab/avatar.ts`).
+Storage policies confine writes to a `{auth.uid()}/…` prefix and allow reads to
+any authenticated user, which is what lets one person see another's avatar.
+
 Note that `lib/auth/*` and `/api/auth` are the **Claude Code CLI's** sign-in and
 have nothing to do with user accounts. Don't extend them for user auth.
 

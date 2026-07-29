@@ -48,17 +48,26 @@ export function isResponse(v: unknown): v is NextResponse {
 
 /**
  * Map a thrown error to a status. The RPCs raise SQLSTATE 42501 for "not
- * allowed" and P0002 for "no such row"; supabase-js surfaces those as text, so
- * the message is what there is to match on.
+ * allowed" and P0002 for "no such row" — lib/collab/folders.ts's rpc()
+ * wrapper preserves that code, so it is checked first; the message regex is
+ * a fallback for errors that arrive without one (e.g. a plain select).
  */
 export function errorResponse(err: any): NextResponse {
   const message = String(err?.message ?? err ?? "unexpected error");
-  const status = /not authorized|invite only|cannot |does not grant|permission denied/i.test(message)
-    ? 403
-    : /no such|not found|no pending/i.test(message)
-      ? 404
-      : /already|invalid|too short/i.test(message)
-        ? 400
-        : 500;
+  const code = err?.code as string | undefined;
+  const status =
+    code === "42501"
+      ? 403
+      : code === "P0002"
+        ? 404
+        : code === "23505" || code === "22023"
+          ? 400
+          : /not authorized|invite only|cannot |does not grant|permission denied/i.test(message)
+            ? 403
+            : /no such|not found|no pending/i.test(message)
+              ? 404
+              : /already|invalid|too short|is required|only be changed/i.test(message)
+                ? 400
+                : 500;
   return NextResponse.json({ error: message }, { status });
 }
