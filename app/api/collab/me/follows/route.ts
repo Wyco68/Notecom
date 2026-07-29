@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { follow, myFollows, unfollow } from "@/lib/collab/folders";
+import { follow, listFollows, unfollow } from "@/lib/collab/folders";
 import { errorResponse, isResponse, requireUser } from "../../route-helpers";
 
 // Following is one-sided and needs no approval from the other person. Its only
@@ -7,12 +7,24 @@ import { errorResponse, isResponse, requireUser } from "../../route-helpers";
 // you a tag or invite you to a folder. So the follower is always the one who
 // opens the door, and either side can close it again (DELETE).
 
-export async function GET() {
+// One direction, one page at a time (`?direction=following|followers&q&limit
+// &offset`). Nobody needs every edge at once, and the caller that wants both
+// sides asks twice.
+export async function GET(req: NextRequest) {
   const user = await requireUser();
   if (isResponse(user)) return user;
 
   try {
-    return NextResponse.json(await myFollows());
+    const params = req.nextUrl.searchParams;
+    const direction = params.get("direction") === "followers" ? "followers" : "following";
+    return NextResponse.json({
+      direction,
+      ...(await listFollows(direction, {
+        q: params.get("q") ?? undefined,
+        limit: Number(params.get("limit")) || undefined,
+        offset: Number(params.get("offset")) || undefined,
+      })),
+    });
   } catch (err: any) {
     return errorResponse(err);
   }

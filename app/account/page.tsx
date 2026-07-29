@@ -10,6 +10,10 @@ import type { FollowEdge, GrantedTag, UserTag } from "@/lib/collab/types";
 // the emailed-code second factor. Reimplementing them here would be a second,
 // weaker path to the same credential.
 
+// People lists are fetched a page at a time, never whole — same rule as the
+// folder console.
+const PAGE = 10;
+
 interface Profile {
   username: string | null;
   email: string | null;
@@ -22,8 +26,11 @@ export default function AccountPage() {
   const [tags, setTags] = useState<UserTag[]>([]);
   const [username, setUsername] = useState("");
   const [avatarUrl, setAvatarUrl] = useState("");
-  const [following, setFollowing] = useState<FollowEdge[]>([]);
-  const [followers, setFollowers] = useState<FollowEdge[]>([]);
+  // Follow lists fetch their own page; bumping this makes them re-read after a
+  // follow or unfollow.
+  const [followRevision, setFollowRevision] = useState(0);
+  const [grantCandidates, setGrantCandidates] = useState<FollowEdge[]>([]);
+  const [grantQuery, setGrantQuery] = useState("");
   const [followName, setFollowName] = useState("");
   const [grantTo, setGrantTo] = useState("");
   const [grantTag, setGrantTag] = useState("");
@@ -34,10 +41,9 @@ export default function AccountPage() {
 
   const load = useCallback(async () => {
     try {
-      const [pRes, tRes, fRes, gRes] = await Promise.all([
+      const [pRes, tRes, gRes] = await Promise.all([
         fetch("/api/collab/me/profile"),
         fetch("/api/collab/me/tags"),
-        fetch("/api/collab/me/follows"),
         fetch("/api/collab/me/grants"),
       ]);
       if (pRes.ok) {
@@ -47,12 +53,8 @@ export default function AccountPage() {
         setAvatarUrl(profile.avatarUrl ?? "");
       }
       if (tRes.ok) setTags((await tRes.json()).tags ?? []);
-      if (fRes.ok) {
-        const data = await fRes.json();
-        setFollowing(data.following ?? []);
-        setFollowers(data.followers ?? []);
-      }
       if (gRes.ok) setGiven((await gRes.json()).given ?? []);
+      setFollowRevision((n) => n + 1);
     } finally {
       setLoaded(true);
     }
@@ -116,6 +118,20 @@ export default function AccountPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  // The tag picker offers a page of followers, searchable — the same rule the
+  // lists below follow: never fetch an unbounded people list.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      const params = new URLSearchParams({ direction: "followers", limit: String(PAGE) });
+      if (grantQuery.trim()) params.set("q", grantQuery.trim());
+      fetch(`/api/collab/me/follows?${params}`)
+        .then((r) => (r.ok ? r.json() : { people: [] }))
+        .then((d) => setGrantCandidates(d.people ?? []))
+        .catch(() => {});
+    }, 250);
+    return () => clearTimeout(t);
+  }, [grantQuery, followRevision]);
 
   const saveProfile = () =>
     act(
@@ -241,14 +257,16 @@ export default function AccountPage() {
         </div>
         <PeopleList
           label="You follow"
-          people={following}
+          direction="following"
+          revision={followRevision}
           emptyText="Not following anyone."
           actionLabel="Unfollow"
           onAction={(id) => doUnfollow(id, "following")}
         />
         <PeopleList
           label="Follows you"
-          people={followers}
+          direction="followers"
+          revision={followRevision}
           emptyText="No followers yet."
           actionLabel="Remove"
           onAction={(id) => doUnfollow(id, "followers")}
@@ -260,9 +278,17 @@ export default function AccountPage() {
           You can offer a tag to anyone who follows you. They decide whether to accept,
           and accepting shares every folder you tag that way with them.
         </p>
-        {followers.length === 0 ? (
+        <input
+          value={grantQuery}
+          onChange={(e) => setGrantQuery(e.target.value)}
+          placeholder="Search your followers"
+          className="mb-2 w-full rounded border border-black/10 bg-white px-2 py-1.5 text-sm text-gray-800 outline-none placeholder:text-gray-400 dark:border-white/10 dark:bg-white/5 dark:text-gray-200"
+        />
+        {grantCandidates.length === 0 ? (
           <p className="text-sm text-gray-500 dark:text-gray-400">
-            Nobody follows you yet, so there is no one to tag.
+            {grantQuery.trim()
+              ? "No follower matches."
+              : "Nobody follows you yet, so there is no one to tag."}
           </p>
         ) : (
           <div className="flex flex-wrap gap-2">
@@ -272,7 +298,7 @@ export default function AccountPage() {
               className="min-w-0 flex-1 rounded border border-black/10 bg-white px-2 py-1.5 text-sm text-gray-800 outline-none dark:border-white/10 dark:bg-white/5 dark:text-gray-200"
             >
               <option value="">Choose a follower...</option>
-              {followers.map((f) => (
+              {grantCandidates.map((f) => (
                 <option key={f.userId} value={f.username}>
                   {f.username}
                 </option>
@@ -336,26 +362,70 @@ export default function AccountPage() {
   );
 }
 
+/**
+ * One side of the follow graph, a page at a time. It owns its own query and
+ * offset so a long list never arrives in one response, and re-reads whenever
+ * `revision` changes (i.e. after a follow or unfollow elsewhere on the page).
+ */
 function PeopleList({
   label,
-  people,
+  direction,
+  revision,
   emptyText,
   actionLabel,
   onAction,
 }: {
   label: string;
-  people: FollowEdge[];
+  direction: "following" | "followers";
+  revision: number;
   emptyText: string;
   actionLabel: string;
   onAction: (userId: string) => void;
 }) {
+  const [people, setPeople] = useState<FollowEdge[]>([]);
+  const [total, setTotal] = useState(0);
+  const [query, setQuery] = useState("");
+  const [offset, setOffset] = useState(0);
+
+  useEffect(() => {
+    const t = setTimeout(() => {
+      const params = new URLSearchParams({
+        direction,
+        limit: String(PAGE),
+        offset: String(offset),
+      });
+      if (query.trim()) params.set("q", query.trim());
+      fetch(`/api/collab/me/follows?${params}`)
+        .then((r) => (r.ok ? r.json() : { people: [], total: 0 }))
+        .then((d) => {
+          setPeople(d.people ?? []);
+          setTotal(d.total ?? 0);
+        })
+        .catch(() => {});
+    }, 250);
+    return () => clearTimeout(t);
+  }, [direction, query, offset, revision]);
+
   return (
     <div className="mt-3">
       <p className="mb-1 text-xs font-medium text-gray-500 dark:text-gray-400">
-        {label} ({people.length})
+        {label} ({total})
       </p>
+      {total > PAGE && (
+        <input
+          value={query}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            setOffset(0);
+          }}
+          placeholder="Search by username"
+          className="mb-2 w-full rounded border border-black/10 bg-white px-2 py-1 text-sm text-gray-800 outline-none placeholder:text-gray-400 dark:border-white/10 dark:bg-white/5 dark:text-gray-200"
+        />
+      )}
       {people.length === 0 ? (
-        <p className="text-sm text-gray-500 dark:text-gray-400">{emptyText}</p>
+        <p className="text-sm text-gray-500 dark:text-gray-400">
+          {query.trim() ? "Nobody matches." : emptyText}
+        </p>
       ) : (
         <ul>
           {people.map((p) => (
@@ -375,6 +445,27 @@ function PeopleList({
             </li>
           ))}
         </ul>
+      )}
+      {total > PAGE && (
+        <div className="mt-2 flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+          <button
+            disabled={offset === 0}
+            onClick={() => setOffset(Math.max(0, offset - PAGE))}
+            className="rounded border border-black/10 px-2 py-0.5 hover:bg-black/5 disabled:opacity-40 dark:border-white/10 dark:hover:bg-white/5"
+          >
+            Previous
+          </button>
+          <span>
+            {offset + 1}–{Math.min(offset + PAGE, total)} of {total}
+          </span>
+          <button
+            disabled={offset + PAGE >= total}
+            onClick={() => setOffset(offset + PAGE)}
+            className="rounded border border-black/10 px-2 py-0.5 hover:bg-black/5 disabled:opacity-40 dark:border-white/10 dark:hover:bg-white/5"
+          >
+            Next
+          </button>
+        </div>
       )}
     </div>
   );

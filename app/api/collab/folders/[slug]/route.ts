@@ -15,11 +15,19 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ slug: strin
     const folder = await requireFolder(slug, req.nextUrl.searchParams.get("owner") ?? undefined);
     if (isResponse(folder)) return folder;
 
-    const [members, tags] = await Promise.all([
-      listMembers(folder.id).catch(() => []),
+    // First page of members only — the console pages and searches the rest
+    // through /members.
+    const [page, tags] = await Promise.all([
+      listMembers(folder.id, { limit: 10 }).catch(() => ({ members: [], total: 0 })),
       listFolderTags(folder.id).catch(() => []),
     ]);
-    return NextResponse.json({ folder, role: folder.myRole, members, tags });
+    return NextResponse.json({
+      folder,
+      role: folder.myRole,
+      members: page.members,
+      memberTotal: page.total,
+      tags,
+    });
   } catch (err: any) {
     return errorResponse(err);
   }

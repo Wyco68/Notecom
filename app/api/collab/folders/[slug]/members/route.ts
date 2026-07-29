@@ -12,9 +12,18 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ slug: strin
 
   try {
     const { slug } = await ctx.params;
-    const folder = await requireFolder(slug, req.nextUrl.searchParams.get("owner") ?? undefined);
+    const params = req.nextUrl.searchParams;
+    const folder = await requireFolder(slug, params.get("owner") ?? undefined);
     if (isResponse(folder)) return folder;
-    return NextResponse.json({ members: await listMembers(folder.id) });
+
+    // Paged: the list is unbounded, and the console shows a page at a time.
+    return NextResponse.json(
+      await listMembers(folder.id, {
+        q: params.get("q") ?? undefined,
+        limit: Number(params.get("limit")) || undefined,
+        offset: Number(params.get("offset")) || undefined,
+      })
+    );
   } catch (err: any) {
     return errorResponse(err);
   }
