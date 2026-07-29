@@ -43,6 +43,34 @@ Content follows the same rule: reader padding and prose sizes step up at `sm`,
 and anything that can be wider than the column (tables) scrolls inside its own
 `overflow-x-auto` box rather than pushing the page sideways.
 
+### Sidebar sections
+
+Top to bottom: header, search, the two inboxes, Favorites, **Folders**,
+**Recent**, account. Folders takes whatever height is left and scrolls;
+**Recent sits under it at a fixed `h-56`** — exactly the eight rows
+`lib/vault/recent.ts` caps its history at (8 × 1.75rem, a row being `text-sm`'s
+1.25rem line plus `py-1`). No padding inside that box, or it eats a row; the
+list collapses to its content while empty rather than holding eight blank rows
+open. Recent rows are the one place in the sidebar that **truncate** instead of
+wrapping, because a fixed height budget cannot absorb a name that wraps — the
+`title` attribute carries the full name.
+
+"Recent" means *finished with*, not *opened*: `AppShell` files a document when
+the reader leaves it (a different selection, or `pagehide`), so the file on
+screen is never also listed above as history.
+
+### Panels in the content column
+
+The account editor and a folder's sharing console render **inside the
+workspace's content column**, not as a navigation — `AccountPanel` and
+`FolderManagePanel` each take an optional `onClose`, and `AppShell` holds one
+`overlay` value (never a boolean per pane) so two cannot be open at once. Their
+routes (`/account`, `/vault/[folder]/manage`) still exist and render the same
+component without `onClose`, for a deep link or an auth `?next=`. A control that
+opens a panel in place is a `<button>`; the same control on a page that must
+navigate is an `<a>` — a link that doesn't navigate and a button that does are
+both lies about what will happen.
+
 ## App icon
 [app/icon.svg](../app/icon.svg) is the master mark (a page + lens on the
 project blue, `#2563eb`). Everything else is generated from it and should be
@@ -62,9 +90,11 @@ under `@layer components`. Compose these instead of re-deriving a control:
 | `ui-field` (+ `ui-field-sm`) | every text input, select and textarea |
 | `ui-btn` + `ui-btn-primary` / `-secondary` / `-ghost` / `-danger` / `-danger-outline` | buttons; add `ui-btn-sm` or `ui-btn-xs` for row-height and dense variants |
 | `ui-icon-btn` (+ `ui-icon-btn-danger`) | square icon-only controls |
-| `ui-row` | a list/tree row that tints on hover |
+| `ui-row` | a list/tree row that tints and nudges 2px on hover |
 | `ui-reveal` | a row action that appears on `group-hover` |
 | `ui-focus` | a visible focus ring on anything not covered above |
+| `ui-scroll` | a pane that scrolls: smooth `scroll-behavior` + contained overscroll |
+| `ui-rise` | enter animation (fade + 4px lift) for a row or card arriving in a list |
 
 Two rules that come with them:
 
@@ -82,7 +112,17 @@ enter/exit, and only ever on colour, opacity and transform — never on `width`,
 while keeping it in the layout at all times, precisely so revealing it cannot
 resize a row or the fixed-width sidebar (the old `hidden group-hover:flex`
 did). One `@media (prefers-reduced-motion: reduce)` block in `globals.css`
-neutralises all of it for anyone who asked their OS for less motion.
+neutralises all of it for anyone who asked their OS for less motion — including
+`ui-rise`, `animate-pulse` and `ui-scroll`'s smooth scrolling.
+
+Lists animate in with `ui-rise` plus an inline `animationDelay` to stagger them:
+`style={{ animationDelay: \`${Math.min(i, 8) * 25}ms\` }}`. **Cap the index.**
+Past the first handful the delay stops reading as sequence and starts delaying
+readability, which is why every call site clamps. 25ms per row for sidebar
+rows and list items, 40ms per card for settings sections. Two transforms that
+replace a cut: the tree's disclosure arrow is one `▸` that rotates, not two
+glyphs that swap, and an opened folder's contents fade and lift in rather than
+appearing.
 
 ## Components
 - **Modals**: every modal wraps [components/modals/Modal.tsx](../components/modals/Modal.tsx)
@@ -106,6 +146,14 @@ neutralises all of it for anyone who asked their OS for less motion.
 - **Icons**: hand-rolled inline SVG components under
   [components/icons/](../components/icons/) (e.g. `TrashIcon`), no icon
   library dependency.
+- **Loading states**: [components/layout/Skeleton.tsx](../components/layout/Skeleton.tsx)
+  — `SkeletonPanel` for a settings-style page, `SkeletonCard`, `SkeletonRows`
+  for a sidebar list, `SkeletonLine`/`SkeletonCircle` to compose one by hand.
+  A skeleton mirrors the layout that is coming, at the same sizes, in the same
+  order, at the same width, so the content landing moves nothing. **Don't add a
+  centred spinner** — it says "wait" and nothing else; these say what the reader
+  is waiting for. They pulse rather than shimmer, because a travelling highlight
+  competes with the page's own enter transitions.
 
 ## Collaboration UI
 Components live in `components/collab/`. Model and permission rules:
