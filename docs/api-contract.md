@@ -7,8 +7,10 @@ Loaded by `/feat` only. Source of truth is the route files themselves
 
 | Route | Method | Body | Response |
 |---|---|---|---|
-| `/api/tree` | GET | — | `{ folders: [{ name, lessons: [{id,slug,title,seq}], quizzes: [...] }] }` |
+| `/api/tree` | GET | — | `{ folders: [{ name }] }` — folder names only, one indexed query. The sidebar's first paint |
+| `/api/tree` | POST | — | `{ imported, skipped, errors, reindexed }` — the housekeeping pass: ingest `vault/`, re-chunk stale documents. Best-effort, never fails the request |
 | `/api/folders` | POST | `{ name }` | `{ ok, folder }` — the app slugifies `name`; the database invents no names |
+| `/api/folders/[name]` | GET | — | `{ lessons: [{id,slug,title,seq}], quizzes: [...] }` — one folder's documents, fetched when the reader opens it |
 | `/api/folders/[name]` | DELETE | — | `{ ok }` |
 | `/api/lesson/[folder]/[id]` | GET | — | `{ html, title }` |
 | `/api/lesson/[folder]/[id]` | DELETE | — | `{ ok }` |
@@ -22,6 +24,16 @@ Loaded by `/feat` only. Source of truth is the route files themselves
 | `/api/generate/[id]` | GET | — | SSE job log (`line` events, then `end` with status) |
 
 Error shape is always `{ error: string }` with a non-2xx status.
+
+**The tree loads in two steps.** `GET /api/tree` used to return every readable
+document in the account, and to run the vault import and a full stale-chunk scan
+before answering — all on every page load, window focus and refresh, to draw a
+list of collapsed folder names. Now the folder list is its own cheap query,
+`GET /api/folders/[name]` fetches a folder's documents when it is opened, and
+the housekeeping pass is `POST /api/tree`, which the client fires *after* the
+tree is on screen (and again when a generation run finishes). A folder that is
+unreadable or absent answers `GET` with empty lists rather than 404 — which
+folders exist is what RLS is hiding.
 
 There is no route that *generates* anything itself. Content creation happens via
 Claude Code (`/lect` for lessons, `/quiz` for quizzes); these routes only start
@@ -96,7 +108,8 @@ Route handlers call these functions, which query Supabase as the signed-in user.
 
 | Function | Notes |
 |---|---|
-| `listTree()` | `{ folders: [{ name, lessons, quizzes }] }`; seeds every readable folder first, so an empty one still appears |
+| `listFolders()` | `{ folders: [{ name }] }`; every readable folder, including empty ones. Slugs are deduplicated — a shared folder colliding with the reader's own is one row, as it is everywhere else |
+| `listFolderDocs(slug)` | `{ lessons, quizzes }` for one folder, spanning every folder the slug resolves to (the rule `loadDoc` opens them by); empty lists when nothing is readable |
 | `createFolder(slug)` | idempotent; new folders start private and undiscoverable — sharing is an explicit later act |
 | `deleteFolder(slug)` | soft delete, cascading to the folder's documents |
 | `loadDoc(folder, id, kind)` | `{ html, title }`; "not found" also means "not readable", deliberately — a probe must not confirm a private folder's contents |

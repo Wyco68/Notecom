@@ -193,10 +193,16 @@ the indexed sections — see §2.1.
 browser -> GET /vault
    -> AppShell renders sidebar + content pane
    -> Sidebar calls GET /api/tree
+        -> listFolders() selects notes_folders (RLS-scoped)
+        -> returns folder names only — the sidebar draws immediately
+   -> behind it, POST /api/tree
         -> importVault() ingests Claude-authored vault files into Supabase
         -> reindexStale() re-chunks anything whose search index lags
-        -> listTree() selects notes_folders + notes_documents (RLS-scoped)
-        -> returns folders + lessons JSON
+        -> the client re-reads the tree only if either changed something
+   -> user opens a folder
+   -> FileTreeNode calls GET /api/folders/<Folder>
+        -> listFolderDocs() selects notes_documents (RLS-scoped)
+        -> returns that folder's lessons + quizzes
    -> user clicks a lesson
    -> LessonViewer calls GET /api/lesson/<Folder>/<id>
         -> loadDoc() selects notes_documents.html
@@ -217,7 +223,8 @@ this section used to specify is gone with the sidecars.
 
 | Function | Returns |
 |---|---|
-| `listTree()` | `{ folders: [{ name, lessons: [...], quizzes: [...] }] }` |
+| `listFolders()` | `{ folders: [{ name }] }` — names only; the tree's first paint |
+| `listFolderDocs(slug)` | `{ lessons: [...], quizzes: [...] }` — one folder, fetched when it is opened |
 | `createFolder(slug)` | `{ ok }` — idempotent; new folders start private |
 | `deleteFolder(slug)` | `{ ok }` — tombstone, cascading to its documents |
 | `loadDoc(folder, id, kind)` | `{ html, title }` |

@@ -89,9 +89,15 @@ Don't move logic across the layers when fixing or extending the app:
 ## Data layer: `lib/vault/store.ts`
 
 The whole persistence surface, and small enough to read in one sitting:
-`listTree`, `createFolder`, `deleteFolder`, `loadDoc`, `saveDoc`, `deleteDoc`,
-`renameDoc`. `lib/vault/helper.ts` sits on top purely to translate the routes'
-lesson/quiz vocabulary into a document `kind`.
+`listFolders`, `listFolderDocs`, `createFolder`, `deleteFolder`, `loadDoc`,
+`saveDoc`, `deleteDoc`, `renameDoc`. `lib/vault/helper.ts` sits on top purely to
+translate the routes' lesson/quiz vocabulary into a document `kind`.
+
+**The tree is read lazily.** `listFolders` returns names; a folder's documents
+come from `listFolderDocs` when the reader opens it. The single `listTree` it
+replaced fetched every readable document in the account on every page load,
+window focus and refresh — a cost that grew with the whole vault to draw a list
+of collapsed folder names.
 
 Two rules it inherits from the sidecar it replaced:
 
@@ -130,8 +136,11 @@ boundaries are how the lessons are actually taught.
 - **Next.js** (`lib/search/search.ts`, `/api/search`, `/api/related/...`) only
   forwards the query and formats the answer.
 
-Freshness: `/api/tree` runs the vault import and a stale-chunk reindex on every
-tree fetch (page load, window focus, refresh button). Both are near-free when
-there is nothing to do, and neither may take the tree down with it.
+Freshness: the vault import and the stale-chunk reindex are `POST /api/tree`,
+fired by the client once the tree is on screen, again when a generation run
+finishes, and on the refresh button. They used to sit in front of `GET
+/api/tree`, where every page load and every window focus paid for a full scan of
+`vault/` and of every document's chunk version before the sidebar could draw.
+Neither may take the tree down with it, and window focus re-reads the tree only.
 
 Endpoints: [api-contract.md](api-contract.md).

@@ -1,6 +1,6 @@
 "use client";
 
-import type { Folder, LessonRef } from "@/lib/vault/types";
+import type { Folder, FolderDocs, LessonRef } from "@/lib/vault/types";
 import FileTreeNode from "./FileTreeNode";
 import TagGroup from "./TagGroup";
 import { SkeletonRows } from "../layout/Skeleton";
@@ -15,21 +15,27 @@ const UNTAGGED = "Untagged";
 
 export default function FileTree({
   folders,
+  docs,
   selected,
   tagsByFolder,
   favorites,
   onSelect,
+  onOpen,
   onToggleFavorite,
   onChanged,
   onManage,
 }: {
   folders: Folder[] | null;
+  /** folder name → its documents, for folders that have been fetched. */
+  docs: Record<string, FolderDocs>;
   selected: LessonRef | null;
   /** folder slug → its tag slugs. Empty/absent means "don't group". */
   tagsByFolder?: Record<string, string[]>;
   /** Keys of starred files, as `kind:folder:id`. */
   favorites: Set<string>;
   onSelect: (ref: LessonRef) => void;
+  /** A folder was opened — fetch its documents if they aren't held yet. */
+  onOpen: (name: string) => void;
   onToggleFavorite: (ref: LessonRef, title: string) => void;
   onChanged: () => void;
   /** Show a folder's sharing console in place. Absent → navigate to its page. */
@@ -54,9 +60,11 @@ export default function FileTree({
     >
       <FileTreeNode
         folder={folder}
+        docs={docs[folder.name]}
         selected={selected}
         favorites={favorites}
         onSelect={onSelect}
+        onOpen={onOpen}
         onToggleFavorite={onToggleFavorite}
         onChanged={onChanged}
         onManage={onManage}

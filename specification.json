@@ -48,7 +48,8 @@
         "notes_doc_chunks"
       ],
       "functions": [
-        "listTree",
+        "listFolders",
+        "listFolderDocs",
         "createFolder",
         "deleteFolder",
         "loadDoc",
@@ -102,7 +103,18 @@
     {
       "path": "/api/tree",
       "method": "GET",
-      "response": "{folders:[{name,lessons,quizzes}]}"
+      "response": "{folders:[{name}]}"
+    },
+    {
+      "path": "/api/tree",
+      "method": "POST",
+      "response": "{imported,skipped,errors,reindexed}",
+      "note": "housekeeping pass: importVault() + reindexStale(), off the tree's critical path"
+    },
+    {
+      "path": "/api/folders/[name]",
+      "method": "GET",
+      "response": "{lessons:[{id,slug,title,seq}],quizzes:[...]}"
     },
     {
       "path": "/api/folders",

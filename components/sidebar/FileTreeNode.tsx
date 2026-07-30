@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { Folder, LessonRef } from "@/lib/vault/types";
+import type { Folder, FolderDocs, LessonRef } from "@/lib/vault/types";
+import { SkeletonRows } from "../layout/Skeleton";
 import ConfirmModal from "../modals/ConfirmModal";
 import TrashIcon from "../icons/TrashIcon";
 import StarIcon from "../icons/StarIcon";
@@ -32,18 +33,24 @@ type PendingDelete =
 
 export default function FileTreeNode({
   folder,
+  docs,
   selected,
   favorites,
   onSelect,
+  onOpen,
   onToggleFavorite,
   onChanged,
   onManage,
 }: {
   folder: Folder;
+  /** This folder's documents, or undefined while they haven't been fetched. */
+  docs?: FolderDocs;
   selected: LessonRef | null;
   /** Keys of starred files, as `kind:folder:id`. */
   favorites: Set<string>;
   onSelect: (ref: LessonRef) => void;
+  /** Ask for this folder's documents. Idempotent — the shell holds them. */
+  onOpen: (name: string) => void;
   onToggleFavorite: (ref: LessonRef, title: string) => void;
   onChanged: () => void;
   /** Show the sharing console in place. Absent → navigate to its own page. */
@@ -63,10 +70,17 @@ export default function FileTreeNode({
     if (containsSelected) setOpen(true);
   }, [containsSelected]);
 
-  // Tolerate a tree response that omits either array (e.g. an older index
-  // binary that predates quizzes) instead of throwing on `.length`/`.map`.
-  const lessons = folder.lessons ?? [];
-  const quizzes = folder.quizzes ?? [];
+  // Opening the folder is what fetches it — the whole point of not shipping
+  // every document with the tree. Driven by `open` rather than by the click, so
+  // the auto-open above pulls its contents too.
+  useEffect(() => {
+    if (open) onOpen(folder.name);
+  }, [open, folder.name, onOpen]);
+
+  // Tolerate a response that omits either array instead of throwing on
+  // `.length`/`.map`.
+  const lessons = docs?.lessons ?? [];
+  const quizzes = docs?.quizzes ?? [];
 
   async function confirmDelete() {
     if (!pending) return;
@@ -166,8 +180,16 @@ export default function FileTreeNode({
           would reflow every row below it. */}
       {open && (
         <div className="ui-rise ml-4 border-l border-black/10 pl-2 dark:border-white/10">
-          {lessons.length === 0 && (
-            <p className="px-2 py-1 text-xs text-gray-500">No lessons yet</p>
+          {/* Not yet fetched is not the same as empty: placeholder rows while
+              the request is out, so the folder never reads as "No lessons yet"
+              for a folder that has some. */}
+          {!docs ? (
+            <SkeletonRows rows={3} />
+          ) : (
+            lessons.length === 0 &&
+            quizzes.length === 0 && (
+              <p className="px-2 py-1 text-xs text-gray-500">No lessons yet</p>
+            )
           )}
           {lessons.map((lesson, i) => {
             const isActive =

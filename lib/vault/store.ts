@@ -25,12 +25,6 @@ export interface LessonEntry {
   seq: number;
 }
 
-export interface TreeFolder {
-  name: string;
-  lessons: LessonEntry[];
-  quizzes: LessonEntry[];
-}
-
 export type Kind = "lesson" | "quiz";
 
 /** Rows the app writes; `id` and the timestamps are ours to supply — the
@@ -70,38 +64,60 @@ async function requireFolderId(slug: string): Promise<string> {
 
 // --- tree ---------------------------------------------------------------------
 
-// Seeds every readable folder first so an empty folder still appears. Both
-// queries are RLS-filtered, so no folder needs excluding by hand.
-export async function listTree(): Promise<{ folders: TreeFolder[] }> {
+// The tree is read in two steps, and deliberately so.
+//
+// It used to be one query pair: every readable folder *and* every readable
+// document, on every page load, window focus and refresh. That cost grew with
+// the whole account while the sidebar showed a list of collapsed folder names —
+// the reader waited for thousands of lesson rows to learn that they had eleven
+// folders. Documents are now fetched per folder, when one is opened
+// (`listFolderDocs`), which is the moment their titles are first visible.
+//
+// Both queries are RLS-filtered, so no folder needs excluding by hand.
+
+/** Folder names only: the sidebar's first paint. */
+export async function listFolders(): Promise<{ folders: { name: string }[] }> {
   const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("notes_folders")
+    .select("slug")
+    .eq("deleted", false)
+    .order("slug");
+  if (error) fail("tree failed", error);
+  // A slug names one folder per owner, so a shared folder can collide with the
+  // reader's own. They read as one folder everywhere else (`folderIdsBySlug`),
+  // so they are one row here too.
+  const names = [...new Set((data ?? []).map((r) => r.slug))];
+  return { folders: names.map((name) => ({ name })) };
+}
 
-  const [{ data: folderRows, error: folderErr }, { data: docRows, error: docErr }] =
-    await Promise.all([
-      supabase.from("notes_folders").select("id,slug").eq("deleted", false).order("slug"),
-      supabase
-        .from("notes_documents")
-        .select("folder_id,doc_key,slug,title,seq,kind")
-        .eq("deleted", false)
-        .order("seq"),
-    ]);
-  if (folderErr) fail("tree failed", folderErr);
-  if (docErr) fail("tree failed", docErr);
+/** One folder's documents. Spans every folder the slug resolves to, matching
+ *  `loadDoc` — a document readable through a shared folder of the same name is
+ *  listed by the same rule that opens it. */
+export async function listFolderDocs(
+  slug: string
+): Promise<{ lessons: LessonEntry[]; quizzes: LessonEntry[] }> {
+  const supabase = await createClient();
+  const out: { lessons: LessonEntry[]; quizzes: LessonEntry[] } = { lessons: [], quizzes: [] };
+  const folderIds = await folderIdsBySlug(slug);
+  // No such folder and no readable folder are the same answer here: an empty
+  // one, not an error — the same reason loadDoc refuses to distinguish them.
+  if (!folderIds.length) return out;
 
-  const byId = new Map<string, TreeFolder>();
-  const out: TreeFolder[] = [];
-  for (const f of folderRows ?? []) {
-    const tf: TreeFolder = { name: f.slug, lessons: [], quizzes: [] };
-    byId.set(f.id, tf);
-    out.push(tf);
-  }
-  for (const d of docRows ?? []) {
-    const tf = byId.get(d.folder_id);
-    if (!tf) continue;
+  const { data, error } = await supabase
+    .from("notes_documents")
+    .select("doc_key,slug,title,seq,kind")
+    .eq("deleted", false)
+    .in("folder_id", folderIds)
+    .order("seq");
+  if (error) fail("folder contents failed", error);
+
+  for (const d of data ?? []) {
     const entry: LessonEntry = { id: d.doc_key, slug: d.slug, title: d.title, seq: d.seq };
-    if (d.kind === "quiz") tf.quizzes.push(entry);
-    else tf.lessons.push(entry);
+    if (d.kind === "quiz") out.quizzes.push(entry);
+    else out.lessons.push(entry);
   }
-  return { folders: out };
+  return out;
 }
 
 // --- folders ------------------------------------------------------------------

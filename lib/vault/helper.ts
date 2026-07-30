@@ -10,13 +10,14 @@ import {
   createFolder,
   deleteDoc,
   deleteFolder,
-  listTree,
+  listFolderDocs,
+  listFolders,
   loadDoc,
   renameDoc,
 } from "./store";
 
-export type { LessonEntry, TreeFolder } from "./store";
-export { createFolder, deleteFolder, listTree };
+export type { LessonEntry } from "./store";
+export { createFolder, deleteFolder, listFolderDocs, listFolders };
 
 export const loadLesson = (folder: string, id: string) => loadDoc(folder, id, "lesson");
 export const deleteLesson = (folder: string, id: string) => deleteDoc(folder, id, "lesson");

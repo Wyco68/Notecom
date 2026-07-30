@@ -57,15 +57,26 @@ AppShell
   │  fetch GET /api/tree
   ▼
 app/api/tree/route.ts
-  │  importVault()    (ingest Claude-authored files, if any)
-  │  reindexStale()   (re-chunk anything indexed at an older version)
-  │  listTree()
+  │  listFolders()
   ▼
 Supabase
-  │  RLS-scoped select over notes_folders + notes_documents
-  │  → { folders: [{ name, lessons: [...], quizzes: [...] }] }
+  │  RLS-scoped select over notes_folders
+  │  → { folders: [{ name }] }
   ▼
-AppShell renders sidebar with folder/lesson tree
+AppShell renders the sidebar's folder list
+
+  │  (behind it) POST /api/tree
+  │     importVault()    (ingest Claude-authored files, if any)
+  │     reindexStale()   (re-chunk anything indexed at an older version)
+  │     → re-reads the tree only if either changed something
+
+  │  user opens a folder
+  ▼
+GET /api/folders/<Folder>
+  │  listFolderDocs()  (RLS-scoped select over notes_documents)
+  │  → { lessons: [...], quizzes: [...] }
+  ▼
+FileTreeNode replaces its placeholder rows with the documents
 
   │  user clicks a lesson
   ▼
@@ -160,10 +171,12 @@ SearchResults renders heading/lesson/summary per hit
   │  click → onSelect(LessonRef) → LessonViewer loads the document
 ```
 
-Index freshness: `GET /api/tree` (page load, window focus, refresh button) runs
-`reindexStale()`, which re-chunks any document whose chunk rows are missing or
-were built from an older `version` — typically one written by another device.
-Cheap when there is nothing to do.
+Index freshness: `POST /api/tree` (once the tree is on screen, when a generation
+run finishes, and on the refresh button) runs `reindexStale()`, which re-chunks
+any document whose chunk rows are missing or were built from an older `version`
+— typically one written by another device. It is a POST, and behind the tree
+rather than in front of it, because it used to run on every page load and every
+window focus, ahead of the first thing the reader was waiting for.
 
 ---
 

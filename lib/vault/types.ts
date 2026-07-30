@@ -9,16 +9,22 @@ export interface Lesson {
 // separate index.json array and a separate document kind.
 export type Quiz = Lesson;
 
+// A folder in the tree is a name and nothing else. Its documents are fetched
+// separately, when the reader opens it — a vault with many folders would
+// otherwise pay for every lesson row in the account on first paint, to show a
+// list of collapsed folders. See FolderDocs.
 export interface Folder {
   name: string;
+}
+
+/** One folder's contents, from `GET /api/folders/[name]`. */
+export interface FolderDocs {
   lessons: Lesson[];
   quizzes: Quiz[];
 }
 
 export interface VaultTree {
   folders: Folder[];
-  // Runtime flag from /api/tree: hides write controls on a READ_ONLY=1 box.
-  readOnly?: boolean;
 }
 
 // A selected lesson or quiz is identified by its folder + id + kind.
