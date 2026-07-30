@@ -233,7 +233,7 @@ Invite-by-username resolves `profiles.username` inside the function, so the
 | Supabase client factories | `lib/supabase/server.ts`, `lib/supabase/client.ts` — anon key only, no business logic |
 | Collaboration data layer | `lib/collab/*.ts` — typed wrappers over the RPCs |
 | HTTP surface | `app/api/collab/**` — see [api-contract.md](api-contract.md) |
-| UI | `app/discover/`, `app/vault/[folder]/manage/`, `components/collab/` |
+| UI | `components/collab/` — `DiscoverPanel` and `FolderManagePanel` render in the workspace's content column (AppShell) and as the standalone `app/discover/`, `app/vault/[folder]/manage/` routes a deep link lands on |
 
 Content persistence (`lib/vault/store.ts`) runs on the same user-scoped client
 and holds no permission logic of its own — same rule as slugs and sequences:
