@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { Folder, LessonRef, VaultTree } from "@/lib/vault/types";
+import type { Folder, FolderDocs, LessonRef, VaultTree } from "@/lib/vault/types";
 import { pruneRecent, pushRecent, type RecentEntry } from "@/lib/vault/recent";
 import {
   pruneFavorites,
@@ -23,6 +23,7 @@ import InvitationsInbox from "../collab/InvitationsInbox";
 import TagGrantsInbox from "../collab/TagGrantsInbox";
 import AccountControl from "../collab/AccountControl";
 import AccountPanel from "../account/AccountPanel";
+import DiscoverPanel from "../collab/DiscoverPanel";
 import FolderManagePanel from "../collab/FolderManagePanel";
 import ThemeToggle from "../theme/ThemeToggle";
 import RefreshIcon from "../icons/RefreshIcon";
@@ -32,6 +33,10 @@ import UploadIcon from "../icons/UploadIcon";
 
 export default function AppShell() {
   const [folders, setFolders] = useState<Folder[] | null>(null);
+  // Documents, per folder, fetched the first time a folder is opened. An
+  // absent key means "not fetched yet", which is what the tree draws a
+  // placeholder for — it is not the same as a folder with no lessons.
+  const [docs, setDocs] = useState<Record<string, FolderDocs>>({});
   const [selected, setSelected] = useState<LessonRef | null>(null);
   const [showNewFolder, setShowNewFolder] = useState(false);
   // `true` opens the form; a job id opens that run's log instead.
@@ -43,7 +48,7 @@ export default function AppShell() {
   // the reader back on the document they left. One value, not a boolean each:
   // two panes cannot be open at once, and this is what says so.
   const [overlay, setOverlay] = useState<
-    { kind: "profile" } | { kind: "manage"; slug: string } | null
+    { kind: "profile" } | { kind: "discover" } | { kind: "manage"; slug: string } | null
   >(null);
   // undefined until the first status check answers — avoids flashing a
   // "signed out" warning during the initial load.
@@ -63,10 +68,12 @@ export default function AppShell() {
   // closing; this only reads them.
   const { completedTick } = useGenerateJobs();
 
+  // Null until the open document's folder has been fetched, which is why
+  // onSelect asks for it: the title is what files the document under "Recent".
   const currentTitle = (() => {
-    if (!selected || !folders) return null;
-    const f = folders.find((f) => f.name === selected.folder);
-    const list = selected.kind === "quiz" ? f?.quizzes : f?.lessons;
+    if (!selected) return null;
+    const d = docs[selected.folder];
+    const list = selected.kind === "quiz" ? d?.quizzes : d?.lessons;
     return list?.find((l) => l.id === selected.id)?.title ?? null;
   })();
 
@@ -88,22 +95,108 @@ export default function AppShell() {
     }
   }, []);
 
-  const refreshTree = useCallback(async () => {
+  // The document cache, readable from callbacks that must not re-subscribe when
+  // it changes — `refreshTree` re-reads every folder already fetched, and would
+  // otherwise be a new function on every fetch, re-running the effects that
+  // depend on it. The state above is the render copy; this is the current one.
+  const docsRef = useRef<Record<string, FolderDocs>>({});
+  // Folders with a request in flight, so an open, a re-render and a refresh
+  // don't each fire their own.
+  const loading = useRef<Set<string>>(new Set());
+
+  const fetchDocs = useCallback(async (name: string) => {
+    if (loading.current.has(name)) return;
+    loading.current.add(name);
+    try {
+      const res = await fetch(`/api/folders/${encodeURIComponent(name)}`, {
+        cache: "no-store",
+      });
+      if (!res.ok) return;
+      const data: FolderDocs = await res.json();
+      docsRef.current = {
+        ...docsRef.current,
+        [name]: { lessons: data.lessons ?? [], quizzes: data.quizzes ?? [] },
+      };
+      setDocs(docsRef.current);
+    } catch {
+      // Leave the folder unfetched rather than caching an empty one: the row
+      // keeps its placeholder, and the next open (or refresh) tries again.
+    } finally {
+      loading.current.delete(name);
+    }
+  }, []);
+
+  // Called when a folder is opened, and for the folder holding the selection.
+  // Idempotent — a folder already fetched costs nothing.
+  const openFolder = useCallback(
+    (name: string) => {
+      if (docsRef.current[name]) return;
+      fetchDocs(name);
+    },
+    [fetchDocs]
+  );
+
+  // Re-reads the folder list and prunes recents/favourites against it — one
+  // request, regardless of how many folders the reader has open. This is the
+  // automatic path (focus, visibility, the interval below): it answers "did a
+  // folder appear or disappear" without paying for every open folder's
+  // documents or the tag list on every check.
+  const refreshFolderNames = useCallback(async () => {
     const res = await fetch("/api/tree", { cache: "no-store" });
     const data: VaultTree = await res.json();
     const list = data.folders ?? [];
     setFolders(list);
-    // Drop recents and favourites whose file was deleted (here or on another
-    // device) so neither list can offer a link that 404s.
+
+    // A folder that disappeared from the tree has its cached documents dropped
+    // too — the rest stay put; nothing here re-fetches an open folder just
+    // because the reader glanced back at the tab.
+    const names = new Set(list.map((f) => f.name));
+    for (const name of Object.keys(docsRef.current)) {
+      if (!names.has(name)) delete docsRef.current[name];
+    }
+    docsRef.current = { ...docsRef.current };
+    setDocs(docsRef.current);
+
+    // An entry in a folder that hasn't been fetched is kept: not knowing its
+    // documents is not evidence that the file is gone, same rule the heavy
+    // refresh below uses.
     const stillExists = (e: { folder: string; id: string; kind: string }) => {
-      const folder = list.find((f) => f.name === e.folder);
-      const inList = e.kind === "quiz" ? folder?.quizzes : folder?.lessons;
-      return !!inList?.some((l) => l.id === e.id);
+      if (!names.has(e.folder)) return false;
+      const d = docsRef.current[e.folder];
+      if (!d) return true;
+      const inList = e.kind === "quiz" ? d.quizzes : d.lessons;
+      return inList.some((l) => l.id === e.id);
     };
     setRecent(pruneRecent(stillExists));
     setFavorites(pruneFavorites(stillExists));
+  }, []);
+
+  // The expensive pass: folder names, every already-open folder's documents
+  // re-fetched, and the tag map. Reserved for moments a stale doc list is
+  // actually likely — first load, the refresh button, and a finished
+  // generation run — never for a routine tab switch.
+  const refreshTree = useCallback(async () => {
+    await refreshFolderNames();
+    const cached = Object.keys(docsRef.current);
+    await Promise.all(cached.map(fetchDocs));
     refreshTags();
-  }, [refreshTags]);
+  }, [refreshFolderNames, fetchDocs, refreshTags]);
+
+  // Ingest anything Claude Code wrote into vault/, and re-chunk documents whose
+  // search index is stale. Off the tree's critical path on purpose (see
+  // app/api/tree/route.ts): the sidebar draws first, and this re-reads it only
+  // when it actually changed something.
+  const sync = useCallback(async () => {
+    try {
+      const res = await fetch("/api/tree", { method: "POST" });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data.imported > 0 || data.reindexed > 0) refreshTree();
+    } catch {
+      // A box with no vault/ has nothing to ingest — the common case, not an
+      // error worth showing.
+    }
+  }, [refreshTree]);
 
   // The document on screen, held so it can be filed under "Recent" when the
   // reader leaves it. A ref, not state: it must not trigger a render, and the
@@ -158,16 +251,22 @@ export default function AppShell() {
   // On a narrow screen the drawer covers the document it just opened, so it
   // closes with the selection; a static sidebar stays put. Picking a document is
   // also how the reader dismisses the account editor.
-  const onSelect = useCallback((ref: LessonRef) => {
-    setSelected(ref);
-    setOverlay(null);
-    if (!window.matchMedia("(min-width: 1024px)").matches) setSidebarOpen(false);
-  }, []);
+  const onSelect = useCallback(
+    (ref: LessonRef) => {
+      setSelected(ref);
+      setOverlay(null);
+      // A search hit or a Recent row can name a folder that was never opened;
+      // its documents are what give this one a title for the Recent list.
+      openFolder(ref.folder);
+      if (!window.matchMedia("(min-width: 1024px)").matches) setSidebarOpen(false);
+    },
+    [openFolder]
+  );
 
   // Both overlays are opened from the sidebar, which on a narrow screen is
   // covering the column they render into.
   const openOverlay = useCallback(
-    (next: { kind: "profile" } | { kind: "manage"; slug: string }) => {
+    (next: { kind: "profile" } | { kind: "discover" } | { kind: "manage"; slug: string }) => {
       setOverlay(next);
       if (!window.matchMedia("(min-width: 1024px)").matches) setSidebarOpen(false);
     },
@@ -177,26 +276,33 @@ export default function AppShell() {
   // Membership test the tree rows use, precomputed once per render.
   const favoriteKeys = new Set(favorites.map((f) => `${f.kind}:${f.folder}:${f.id}`));
 
+  // The button is the deliberate full pass: re-read the tree *and* run the
+  // ingest/reindex. Window focus only re-reads, since that fires constantly and
+  // a lesson written by a terminal is what this button is for.
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
       await refreshTree();
+      await sync();
     } finally {
       setRefreshing(false);
     }
-  }, [refreshTree]);
+  }, [refreshTree, sync]);
 
+  // The tree first, then the housekeeping pass behind it. Ordered, not
+  // parallel: an import that finds nothing new — the usual case — must not make
+  // the reader wait for the folder list it was already entitled to.
   useEffect(() => {
-    refreshTree();
-  }, [refreshTree]);
+    refreshTree().then(sync);
+  }, [refreshTree, sync]);
 
-  // A finished run wrote a file into vault/; the next tree fetch is what ingests
-  // it into SQLite. The dialog used to trigger this, which meant closing it lost
-  // the refresh — the job itself announces completion now, wherever the reader
-  // happens to be.
+  // A finished run wrote a file into vault/; the sync pass is what ingests it
+  // into the database. The dialog used to trigger this, which meant closing it
+  // lost the refresh — the job itself announces completion now, wherever the
+  // reader happens to be.
   useEffect(() => {
-    if (completedTick) refreshTree();
-  }, [completedTick, refreshTree]);
+    if (completedTick) sync();
+  }, [completedTick, sync]);
 
   // Generating runs the local Claude Code CLI, so a signed-out session is a
   // dead end the user should see before they upload a file, not after a run
@@ -215,14 +321,28 @@ export default function AppShell() {
   }, [refreshAuth]);
 
   // Lessons and quizzes are written to the vault by Claude Code (/lect, /quiz)
-  // outside this app, so the tree can go stale while the window is in the
-  // background. Re-fetch when the user returns to the window (or the tab
-  // becomes visible) so a just-added quiz/folder shows up without a manual
-  // reload.
+  // outside this app, so the folder list can go stale while the window is in
+  // the background. Re-check when the user returns to the window (or the tab
+  // becomes visible) so a just-added folder shows up without a manual reload —
+  // the cheap check only, not a re-fetch of every open folder's documents.
+  //
+  // `focus` and `visibilitychange` both fire on an ordinary tab switch, so
+  // without a guard one alt-tab would check twice. `lastRun` coalesces that and
+  // also caps how often an idle tab left in the background can trigger a
+  // request at all — a reader alt-tabbing every few seconds should not cost a
+  // request every few seconds.
+  const lastAutoRefresh = useRef(0);
   useEffect(() => {
-    const onFocus = () => refreshTree();
+    const MIN_INTERVAL_MS = 15_000;
+    const maybeRefresh = () => {
+      const now = Date.now();
+      if (now - lastAutoRefresh.current < MIN_INTERVAL_MS) return;
+      lastAutoRefresh.current = now;
+      refreshFolderNames();
+    };
+    const onFocus = () => maybeRefresh();
     const onVisible = () => {
-      if (document.visibilityState === "visible") refreshTree();
+      if (document.visibilityState === "visible") maybeRefresh();
     };
     window.addEventListener("focus", onFocus);
     document.addEventListener("visibilitychange", onVisible);
@@ -230,7 +350,7 @@ export default function AppShell() {
       window.removeEventListener("focus", onFocus);
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [refreshTree]);
+  }, [refreshFolderNames]);
 
   return (
     <div className="flex h-dvh overflow-hidden">
@@ -354,13 +474,18 @@ export default function AppShell() {
                       <UploadIcon className="h-3.5 w-3.5" />
                     </button>
                   )}
-                  <a
-                    href="/discover"
+                  {/* Opens in the content column like the account editor and
+                      the sharing console — leaving the workspace to browse
+                      other people's folders would tear down the tree, the open
+                      document and the running generation log, all to come back
+                      to them a moment later. */}
+                  <button
+                    onClick={() => openOverlay({ kind: "discover" })}
                     title="Discover folders shared by other people"
                     className="ui-icon-btn h-6 w-6"
                   >
                     <SearchIcon className="h-3.5 w-3.5" />
-                  </a>
+                  </button>
                   <button
                     onClick={() => setShowNewFolder(true)}
                     title="New Folder"
@@ -378,10 +503,12 @@ export default function AppShell() {
               ) : (
                 <FileTree
                   folders={folders}
+                  docs={docs}
                   selected={selected}
                   tagsByFolder={tagsByFolder}
                   favorites={favoriteKeys}
                   onSelect={onSelect}
+                  onOpen={openFolder}
                   onToggleFavorite={onToggleFavorite}
                   onChanged={refreshTree}
                   onManage={(slug) => openOverlay({ kind: "manage", slug })}
@@ -429,6 +556,13 @@ export default function AppShell() {
             previous folder's state while the new one loads. */}
         {overlay?.kind === "profile" ? (
           <AccountPanel onClose={() => setOverlay(null)} />
+        ) : overlay?.kind === "discover" ? (
+          <DiscoverPanel
+            onClose={() => setOverlay(null)}
+            // Joining a folder adds it to the reader's tree; the sidebar behind
+            // this panel should already show it when they close it.
+            onJoined={refreshTree}
+          />
         ) : overlay?.kind === "manage" ? (
           <FolderManagePanel
             key={overlay.slug}
