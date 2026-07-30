@@ -5,8 +5,8 @@ import path from "path";
 import { listJobs, startJob } from "@/lib/generate/runner";
 
 const KINDS = new Set(["lect", "quiz"]);
-// Same segment guard as vaultd's safeName — folder lands in a CLI prompt
-// and a filesystem path.
+// Folder lands in a CLI prompt and a filesystem path, so it gets the same
+// segment guard the vault importer applies.
 const SAFE = /^[A-Za-z0-9][A-Za-z0-9-]*$/;
 
 // Jobs this server process is tracking. A generation run outlives the dialog

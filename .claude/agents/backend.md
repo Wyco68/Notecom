@@ -33,17 +33,17 @@ changing one, stop and say so instead of doing it:
    check in TypeScript is a second, weaker answer to a question RLS already
    answered.
 3. **Layer separation.** Naming/slug/sequence logic lives in `lib/vault/`, never
-   in Go. Persistence goes through `lib/vault/helper.ts` → `stored`. `vaultd`
-   stays dumb filesystem I/O, `indexd` owns all search intelligence, `stored`
-   owns persistence + sync and holds no naming logic. The two sanctioned
-   server-side Supabase readers are the hosted reader (`lib/vault/supabase.ts`)
-   and the collaboration surface (`lib/collab/*`, `app/api/collab/**`).
+   in the database — every value arrives at Supabase fully resolved. Content
+   persistence goes through `lib/vault/store.ts` and nothing else; the
+   collaboration surface (`lib/collab/*`, `app/api/collab/**`) is the only other
+   place that touches `notes_*` tables. Retrieval and ranking live in SQL
+   (`notes_search_chunks`, `notes_related_docs`), not in TypeScript.
 4. **No AI generation logic in the app.** Generation is the local Claude Code
    CLI, and that is the only delegation. Never add an Anthropic call, an API
    key, an embedding model, or a chat surface — the in-app chat and its local
    model were deliberately removed.
 5. **Migrations are append-only.** Never edit an applied file; fix forward with
-   the next `NNNN_`. Same rule for `tools/stored/migrations.go`.
+   the next `NNNN_`.
 6. **Folders are the unit of sharing**, documents inherit folder permissions,
    and files are members-only regardless of visibility. Discoverability and
    join policy are retired — do not reintroduce them.

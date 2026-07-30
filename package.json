@@ -4,9 +4,7 @@
   "private": true,
   "scripts": {
     "setup": "node scripts/setup.mjs",
-    "predev": "node scripts/ensure-vaultd.mjs && node scripts/ensure-indexd.mjs && node scripts/ensure-stored.mjs",
     "dev": "next dev --turbopack",
-    "prestart": "node scripts/ensure-vaultd.mjs && node scripts/ensure-indexd.mjs && node scripts/ensure-stored.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",

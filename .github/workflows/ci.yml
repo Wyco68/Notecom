@@ -1,7 +1,7 @@
 # Fast compatibility check on every push/PR to main. Does NOT build the
 # installers (that's release.yml, which is heavy and runs on tags) — it just
-# confirms the web app type-checks and all three Go services still compile,
-# so a change that breaks the build is caught before you cut a release.
+# confirms the web app type-checks, so a change that breaks the build is
+# caught before you cut a release.
 
 name: CI
 
@@ -23,25 +23,8 @@ jobs:
         with:
           node-version: 20
 
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: "1.21"
-
       - name: Install npm dependencies
         run: npm ci
 
       - name: Type-check web app
         run: npx tsc --noEmit
-
-      - name: Build vaultd (filesystem helper)
-        run: go build ./...
-        working-directory: tools/vaultd
-
-      - name: Build indexd (search/RAG service)
-        run: go build ./...
-        working-directory: tools/indexd
-
-      - name: Build stored (primary datastore + sync service)
-        run: go build ./...
-        working-directory: tools/stored

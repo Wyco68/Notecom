@@ -1,6 +1,6 @@
 ---
 name: collab
-description: Authoring and reviewing folder collaboration, sharing, membership, roles, invitations, join requests, tags, folder search, and Supabase Row Level Security in this repo. Use whenever a task touches supabase/migrations/, lib/collab/, lib/supabase/, app/api/collab/, notes_folder_* tables, RLS policies, or the user-JWT sync in tools/stored/. Not for lesson or quiz content.
+description: Authoring and reviewing folder collaboration, sharing, membership, roles, invitations, join requests, tags, folder search, and Supabase Row Level Security in this repo. Use whenever a task touches supabase/migrations/, lib/collab/, lib/supabase/, app/api/collab/, notes_folder_* tables, or RLS policies. Not for lesson or quiz content.
 ---
 
 # Collaboration & RLS
@@ -24,7 +24,7 @@ working procedure and the checks that must pass.
 - One file per concern in `supabase/migrations/`, named
   `NNNN_short_description.sql`. Apply with `mcp__supabase__apply_migration`.
 - **Append-only.** Never edit a file that has been applied — same discipline as
-  `tools/stored/migrations.go`. Fix forward with a new migration.
+  an applied migration. Fix forward with a new migration.
 - Order matters: schema → functions → policies. A policy referencing a function
   that does not exist yet fails the whole migration.
 - Adding a `NOT NULL` column to a populated table is three steps: add nullable,

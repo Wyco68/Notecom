@@ -1,16 +1,22 @@
 import { NextResponse } from "next/server";
-import { listTree, syncFromVault } from "@/lib/vault/helper";
-import { triggerReindex } from "@/lib/search/indexd";
+import { listTree } from "@/lib/vault/helper";
+import { importVault } from "@/lib/vault/import";
+import { reindexStale } from "@/lib/vault/store";
 
 export async function GET() {
-  // Tree fetches happen exactly when vault content may have changed (page
-  // load, window focus, manual refresh) — cheapest possible hook to keep
-  // the search index current. Hash-based scan, near-free when unchanged.
-  triggerReindex();
-  // Ingest Claude-authored vault files into SQLite before listing, so a
-  // just-generated lesson appears in this very response. Best-effort:
-  // stored being briefly down must not take the tree with it.
-  await syncFromVault().catch(() => {});
+  // Tree fetches happen exactly when content may have changed (page load,
+  // window focus, manual refresh), which makes this the cheapest hook for the
+  // two housekeeping passes:
+  //
+  //   1. ingest Claude-authored vault files, so a lesson generated a moment ago
+  //      is present in this very response;
+  //   2. re-chunk anything whose search index is stale — typically a document
+  //      written by another device, which never passed through this app.
+  //
+  // Both are best-effort: neither may take the tree down with it, and both are
+  // near-free when there is nothing to do.
+  await importVault().catch(() => {});
+  await reindexStale().catch(() => {});
   try {
     return NextResponse.json(await listTree());
   } catch (err: any) {

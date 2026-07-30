@@ -1,4 +1,4 @@
-// Slugify is used by Next.js when creating folders; vaultd receives the result.
+// Naming stays in the app: the database receives the result, never the raw name.
 export function slugify(input: string): string {
   const slug = input
     .toLowerCase()

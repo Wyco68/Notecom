@@ -63,7 +63,7 @@ export default function FileTreeNode({
     if (containsSelected) setOpen(true);
   }, [containsSelected]);
 
-  // Tolerate a tree response that omits either array (e.g. an older vaultd
+  // Tolerate a tree response that omits either array (e.g. an older index
   // binary that predates quizzes) instead of throwing on `.length`/`.map`.
   const lessons = folder.lessons ?? [];
   const quizzes = folder.quizzes ?? [];

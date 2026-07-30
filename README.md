@@ -176,16 +176,16 @@ npm run install:desktop   # only if you use the installed desktop app
 
 ## For developers
 
-Notes are authored by **Claude Code** (`/lect`, `/quiz`) and stored as HTML in
-`vault/`. The Next.js app reads and manages them; it never generates content
-and holds no API key. A Go sidecar (`stored`) owns the live SQLite database
-and syncs it to Supabase, mirroring every change back to `vault/` so the file
-tree stays a working export. A second Go service (`indexd`) builds the
-keyword search index. Access control is entirely Postgres Row Level Security —
-there is no service-role key anywhere in this app.
+Notes are authored by **Claude Code** (`/lect`, `/quiz`) as HTML files in
+`vault/`. The Next.js app imports them into Supabase and reads and writes
+everything there directly — no local database, no sync worker, no sidecars, so
+the desktop app, a dev server and a VPS all see the same rows at the same time.
+The app never generates content and holds no API key. Search is Postgres
+full-text over heading-sized chunks. Access control is entirely Row Level
+Security — there is no service-role key anywhere in this app.
 
 ```bash
-npm run dev             # app + Go services, http://localhost:3000
+npm run dev             # http://localhost:3000
 npm run dev:desktop     # native window (needs Rust)
 npx tsc --noEmit        # type check
 ```
@@ -194,22 +194,12 @@ npx tsc --noEmit        # type check
 
 | Variable | Used by | Default | Purpose |
 |---|---|---|---|
-| `NEXT_PUBLIC_SUPABASE_URL` | Next.js | unset | Supabase project for accounts and sharing; unset = fully local, no sign-in |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Next.js | unset | Public anon key for the same project |
-| `VAULT_ROOT` | vaultd, indexd, stored | `./vault` | Vault directory the services read and write |
-| `VAULTD_ADDR` | vaultd | `127.0.0.1:4321` | Listen address |
-| `VAULTD_URL` | stored | `http://127.0.0.1:4321` | Where stored mirrors file writes |
-| `VAULTD_TOKEN` | vaultd, Next.js | unset | Shared secret; vaultd requires `X-Auth-Token` once set |
-| `INDEXD_ADDR` | indexd | `127.0.0.1:4322` | Listen address |
-| `INDEXD_URL` | Next.js | `http://127.0.0.1:4322` | Where the app reaches indexd |
-| `INDEXD_TOKEN` | indexd, Next.js | unset | Shared secret, same behaviour as `VAULTD_TOKEN` |
-| `STORED_URL` | Next.js | `http://127.0.0.1:4323` | Where the app reaches stored |
+| `NEXT_PUBLIC_SUPABASE_URL` | Next.js | unset | **Required.** The Supabase project that stores everything — notes, folders, sharing, search |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Next.js | unset | **Required.** Publishable anon key for the same project; RLS is what protects the data |
+| `VAULT_ROOT` | Next.js | `./vault` | Where Claude Code writes generated lessons; the app imports from it and never writes to it |
 | `REPO_ROOT` | Next.js | `process.cwd()` | Checkout the packaged app runs the `claude` CLI from |
 | `CLAUDE_BIN` | Next.js | `claude` | Override the Claude Code binary |
 | `GENERATE_MODEL` | Next.js | `sonnet` | Model passed to `claude --model` for in-app generation |
-
-Supabase sync credentials for `stored` live in `<vault>/.data/sync.env`, not in
-the app's environment.
 
 ### Generation is local, and it is everyone's
 
@@ -223,9 +213,9 @@ never bills anyone.
 That is also the limit. A subscription authenticates on the machine it belongs
 to, so a hosted server cannot generate on a visitor's behalf: to generate, run
 the app where your CLI is (the desktop app, or `npm run dev` on your own
-machine). A deployment with no `stored` sidecar and no vault on disk — the thin
-Vercel reader, `VAULT_SOURCE=supabase` — can still read shared notes, but a write
-there fails because it has nowhere to go, not because a flag forbade it.
+machine). A deployment with no `claude` on PATH — a VPS — reads and edits shared
+notes perfectly well; it just cannot generate, because the CLI it would need
+isn't there. No flag says so; the missing dependency does.
 
 Generation runs in the **background**: start it and keep reading. The sidebar
 keeps a live row per run, the log is reachable from it, and the tree refreshes
@@ -235,10 +225,9 @@ itself when the file lands. Up to three runs at once.
 
 | Document | What's in it |
 |---|---|
-| [SPECIFICATION.md](SPECIFICATION.md) | the two-layer contract, end to end |
-| [docs/architecture.md](docs/architecture.md) | services, data flow, the rules that must not break |
+| [SPECIFICATION.md](SPECIFICATION.md) | the layer contract, end to end |
+| [docs/architecture.md](docs/architecture.md) | data flow, and the rules that must not break |
 | [docs/api-contract.md](docs/api-contract.md) | every endpoint |
 | [docs/collaboration.md](docs/collaboration.md) | sharing model and RLS |
 | [docs/ui-guidelines.md](docs/ui-guidelines.md) | design system and motion |
 | [docs/desktop.md](docs/desktop.md) | the Tauri shell and packaging |
-| [docs/deploy-vps-dokploy.md](docs/deploy-vps-dokploy.md) | self-hosting the reader |

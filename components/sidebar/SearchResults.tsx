@@ -89,10 +89,7 @@ export default function SearchResults({
   if (state.status === "offline") {
     return (
       <p className="px-2 py-2 text-sm text-gray-500">
-        Search index is offline. Start it with{" "}
-        <code className="rounded border border-black/10 bg-black/[0.04] px-1 py-0.5 text-xs dark:border-white/10 dark:bg-white/[0.06]">
-          node scripts/ensure-indexd.mjs
-        </code>
+        Search is unavailable right now — check your connection and try again.
       </p>
     );
   }

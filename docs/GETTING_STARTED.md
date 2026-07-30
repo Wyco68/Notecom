@@ -9,7 +9,6 @@ clone, install, run one setup command, log in to Claude once.
 | Tool | Why | Install |
 |---|---|---|
 | **Node.js 20+** | runs the app | [nodejs.org](https://nodejs.org) |
-| **Go 1.21+** | builds the two backend services | [go.dev/dl](https://go.dev/dl) |
 | **Python 3 + pip** | file conversion for `/lect` | [python.org](https://python.org) (often preinstalled on macOS/Linux) |
 | **Git** | clone the repo | [git-scm.com](https://git-scm.com) |
 
@@ -91,8 +90,9 @@ app uses it.
   (or re-run `npm run setup`), then start a fresh `claude` session.
 - **App shows no notes** — confirm `vault/<Subject>/` folders exist in this
   checkout; if you have several checkouts, make sure you're running the app
-  from the one `/lect` wrote into. All run modes read this checkout's
-  `vault/` — there is no second notes location.
-- **Search returns nothing** — `npm run dev` starts both backend
-  services automatically; if one died, re-run `npm run dev` (or
-  `node scripts/ensure-vaultd.mjs` / `node scripts/ensure-indexd.mjs`).
+  from the one `/lect` wrote into. Notes are imported from this checkout's
+  `vault/` into your Supabase project on the first page load after they're
+  written, so also confirm you're signed in.
+- **Search returns nothing** — search runs on the imported copy, so open the
+  vault page once after generating (that is what triggers the import), then
+  search again.

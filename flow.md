@@ -1,13 +1,13 @@
-# Data Flow — Next.js + Go services (stored / vaultd / indexd)
+# Data Flow — Next.js + Supabase
 
 Two separate workflows: **lesson creation** (Claude Code, outside the app) and
-**lesson reading/management** (the Next.js app). They meet in `stored`'s
-SQLite database — the source of truth — with `vault/` as the file-format
-bridge between Claude Code and the database.
+**lesson reading/management** (the Next.js app). They meet in Supabase — the
+source of truth — with `vault/` as the one-way bridge that carries generated
+files into it.
 
 ---
 
-## 1. Lesson creation (Claude Code → vault/ → SQLite)
+## 1. Lesson creation (Claude Code → vault/ → Supabase)
 
 Claude Code is the only tool that writes lesson content.
 
@@ -21,19 +21,18 @@ Claude Code is the only tool that writes lesson content.
   → Done
 ```
 
-This happens entirely outside the Next.js process. On the next tree fetch
-the app awaits `stored POST /import`, which ingests the new files into
-SQLite (idempotent, disk-wins, never enqueues sync ops); the stored sync
-worker then uploads the new records to Supabase in the background.
+This happens entirely outside the Next.js process. On the next tree fetch the
+app runs `importVault()` (`lib/vault/import.ts`), which upserts the new files
+into Supabase and rebuilds their search chunks. Idempotent: a file identical to
+the stored row is skipped, so a re-import churns no versions.
 
-Strict generation: the saved file is what stored persists to SQLite and
-syncs to Supabase, so it must be faithful to the lecture — the content comes
-from the uploaded source, not the model's prior knowledge. The in-app
-Generate button drives the same `/lect` (or `/quiz`) flow via
-`lib/generate/runner.ts`, whose prompt pins the exact destination folder and
-enforces that grounding (fail rather than fabricate if the source can't be
-read). It never writes to storage directly — it only produces the vault
-file, and the import path above does the rest.
+Strict generation: the saved file is what the importer persists, so it must be
+faithful to the lecture — the content comes from the uploaded source, not the
+model's prior knowledge. The in-app Generate button drives the same `/lect` (or
+`/quiz`) flow via `lib/generate/runner.ts`, whose prompt pins the exact
+destination folder and enforces that grounding (fail rather than fabricate if
+the source can't be read). It never writes to storage directly — it only
+produces the vault file, and the import path above does the rest.
 
 **Naming convention (Claude Code must follow):**
 - `<folder>` = kebab-case slug of the subject name, e.g. `computer-networks`
@@ -48,7 +47,7 @@ file, and the import path above does the rest.
 
 ---
 
-## 2. Viewing a lesson (browser → Next.js → stored)
+## 2. Viewing a lesson (browser → Next.js → Supabase)
 
 ```
 Browser
@@ -58,11 +57,13 @@ AppShell
   │  fetch GET /api/tree
   ▼
 app/api/tree/route.ts
-  │  await stored POST /import   (ingest Claude-authored files)
-  │  listTree() → stored GET /tree
+  │  importVault()    (ingest Claude-authored files, if any)
+  │  reindexStale()   (re-chunk anything indexed at an older version)
+  │  listTree()
   ▼
-stored
-  │  reads SQLite, returns { folders: [{ name, lessons: [...] }] }
+Supabase
+  │  RLS-scoped select over notes_folders + notes_documents
+  │  → { folders: [{ name, lessons: [...], quizzes: [...] }] }
   ▼
 AppShell renders sidebar with folder/lesson tree
 
@@ -72,10 +73,11 @@ LessonViewer
   │  fetch GET /api/lesson/<folder>/<id>
   ▼
 app/api/lesson/[folder]/[id]/route.ts
-  │  loadLesson() → stored GET /lesson/<folder>/<id>
+  │  loadLesson() → loadDoc(folder, id, "lesson")
   ▼
-stored
-  │  reads SQLite, returns { html, title }
+Supabase
+  │  notes_documents.html, or "not found" — which also covers
+  │  "exists but you may not read it", deliberately
   ▼
 HtmlRenderer
   │  DOMParser walk → React elements
@@ -87,15 +89,14 @@ Screen
 
 ---
 
-## 3. Folder management (browser → Next.js → stored)
+## 3. Folder management (browser → Next.js → Supabase)
 
 **Create folder:**
 ```
 NewFolderModal
   → POST /api/folders { name }
-  → slugify(name) → POST stored /folder { name: slug }
-  → stored: SQLite insert + sync_queue row (one transaction)
-  → stored mirrors to disk via vaultd (dir + empty index.json)
+  → slugify(name) → createFolder(slug)
+  → insert notes_folders (owner = caller, private, undiscoverable)
   → sidebar refreshes
 ```
 
@@ -104,72 +105,65 @@ NewFolderModal
 FileTreeNode (hover → trash icon)
   → ConfirmModal
   → DELETE /api/folders/<name>
-  → stored: tombstone folder + its documents + sync_queue rows (one transaction)
-  → stored mirrors to disk via vaultd (os.RemoveAll)
+  → tombstone the folder and each of its documents (deleted = true, version + 1)
   → sidebar refreshes
 ```
 
 ---
 
-## 4. Lesson management (browser → Next.js → stored)
+## 4. Lesson management (browser → Next.js → Supabase)
 
 **Delete lesson:**
 ```
 FileTreeNode (hover → trash icon)
   → ConfirmModal
   → DELETE /api/lesson/<folder>/<id>
-  → stored: tombstone row + sync_queue row; mirror removes .html + index entry
+  → tombstone the row; delete its chunks outright (a stale chunk would keep
+    answering searches for text nobody can open)
   → sidebar refreshes
 ```
 
 **Rename lesson:**
 ```
 (rename UI → POST /api/lesson/<folder>/<id> { newTitle })
-  → stored: title updated, version bumped, sync_queue row; mirror updates index.json
-  → (filename and id unchanged)
+  → title updated, version bumped
+  → (id, doc_key and slug unchanged — they are the document's identity)
 ```
 
 ---
 
-## 5. Cross-device sync (stored ⇄ Supabase, background)
+## 5. Multiple devices
 
-```
-every 30s / on start / final flush on exit
-  │  pull: rows with synced_at > cursor  → LWW apply → SQLite → disk mirror
-  ▼
-stored sync worker
-  │  push: drain sync_queue → read live rows → batched upserts (tombstones
-  │        included) → remove queue rows (or retry with backoff)
-  ▼
-Supabase (notes_folders / notes_documents — RLS, as the signed-in user)
-```
+There is no sync step. Every device queries Supabase on each request, so a
+change made on one is visible on the next load of another — the desktop app, a
+dev server and the VPS are the same client pointed at the same database.
 
-Conflicts: Last-Write-Wins — higher `version` wins, `updated_at` breaks
-ties, equal means same write (ignored). UI code never talks to Supabase.
+Writes are guarded by RLS, not by the app: a viewer's edit fails in Postgres,
+which is the only place that can be trusted to refuse it.
 
 ---
 
-## 6. Searching notes (browser → Next.js → indexd)
+## 6. Searching notes (browser → Next.js → Postgres)
 
 ```
 Sidebar search box (AppShell)
   │  debounced fetch GET /api/search?q=...
   ▼
 app/api/search/route.ts
-  │  search() → indexd GET /search?q=...
+  │  search() → rpc notes_search_chunks
   ▼
-indexd
-  │  FTS5 keyword ranks
-  │  reciprocal-rank fusion → top chunks with metadata
+Postgres
+  │  websearch_to_tsquery('simple', q) over notes_doc_chunks.search_tsv
+  │  ts_rank → top chunks with their document + folder metadata
   ▼
 SearchResults renders heading/lesson/summary per hit
   │  click → onSelect(LessonRef) → LessonViewer loads the document
 ```
 
-Index freshness: every `GET /api/tree` (page load, window focus, refresh
-button) fire-and-forgets `POST /reindex` to indexd; the scan is hash-based
-and skips unchanged files. indexd reads the disk mirror, which stored keeps
-current — so search follows both local edits and pulled remote changes.
+Index freshness: `GET /api/tree` (page load, window focus, refresh button) runs
+`reindexStale()`, which re-chunks any document whose chunk rows are missing or
+were built from an older `version` — typically one written by another device.
+Cheap when there is nothing to do.
 
 ---
 
@@ -177,8 +171,8 @@ current — so search follows both local edits and pulled remote changes.
 
 | Layer | Files | Responsibility |
 |---|---|---|
-| **Claude Code** | `/lect` command | Content creation: generate HTML, write vault/ files, update index.json |
-| **Next.js** | `app/api/*`, `lib/vault/*`, `lib/search/*`, `components/*` | Read and manage via stored; proxy search; never touches Supabase |
-| **stored** | `tools/stored/*.go` | Source of truth (SQLite), sync queue + Supabase worker, vault import, disk mirror orchestration. Zero naming logic |
-| **vaultd** | `tools/vaultd/main.go` | Pure filesystem I/O over HTTP (Claude Code saves; stored mirrors). Zero naming logic, zero content logic |
-| **indexd** | `tools/indexd/*.go` | Chunking and FTS5 keyword search over `vault/.index/index.db` |
+| **Claude Code** | `/lect`, `/quiz` commands | Content creation: generate HTML, write vault/ files, update index.json |
+| **Next.js routes** | `app/api/*` | Turn HTTP into data-layer calls and errors into `{ error }`. No permission logic |
+| **Data layer** | `lib/vault/store.ts`, `lib/vault/import.ts` | All content persistence, and the one-way vault ingest. Zero permission logic |
+| **Search** | `lib/search/chunker.ts`, `lib/search/search.ts` | Split lessons into sections; forward queries. Ranking lives in SQL |
+| **Supabase** | `supabase/migrations/*` | The source of truth, and the authorization boundary (RLS) |

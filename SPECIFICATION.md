@@ -44,42 +44,40 @@ deliberate delegations exist (added 2026-07):
 The app still never calls the Anthropic API directly, stores no API key,
 and never writes vault content itself.
 
-### 2.2 Go datastore (`stored`) — persistence and sync
+### 2.2 Data layer (`lib/vault/store.ts`) — persistence
 
-The primary datastore service (`tools/stored/`). Owns the live SQLite
-database (`vault/.data/notes.db`) — **the source of truth while the app
-runs** — and the cross-device sync engine:
+Supabase is the store, reached directly as the signed-in user. There is no
+local database, no sync worker and no per-instance state, so the desktop app, a
+dev server and a VPS all see the same rows at the same time.
 
-- The app reads and writes exclusively through stored (same wire contract
-  vaultd had; `lib/vault/helper.ts` is the only TypeScript caller).
-- Every mutation commits atomically with one `sync_queue` row; a background
-  worker reconciles with Supabase every 30 seconds (batched upserts,
-  tombstone deletes, Last-Write-Wins by version). Fully offline-capable:
-  without credentials or network the queue just waits.
-- Every mutation is mirrored to `vault/` by calling vaultd, keeping the
-  file tree a live legacy-format export; `POST /import` ingests
-  Claude-authored files back into SQLite.
+- `lib/vault/store.ts` is the whole persistence surface for content; nothing
+  else writes `notes_folders` or `notes_documents`.
+- Deletes are tombstones (`deleted = true`, `version + 1`), never row removal.
+- It receives fully-resolved values only — no slugify logic, no sequence-number
+  generation, no content logic. Naming stays in `lib/vault/slug.ts` and in the
+  generated `index.json`.
+- Authorization is Row Level Security, in the database. This layer contains no
+  permission checks, and must not grow any.
 
-Like vaultd it receives fully-resolved values only — no slugify logic, no
-sequence-number generation, no content logic.
+Superseded (2026-07) an offline-first design in which three Go sidecars —
+`vaultd` (files), `stored` (local SQLite + background Supabase sync) and
+`indexd` (FTS5 search) — ran on every machine. They are removed from the repo.
 
-### 2.3 Go helper (`vaultd`) — filesystem operations only
+### 2.3 Vault import (`lib/vault/import.ts`) — one direction only
 
-A small Go HTTP service performing raw filesystem I/O on `vault/`. Its two
-callers are Claude Code (saving generated content as files) and stored
-(mirroring DB mutations to disk). It contains no slugify logic, no
-sequence-number generation, no content logic.
+Claude Code writes generated lessons to `vault/` as files. This reads them and
+upserts them into Supabase on the next tree load. The app writes no files
+anywhere; a box with no `vault/` directory simply has nothing to import.
 
-### 2.4 Go search service (`indexd`) — retrieval only
+### 2.4 Search — Postgres full-text
 
-A second Go service (`tools/indexd/`, default `127.0.0.1:4322`) that makes
-the vault searchable (the RAG backend): chunks lesson HTML by educational
-sections and serves keyword
-search (SQLite FTS5 + vector cosine, RRF-merged). Its entire state is one
-derived SQLite file, `vault/.index/index.db` — safe to delete, rebuilt by a
-reindex. It never generates
-content and never calls Claude. See
-[docs/architecture.md](docs/architecture.md) and
+Lesson HTML is split into educational sections (`lib/search/chunker.ts`: every
+`<h2>` a topic, every `<h3>` a chunk, leading content an "Overview") and stored
+in `notes_doc_chunks` with a generated `tsvector`. Ranking is two SQL functions,
+`notes_search_chunks` and `notes_related_docs`, both SECURITY INVOKER so RLS
+decides what is searchable. The chunk table is derived data — it can be rebuilt
+from `notes_documents.html` at any time. Nothing here generates content or calls
+Claude. See [docs/architecture.md](docs/architecture.md) and
 [docs/api-contract.md](docs/api-contract.md).
 
 ---
@@ -107,9 +105,9 @@ Claude Code is the sole author of lesson content.
 ```
 
 Claude Code writes files using its own file tools. It does not go through any
-Next.js API route to create content. The Go helper (`vaultd`) is still the
-correct path for the app's management operations (delete, rename, list), but
-Claude Code writes lesson files directly.
+Next.js API route to create content. The app's own management operations
+(delete, rename, list) go through `lib/vault/store.ts` to Supabase; the two
+meet at the import step, never at a shared write path.
 
 Claude must never:
 - choose app-level folder names without following the slug format
@@ -125,16 +123,12 @@ no custom classes other than `class="mermaid"`.
 
 ## 4. Storage model
 
-**SQLite is the source of truth** (`vault/.data/notes.db`, owned by
-stored): `folders` and `documents` tables with device-independent UUID ids,
-per-row `version` + `updated_at` (the sync conflict unit), soft-delete
-tombstones, plus `settings`, `sync_queue` and `sync_state`. The Supabase
-side (`notes_folders`, `notes_documents`) mirrors this shape.
+**Supabase is the source of truth**: `notes_folders` and `notes_documents`,
+with device-independent UUID ids, per-row `version` + `updated_at`, and
+soft-delete tombstones. `notes_doc_chunks` holds the derived search index.
 
-The file tree below is a **continuously-maintained legacy-format mirror**:
-stored replays every DB mutation to it (via vaultd), Claude Code writes new
-content into it, and stored imports those files back into SQLite. It stays
-exactly:
+The file tree below is **generation output**, written only by Claude Code and
+read only by the importer. It stays exactly:
 
 ```
 vault/
@@ -199,13 +193,14 @@ the indexed sections — see §2.1.
 browser -> GET /vault
    -> AppShell renders sidebar + content pane
    -> Sidebar calls GET /api/tree
-        -> Next.js awaits stored POST /import (ingest Claude-authored files)
-        -> Next.js calls stored GET /tree (SQLite)
+        -> importVault() ingests Claude-authored vault files into Supabase
+        -> reindexStale() re-chunks anything whose search index lags
+        -> listTree() selects notes_folders + notes_documents (RLS-scoped)
         -> returns folders + lessons JSON
    -> user clicks a lesson
    -> LessonViewer calls GET /api/lesson/<Folder>/<id>
-        -> Next.js calls stored GET /lesson/... (SQLite)
-        -> returns the stored HTML
+        -> loadDoc() selects notes_documents.html
+        -> returns the HTML
    -> HtmlRenderer parses HTML into React elements
         (DOMParser walk — no dangerouslySetInnerHTML)
         blockquote callouts → <Callout>, div.mermaid → <Mermaid>
@@ -214,27 +209,25 @@ browser -> GET /vault
 
 ---
 
-## 7. Service interface (stored / vaultd)
+## 7. Data-layer interface
 
-One wire contract, two implementations: **stored** (`localhost:4323`,
-SQLite — what the app calls via `lib/vault/helper.ts`) and **vaultd**
-(`localhost:4321`, filesystem — called by Claude Code and by stored's disk
-mirror). stored adds `POST /import` and a richer `GET /status`; see
-[docs/api-contract.md](docs/api-contract.md).
+`lib/vault/store.ts`, called by the route handlers through the lesson/quiz
+façade in `lib/vault/helper.ts`. Not HTTP — the internal service wire contract
+this section used to specify is gone with the sidecars.
 
-| Method | Path | Body in | Body out |
-|--------|------|---------|----------|
-| `POST` | `/folder` | `{ name }` | `{ ok }` |
-| `DELETE` | `/folder/:name` | — | `{ ok }` |
-| `GET` | `/lesson/:folder/:id` | — | `{ html, title }` |
-| `DELETE` | `/lesson/:folder/:id` | — | `{ ok }` |
-| `POST` | `/lesson/:folder/:id/rename` | `{ newTitle }` | `{ ok }` |
-| `GET`/`DELETE`/`POST …/rename` | `/quiz/:folder/:id[…]` | — / `{ newTitle }` | mirrors `/lesson` for quizzes |
-| `GET` | `/tree` | — | `{ folders: [{ name, lessons: [...], quizzes: [...] }] }` |
+| Function | Returns |
+|---|---|
+| `listTree()` | `{ folders: [{ name, lessons: [...], quizzes: [...] }] }` |
+| `createFolder(slug)` | `{ ok }` — idempotent; new folders start private |
+| `deleteFolder(slug)` | `{ ok }` — tombstone, cascading to its documents |
+| `loadDoc(folder, id, kind)` | `{ html, title }` |
+| `saveDoc(input)` | `boolean` — false when nothing changed |
+| `deleteDoc(folder, id, kind)` | `{ ok }` — tombstone |
+| `renameDoc(folder, id, kind, title)` | `{ ok }` — title only |
 
-Note: `POST /lesson` and `POST /quiz` (save) are implemented in vaultd and
-used by Claude Code (`/lect`, `/quiz`). See
-[docs/api-contract.md](docs/api-contract.md) for the full endpoint list.
+Saving is the importer's path, not a user-facing one: content is created by
+Claude Code as files and enters the database through `lib/vault/import.ts`. See
+[docs/api-contract.md](docs/api-contract.md) for the HTTP routes.
 
 ---
 
@@ -250,11 +243,10 @@ used by Claude Code (`/lect`, `/quiz`). See
 | Code highlighting | `highlight.js` (client-side) | Syntax inside `<pre><code>` blocks |
 | Diagrams | `mermaid` | Client-side SVG from `div.mermaid` blocks |
 | Animation | `framer-motion` | Fade/slide on lesson switch |
-| Primary datastore | Go HTTP service (`stored`) + SQLite | Source of truth: folder/document CRUD, sync queue, Supabase sync worker |
-| Cloud sync | Supabase Postgres (`notes_*` tables, RLS-enforced) | Cross-device synchronization, backup and folder sharing; never a runtime database |
-| Filesystem helper | Go HTTP service (`vaultd`) | Legacy-format disk mirror + Claude Code's save path |
-| Search | Go HTTP service (`indexd`) + SQLite (FTS5) | Section chunking, keyword retrieval |
-| Notes storage | `.html` + `index.json` under `vault/` | Live legacy-format mirror/export; gitignored |
+| Datastore | Supabase Postgres (`notes_*` tables, RLS-enforced) | The source of truth: folders, documents, sharing, search index |
+| Data layer | `lib/vault/store.ts` (user-scoped Supabase client) | Folder/document CRUD; no permission logic of its own |
+| Search | Postgres full-text (`notes_doc_chunks` + two SQL functions) | Section chunking, keyword retrieval |
+| Notes storage | `.html` + `index.json` under `vault/` | Generation output, imported once and never written back; gitignored |
 | Desktop shell | Tauri (Rust) | Native window, startup orchestration, splash screen, packaging |
 
 No AI SDK, no Anthropic API key. Generation =
@@ -267,7 +259,6 @@ local Claude Code CLI subprocess. No authentication.
 Requires:
 
 - [Node.js](https://nodejs.org/) 20+ and npm.
-- [Go](https://go.dev/dl/) 1.21+ (only to build the filesystem helper).
 - [Rust](https://www.rust-lang.org/tools/install) + the platform C/C++ build
   tools Tauri needs (only to build/run the desktop shell).
 - A Claude subscription (Pro/Max) and the [Claude Code](https://claude.com/claude-code)
@@ -285,20 +276,15 @@ npm run dev:desktop     # development: native window, hot reload
 npm run build:desktop   # production: installer under desktop/target/release/bundle
 ```
 
-**Browser-only fallback** — no native window; `predev` auto-builds and
-starts all three Go services (vaultd :4321, indexd :4322, stored :4323):
+**Browser-only fallback** — no native window, one process:
 
 ```bash
 npm run dev                 # http://localhost:3000 -> /vault
 ```
 
-Cross-device sync (optional): put `SUPABASE_URL`, `SUPABASE_ANON_KEY` and a
-user credential (`SUPABASE_REFRESH_TOKEN`, or `SUPABASE_EMAIL` +
-`SUPABASE_PASSWORD` once) in `vault/.data/sync.env`; without them the app is
-fully local.
-
-Search runs in keyword (FTS5)
-mode; with it, indexd embeds automatically on the next scan.
+Either way the app needs `NEXT_PUBLIC_SUPABASE_URL` and
+`NEXT_PUBLIC_SUPABASE_ANON_KEY` in `.env.local`: that project *is* the store,
+not an optional backup, so there is no fully-local mode any more.
 
 Writing a note happens separately, via Claude Code in a terminal, using the
 `/lect` command (see [CLAUDE.md](CLAUDE.md)) — not through the website.
@@ -307,9 +293,9 @@ Writing a note happens separately, via Claude Code in a terminal, using the
 
 ## 10. Out of scope
 
-- No hosted/browser reader deployment — multi-device is desktop app +
-  background Supabase sync on each machine (the former GCS/Cloudflare
-  read-only reader channels were retired 2026-07; see git history).
+- No offline mode — every read and write goes to Supabase as it happens. The
+  local-SQLite-plus-background-sync design, and the earlier GCS/Cloudflare
+  read-only reader channels, were both retired 2026-07; see git history.
 - No anonymous access — collaboration requires a Supabase account, and
   `anon` is granted nothing on any `notes_*` table.
 - No per-document permissions — folders are the unit of sharing and
@@ -318,5 +304,5 @@ Writing a note happens separately, via Claude Code in a terminal, using the
   the local Claude Code CLI (lessons/quizzes), which runs on the subscription of
   the person at that machine. No server-side generation, no shared API key, no
   relay serving several people from one subscription.
-- No reading or writing Supabase from the app/UI — sync lives only inside
-  the stored worker; Supabase is never a runtime database.
+- No service-role key, anywhere. Every query carries the caller's JWT and is
+  filtered by RLS; a task that seems to need the service key has a wrong policy.

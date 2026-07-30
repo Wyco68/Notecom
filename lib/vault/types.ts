@@ -6,7 +6,7 @@ export interface Lesson {
 }
 
 // Same shape as Lesson — kept as a distinct alias since quizzes are a
-// separate index.json array and separate vaultd namespace.
+// separate index.json array and a separate document kind.
 export type Quiz = Lesson;
 
 export interface Folder {

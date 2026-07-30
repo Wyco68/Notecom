@@ -28,7 +28,7 @@ irrelevant to application work.
 - Improve performance.
 - Improve security.
 - Update architecture.
-- Modify the Go helper (`tools/vaultd/`).
+- Write files from the app (`vault/` is generation output — read-only here).
 - Modify Next.js (`app/`, `components/`, `lib/`).
 - Modify the desktop shell (`desktop/`, `scripts/*desktop*`).
 - Documentation, testing, build configuration.
@@ -47,6 +47,6 @@ If the request belongs to lesson generation, stop and tell the user to use
 
 ## Verification
 After any change: `npx tsc --noEmit` for the Next.js app, `go build` for
-`tools/vaultd`, and a browser check via the preview tools for anything
+the data layer, and a browser check via the preview tools for anything
 UI-visible. For anything touching permissions or RLS, those checks prove
 nothing on their own — run the RLS proof in the `collab` skill as well.

@@ -1,0 +1,88 @@
+// Search and "related documents", answered by Postgres.
+//
+// Replaces the `indexd` sidecar: same chunk granularity, same strict
+// all-terms-must-match behaviour, same response shape — the ranking just moved
+// from SQLite FTS5 into two functions in supabase/migrations/0015. The app
+// still chunks and ranks nothing itself; it forwards a query and formats the
+// answer. See docs/architecture.md.
+//
+// Both RPCs are SECURITY INVOKER, so results are already limited to folders the
+// caller may read. There is no separate permission check here, and there must
+// not be one.
+
+import { createClient } from "@/lib/supabase/server";
+
+export interface SearchResult {
+  folder: string;
+  id: string;
+  kind: "lesson" | "quiz";
+  title: string;
+  topic: string;
+  heading: string;
+  summary: string;
+  keywords: string;
+  seq: number;
+  headingIndex: number;
+  score: number;
+  html?: string;
+}
+
+export interface RelatedResult {
+  folder: string;
+  id: string;
+  kind: "lesson" | "quiz";
+  title: string;
+  score: number;
+}
+
+export async function search(params: {
+  q: string;
+  folder?: string;
+  kind?: string;
+  limit?: number;
+  /** include each hit's section HTML — only the reader's inline preview wants it */
+  html?: boolean;
+}): Promise<{ mode: "keyword"; results: SearchResult[] }> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("notes_search_chunks", {
+    p_q: params.q,
+    p_folder: params.folder ?? null,
+    p_kind: params.kind ?? null,
+    p_limit: params.limit ?? 10,
+  });
+  if (error) throw new Error(error.message);
+
+  const results: SearchResult[] = (data ?? []).map((r: any) => ({
+    folder: r.folder,
+    id: r.id,
+    kind: r.kind,
+    title: r.title,
+    topic: r.topic,
+    heading: r.heading,
+    summary: r.summary,
+    keywords: r.keywords,
+    seq: r.seq,
+    headingIndex: r.heading_index,
+    score: r.score,
+    ...(params.html ? { html: r.html } : {}),
+  }));
+  // `mode` is always "keyword"; it stays in the response because callers
+  // already read it.
+  return { mode: "keyword", results };
+}
+
+export async function related(
+  folder: string,
+  id: string,
+  kind: string
+): Promise<{ results: RelatedResult[] }> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("notes_related_docs", {
+    p_folder: folder,
+    p_id: id,
+    p_kind: kind,
+    p_limit: 5,
+  });
+  if (error) throw new Error(error.message);
+  return { results: (data ?? []) as RelatedResult[] };
+}

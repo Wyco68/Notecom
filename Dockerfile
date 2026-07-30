@@ -4,7 +4,8 @@
 FROM node:22-alpine AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
-RUN npm ci
+RUN --mount=type=cache,target=/root/.npm,id=npm \
+    npm ci
 
 FROM node:22-alpine AS build
 WORKDIR /app
@@ -27,7 +28,10 @@ ENV NEXT_PUBLIC_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL \
     NEXT_PUBLIC_SUPABASE_ANON_KEY=$NEXT_PUBLIC_SUPABASE_ANON_KEY
 # This project ships no public/ dir; create it so the run-stage COPY never
 # fails (and still picks up assets if one is added later).
-RUN npm run build && mkdir -p public
+# The .next/cache mount persists Next's compiler cache between builds, so an
+# unchanged-dependency rebuild only recompiles the routes that actually moved.
+RUN --mount=type=cache,target=/app/.next/cache,id=nextcache \
+    npm run build && mkdir -p public
 
 FROM node:22-alpine AS run
 WORKDIR /app

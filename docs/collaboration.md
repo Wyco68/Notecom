@@ -89,9 +89,9 @@ retroactively — a folder that was hidden stays hidden.
 
 Two settings used to sit beside it and are **retired** (0012): `discoverable`
 restated what `visibility` already said, and `join_policy` offered instant and
-invite-only variants nobody wanted. Both columns survive in the table because
-`stored` still ships them in its sync payload, but nothing reads them; don't
-reintroduce either as a product concept.
+invite-only variants nobody wanted. Both columns survive in the table only
+because dropping a column is not worth a migration, but nothing reads them;
+don't reintroduce either as a product concept.
 
 ## Joining
 
@@ -148,7 +148,7 @@ Existing tables are extended in preference to new ones.
 | Table | Why |
 |---|---|
 | `profiles` | *(existing)* the one identity pool, shared with BookCommunity |
-| `notes_folders` | *(existing, extended)* gains `owner_id`, `description`, `visibility`, `search_tsv`. `discoverable`/`join_policy` are retired leftovers kept only for `stored`'s sync payload |
+| `notes_folders` | *(existing, extended)* gains `owner_id`, `description`, `visibility`, `search_tsv`. `discoverable`/`join_policy` are retired leftovers nothing reads |
 | `notes_documents` | *(existing, unchanged)* permissions are inherited from the folder — adding a permission column here is a design error |
 | `notes_folder_roles` | makes roles data instead of code, so the set is extensible |
 | `notes_folder_members` | the membership edge; composite PK `(folder_id, user_id)` |
@@ -163,9 +163,9 @@ Existing tables are extended in preference to new ones.
 ## Security rules (non-negotiable)
 
 1. **No service-role key exists anywhere in this app.** Not in `lib/`, not in
-   `tools/stored/`, not in an env file for the web deployment. Every read and
-   write carries a user JWT and passes through RLS. If a task seems to need the
-   service key, the RLS policy is wrong — fix the policy.
+   an env file, not in the Docker image. Every read and write carries a user JWT
+   and passes through RLS. If a task seems to need the service key, the RLS
+   policy is wrong — fix the policy.
 2. **Deny by default.** Every table has RLS enabled and explicit policies. `anon`
    is granted nothing.
 3. **Frontend checks are cosmetic.** Hiding a button is UX. Assume any client can
@@ -185,8 +185,8 @@ Existing tables are extended in preference to new ones.
 ### Tombstones and visibility
 
 `notes_folders`' SELECT policy lets a member see their folders **including
-tombstones** (`deleted = true`), because `stored` needs the tombstone to
-replicate a delete to other devices. `notes_can_read_folder()` deliberately does
+tombstones** (`deleted = true`), so a client holding an older copy can tell
+"removed" from "never existed". `notes_can_read_folder()` deliberately does
 *not*: it requires `deleted = false`, so documents and membership rows belonging
 to a deleted folder stop being readable the moment the folder is tombstoned.
 That is the intended asymmetry — the folder tombstone alone is enough to
@@ -235,9 +235,9 @@ Invite-by-username resolves `profiles.username` inside the function, so the
 | HTTP surface | `app/api/collab/**` — see [api-contract.md](api-contract.md) |
 | UI | `app/discover/`, `app/vault/[folder]/manage/`, `components/collab/` |
 
-`stored` (`tools/stored/`) authenticates to Supabase as the signed-in user and
-therefore syncs only what RLS allows it to see. It holds no permission logic of
-its own — same rule as slugs and sequences: every value arrives resolved.
+Content persistence (`lib/vault/store.ts`) runs on the same user-scoped client
+and holds no permission logic of its own — same rule as slugs and sequences:
+every value arrives resolved, and the database decides the rest.
 
 ## Verifying a change
 

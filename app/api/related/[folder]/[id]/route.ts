@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { related } from "@/lib/search/indexd";
+import { related } from "@/lib/search/search";
 
 export async function GET(
   req: NextRequest,

@@ -1,7 +1,7 @@
 # Desktop shell (`desktop/`)
 
-Loaded by `/feat` only. The Tauri project that wraps the existing Next.js
-app and Go helper into a native window — see
+Loaded by `/feat` only. The Tauri project that wraps the Next.js app into a
+native window — see
 [architecture.md](architecture.md) for the rule that it holds no business
 logic, only orchestration.
 
@@ -18,56 +18,43 @@ desktop/
   resources/frontend/         -- Next standalone build output (gitignored, generated)
 ```
 
-`app/`, `components/`, `lib/` (the Next.js app) and `tools/vaultd/` (the Go
-helper) are unchanged and stay at the repo root — see
-[architecture.md](architecture.md) for why nothing moved.
+`app/`, `components/` and `lib/` (the Next.js app) are unchanged and stay at the
+repo root — see [architecture.md](architecture.md) for why nothing moved.
 
 ## Startup orchestration (`desktop/src/lib.rs`)
 
 On launch: create a splash window (`assets/splash.html`) immediately, then
 on a background thread:
 
-1. Pick four free ports (bind `127.0.0.1:0`, read back the assigned port) —
-   one each for vaultd, indexd, stored, and the Next server.
-2. Start vaultd, poll its port until it accepts connections (stored mirrors
-   DB mutations to disk through it, so it goes first).
-3. Start indexd (search/RAG). It is *not* waited on — the reader works
-   without it and it indexes in the background while the UI loads.
-4. Start stored (primary SQLite datastore + Supabase sync worker, given
-   `VAULTD_URL`), poll its port — every app read/write goes through it.
-5. Start the Next server (given `STORED_URL` + `INDEXD_URL`), poll its port.
-6. Emit `stage-update` events to the splash window at each step (it listens
-   via `window.__TAURI__.event.listen`, enabled by `app.withGlobalTauri`).
-7. Create the main window pointed at `http://127.0.0.1:<port>/vault`, close
+1. Pick a free port for the Next server (bind `127.0.0.1:0`, read back the
+   assigned port).
+2. Start the Next server, given `VAULT_ROOT` so it can import Claude-authored
+   lessons, and poll its port.
+3. Emit `stage-update` events to the splash window (it listens via
+   `window.__TAURI__.event.listen`, enabled by `app.withGlobalTauri`).
+4. Create the main window pointed at `http://127.0.0.1:<port>/vault`, close
    the splash window.
 
-Four sidecars in the release build (`bundle.externalBin`): `vaultd` (files),
-`indexd` (search/RAG), `stored` (SQLite datastore + sync), and `node` (runs
-the Next standalone `server.js`). indexd needs nothing external — keyword
-search is served from its own SQLite index, both
-handled in the app. stored's Supabase credentials are optional the same way
-— without `vault/.data/sync.env` it runs fully local and skips sync.
+One sidecar in the release build (`bundle.externalBin`): `node`, which runs the
+Next standalone `server.js`. Startup used to be four processes — `vaultd`,
+`indexd` and `stored` came first, because the app's data lived in a local SQLite
+database that a background worker synced to Supabase. The app talks to Supabase
+directly now, so there is nothing local left to start, and the splash screen has
+one stage instead of four.
 
-Since folders became shareable, stored signs in to Supabase **as a user**, not
-with a service key (see `tools/stored/auth.go` and
-[collaboration.md](collaboration.md)). `sync.env` now needs `SUPABASE_URL`,
-`SUPABASE_ANON_KEY`, and one user credential — `SUPABASE_REFRESH_TOKEN`
-(preferred) or `SUPABASE_EMAIL` + `SUPABASE_PASSWORD` once, which stored
-exchanges for a refresh token and then erases the password from the file. A
-`sync.env` still holding only the old `SUPABASE_SERVICE_KEY` is treated as
-unconfigured: the new binary **disables sync rather than bypass RLS**, so an
-install carried over from before this change stops syncing until its
-`sync.env` is updated.
+Credentials are the app's own: `NEXT_PUBLIC_SUPABASE_URL` and
+`NEXT_PUBLIC_SUPABASE_ANON_KEY`, baked into the build. The desktop shell holds
+none of its own, and there is no service key anywhere — the signed-in user's JWT
+plus RLS decides everything (see [collaboration.md](collaboration.md)).
 
 The webview navigating to a `127.0.0.1` URL is not "opening localhost in a
 browser" — it's the app's own native window loading the app's own local
 server, the standard way Tauri/Electron ship a Next.js app that has live
 API routes (no static export is possible with API routes in the mix).
 
-The dev sidecar launch is OS-aware: `npm` is `npm.cmd` on Windows (needs
-`cmd /C`) but a plain executable on macOS/Linux (invoked directly), and the
-locally built vaultd binary is `vaultd.exe` vs `vaultd`. Both differences are
-isolated to the `dev` module so `tauri dev` runs on all three platforms.
+The dev launch is OS-aware: `npm` is `npm.cmd` on Windows (needs `cmd /C`) but a
+plain executable on macOS/Linux (invoked directly). That difference is isolated
+to the `dev` module so `tauri dev` runs on all three platforms.
 
 On exit, every tracked PID is killed via `taskkill /T /F` (Windows), not
 `Child::kill()` — on Windows `npm run dev` runs under `cmd /C`, which fans out
@@ -86,8 +73,6 @@ would be more confusing than two complete ones:
 
 | | Dev (`tauri dev`) | Release (`tauri build`) |
 |---|---|---|
-| vaultd | built from `tools/vaultd/` if missing, run directly | bundled sidecar, resolved via `app.shell().sidecar("vaultd")` |
-| indexd | built from `tools/indexd/` if missing, run directly | bundled sidecar, `app.shell().sidecar("indexd")` |
 | Next | `npm run dev -- -p <port>` against the repo (`cmd /C npm` on Windows, `npm` directly elsewhere) | bundled Node sidecar running the standalone `server.js`, given `REPO_ROOT` so the in-app Generate button can run the claude CLI from the checkout |
 | Vault location | repo's `vault/` (`CARGO_MANIFEST_DIR`'s parent) | **same** — the checkout's `vault/`, baked in at compile time |
 
@@ -100,8 +85,8 @@ git history). The installers this produces are therefore **for the machine
 that built them**; distribution is "clone the repo and set up", per
 [GETTING_STARTED.md](GETTING_STARTED.md).
 
-Sidecars are referenced by **basename only** (`sidecar("vaultd")`, not
-`sidecar("bin/vaultd")`) — Tauri flattens `bundle.externalBin` entries to
+Sidecars are referenced by **basename only** (`sidecar("node")`, not
+`sidecar("bin/node")`) — Tauri flattens `bundle.externalBin` entries to
 sit directly next to the installed `.exe`, regardless of which
 subdirectory they were built into.
 
@@ -111,17 +96,14 @@ subdirectory they were built into.
   empty placeholder files at the sidecar paths and an empty
   `resources/frontend/` dir. Tauri's build script enforces that every
   `bundle.externalBin` entry and `bundle.resources` glob resolves to a real
-  path *at compile time*, even for `tauri dev`, which never runs them
-  (dev mode talks to a plain local vaultd + `npm run dev` — see table
-  above). This keeps `tauri dev` fast instead of paying for a full
-  production build on every run.
+  path *at compile time*, even for `tauri dev`, which never runs it (dev mode
+  spawns `npm run dev` directly — see table above). This keeps `tauri dev` fast
+  instead of paying for a full production build on every run.
 - **`prepare-desktop-resources.mjs`** (`build.beforeBuildCommand`) — the
   real artifact build for `tauri build`:
-  1. `go build` vaultd, indexd **and** stored (shared `buildGoSidecar`
-     helper), copy each to `desktop/bin/<name>-<target-triple>[.exe]`.
-  2. `next build` (standalone output), assemble `desktop/resources/frontend/`
+  1. `next build` (standalone output), assemble `desktop/resources/frontend/`
      from `.next/standalone` + `.next/static` + `public/`.
-  3. Copy the local Node executable to `desktop/bin/node-<target-triple>`
+  2. Copy the local Node executable to `desktop/bin/node-<target-triple>`
      (`.exe` on Windows) as the Node sidecar — `next build --output
      standalone` still needs a Node runtime to execute `server.js`; there's
      no way to make Next itself a zero-runtime native binary.
@@ -142,7 +124,7 @@ out to `go`/`npx`/`node` from `PATH`), so no per-OS branches live in them.
 
 ## Install & run
 
-Prerequisites (one-time, machine setup): Node 20+, Go 1.21+, Rust
+Prerequisites (one-time, machine setup): Node 20+, Rust
 (`rustup`) + the platform's C/C++ build tools and webview:
 
 | OS | Build tools | Webview |
@@ -161,7 +143,7 @@ npm install
 npm run build:desktop
 ```
 
-Runs `prepare-desktop-resources.mjs` (Go build, `next build --output
+Runs `prepare-desktop-resources.mjs` (`next build --output
 standalone`, copies a Node sidecar) then `cargo tauri build`, then
 `install-desktop.mjs` copies the finished installer into `installation/`
 at the repo root and opens that folder. `bundle.targets: "all"` in

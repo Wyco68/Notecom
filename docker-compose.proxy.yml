@@ -1,0 +1,22 @@
+# Optional override for hosts where an existing reverse proxy (Traefik, Caddy,
+# nginx-proxy, a PaaS) already runs in Docker on its own network. It drops the
+# published host port and joins web to that network instead, so the proxy can
+# reach it as http://web:3000.
+#
+#   PROXY_NETWORK=server_default \
+#     docker compose -f docker-compose.yml -f docker-compose.proxy.yml up -d
+#
+# The network must already exist (the proxy's own stack creates it); Compose
+# attaches rather than recreates it.
+
+services:
+  web:
+    ports: !reset []
+    networks:
+      - default
+      - proxy
+
+networks:
+  proxy:
+    external: true
+    name: ${PROXY_NETWORK:?set PROXY_NETWORK to the proxy's docker network}

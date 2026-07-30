@@ -86,9 +86,15 @@ fn track_pids(app: &AppHandle, pids: &[u32]) {
     }
 }
 
-// Dev: vaultd and `npm run dev` are spawned straight from the checked-out
-// repo (CARGO_MANIFEST_DIR is desktop/, baked in at compile time — fine since
-// a dev build is always run from its own source tree).
+// Dev: `npm run dev` is spawned straight from the checked-out repo
+// (CARGO_MANIFEST_DIR is desktop/, baked in at compile time — fine since a dev
+// build is always run from its own source tree).
+//
+// There is one child process now. The app used to launch three Go sidecars
+// first — vaultd (files), stored (local SQLite + background sync) and indexd
+// (search) — because the desktop copy was the source of truth and Supabase was
+// a replica it pushed to. That is reversed: Supabase is the store, the app
+// talks to it directly, and there is nothing local left to serve.
 #[cfg(debug_assertions)]
 mod dev {
     use super::*;
@@ -119,95 +125,38 @@ mod dev {
         cmd
     }
 
-    // Build tools/<name> if its binary is missing, then run it against the
-    // repo's vault/. Shared by vaultd (filesystem helper), indexd
-    // (search/RAG), and stored (primary SQLite datastore) — identical dev
-    // launch shape; per-service extras arrive via `extra` env pairs.
-    fn spawn_go_service(
-        root: &Path,
-        name: &str,
-        addr_env: &str,
-        port: u16,
-        extra: &[(&str, String)],
-    ) -> u32 {
-        let dir = root.join("tools").join(name);
-        let exe_name = if cfg!(windows) {
-            format!("{name}.exe")
-        } else {
-            name.to_string()
-        };
-        let exe = dir.join(&exe_name);
-        if !exe.exists() {
-            let mut build = Command::new("go");
-            build.args(["build", "-o", &exe_name, "."]).current_dir(&dir);
-            hide_window(&mut build);
-            build.status().expect("failed to build go service");
-        }
-        let mut cmd = Command::new(&exe);
-        cmd.current_dir(root)
-            .env(addr_env, format!("127.0.0.1:{port}"))
-            .env("VAULT_ROOT", root.join("vault"));
-        for (k, v) in extra {
-            cmd.env(k, v);
-        }
-        hide_window(&mut cmd);
-        cmd.spawn().expect("failed to start go service").id()
-    }
-
-    fn spawn_next(root: &Path, port: u16, stored_url: &str, indexd_url: &str) -> u32 {
+    // VAULT_ROOT still points at the repo's vault/: that is where Claude Code
+    // writes generated lessons, and the app imports them from there on the next
+    // tree load. Read-only as far as the app is concerned.
+    fn spawn_next(root: &Path, port: u16) -> u32 {
         let port_arg = port.to_string();
         let mut cmd = npm(&["run", "dev", "--", "-p", &port_arg]);
-        cmd.current_dir(root)
-            .env("STORED_URL", stored_url)
-            .env("INDEXD_URL", indexd_url);
+        cmd.current_dir(root).env("VAULT_ROOT", root.join("vault"));
         hide_window(&mut cmd);
         cmd.spawn().expect("failed to start next dev server").id()
     }
 
     pub fn orchestrate(app: AppHandle) {
         let root = repo_root();
-        let vaultd_port = free_port();
-        let indexd_port = free_port();
-        let stored_port = free_port();
         let next_port = free_port();
-        let vaultd_url = format!("http://127.0.0.1:{vaultd_port}");
-        let indexd_url = format!("http://127.0.0.1:{indexd_port}");
-        let stored_url = format!("http://127.0.0.1:{stored_port}");
 
-        emit_stage(&app, "Starting backend...");
-        // vaultd first — stored mirrors every DB mutation to vault/ through it.
-        let vaultd_pid = spawn_go_service(&root, "vaultd", "VAULTD_ADDR", vaultd_port, &[]);
-        wait_for_port(vaultd_port, Duration::from_secs(15));
-        let indexd_pid = spawn_go_service(&root, "indexd", "INDEXD_ADDR", indexd_port, &[]);
-        // stored is the app's datastore — every read/write goes through it,
-        // so it is waited on like vaultd.
-        let stored_pid = spawn_go_service(
-            &root,
-            "stored",
-            "STORED_ADDR",
-            stored_port,
-            &[("VAULTD_URL", vaultd_url.clone())],
-        );
-        wait_for_port(stored_port, Duration::from_secs(15));
-
-        emit_stage(&app, "Loading vault...");
         emit_stage(&app, "Preparing interface...");
-        let next_pid = spawn_next(&root, next_port, &stored_url, &indexd_url);
+        let next_pid = spawn_next(&root, next_port);
         wait_for_port(next_port, Duration::from_secs(60));
 
-        track_pids(&app, &[vaultd_pid, indexd_pid, stored_pid, next_pid]);
+        track_pids(&app, &[next_pid]);
         finish_launch(&app, next_port);
     }
 }
 
-// Release: vaultd, indexd, and a bundled Node runtime are sidecars resolved
-// from the installed app's resources. The vault is the repo checkout's
-// vault/ — the same folder dev mode and Claude Code (/lect, /quiz) use.
-// This app is checkout-centric by design: content can
-// only ever be created through the repo's command files, so every user has
-// the repo cloned, and the packaged app is just a nicer window onto that
-// same checkout. (CARGO_MANIFEST_DIR is baked at compile time — always
-// this checkout, because you build the app from it.)
+// Release: a bundled Node runtime is the only sidecar, resolved from the
+// installed app's resources. The vault is the repo checkout's vault/ — the same
+// folder dev mode and Claude Code (/lect, /quiz) use, and the app only ever
+// reads it. This app is checkout-centric by design: content can only ever be
+// created through the repo's command files, so every user has the repo cloned,
+// and the packaged app is just a nicer window onto that same checkout.
+// (CARGO_MANIFEST_DIR is baked at compile time — always this checkout, because
+// you build the app from it.)
 #[cfg(not(debug_assertions))]
 mod release {
     use super::*;
@@ -227,45 +176,7 @@ mod release {
         dir
     }
 
-    fn spawn_vaultd(app: &AppHandle, port: u16, vault_root: &str) -> u32 {
-        let (_rx, child) = app
-            .shell()
-            .sidecar("vaultd")
-            .expect("vaultd sidecar not found")
-            .env("VAULTD_ADDR", format!("127.0.0.1:{port}"))
-            .env("VAULT_ROOT", vault_root.to_string())
-            .spawn()
-            .expect("failed to start vaultd sidecar");
-        child.pid()
-    }
-
-    fn spawn_indexd(app: &AppHandle, port: u16, vault_root: &str) -> u32 {
-        let (_rx, child) = app
-            .shell()
-            .sidecar("indexd")
-            .expect("indexd sidecar not found")
-            .env("INDEXD_ADDR", format!("127.0.0.1:{port}"))
-            .env("VAULT_ROOT", vault_root.to_string())
-            .spawn()
-            .expect("failed to start indexd sidecar");
-        child.pid()
-    }
-
-    fn spawn_stored(app: &AppHandle, port: u16, vault_root: &str, vaultd_url: &str) -> u32 {
-        let (_rx, child) = app
-            .shell()
-            .sidecar("stored")
-            .expect("stored sidecar not found")
-            .env("STORED_ADDR", format!("127.0.0.1:{port}"))
-            .env("VAULT_ROOT", vault_root.to_string())
-            // stored mirrors every DB mutation back to vault/ through vaultd.
-            .env("VAULTD_URL", vaultd_url.to_string())
-            .spawn()
-            .expect("failed to start stored sidecar");
-        child.pid()
-    }
-
-    fn spawn_next(app: &AppHandle, port: u16, stored_url: &str, indexd_url: &str) -> u32 {
+    fn spawn_next(app: &AppHandle, port: u16, vault_root: &str) -> u32 {
         let frontend_dir = app
             .path()
             .resource_dir()
@@ -280,8 +191,9 @@ mod release {
             .current_dir(frontend_dir)
             .args(["server.js"])
             .env("PORT", port.to_string())
-            .env("STORED_URL", stored_url.to_string())
-            .env("INDEXD_URL", indexd_url.to_string())
+            // Where Claude Code (/lect, /quiz) writes generated lessons. The
+            // app imports from here; it never writes back.
+            .env("VAULT_ROOT", vault_root.to_string())
             // Generate (lib/generate/runner.ts) must run the claude CLI from
             // the checkout, where .claude/commands/ lives — the standalone
             // server's own cwd is the installed resources dir.
@@ -293,34 +205,13 @@ mod release {
 
     pub fn orchestrate(app: AppHandle) {
         let vault_root = vault_dir(&app).to_string_lossy().to_string();
-        let vaultd_port = free_port();
-        let indexd_port = free_port();
-        let stored_port = free_port();
         let next_port = free_port();
-        let vaultd_url = format!("http://127.0.0.1:{vaultd_port}");
-        let indexd_url = format!("http://127.0.0.1:{indexd_port}");
-        let stored_url = format!("http://127.0.0.1:{stored_port}");
 
-        emit_stage(&app, "Starting backend...");
-        // vaultd first — stored mirrors every DB mutation to vault/ through it.
-        let vaultd_pid = spawn_vaultd(&app, vaultd_port, &vault_root);
-        wait_for_port(vaultd_port, Duration::from_secs(15));
-
-        // Search/RAG service. Not waited on — the reader works without it and
-        // it can index in the background while the UI loads.
-        let indexd_pid = spawn_indexd(&app, indexd_port, &vault_root);
-
-        // Primary datastore — every app read/write goes through it, so it is
-        // waited on like vaultd.
-        let stored_pid = spawn_stored(&app, stored_port, &vault_root, &vaultd_url);
-        wait_for_port(stored_port, Duration::from_secs(15));
-
-        emit_stage(&app, "Loading vault...");
         emit_stage(&app, "Preparing interface...");
-        let next_pid = spawn_next(&app, next_port, &stored_url, &indexd_url);
+        let next_pid = spawn_next(&app, next_port, &vault_root);
         wait_for_port(next_port, Duration::from_secs(30));
 
-        track_pids(&app, &[vaultd_pid, indexd_pid, stored_pid, next_pid]);
+        track_pids(&app, &[next_pid]);
         finish_launch(&app, next_port);
     }
 }

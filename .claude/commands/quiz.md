@@ -66,10 +66,11 @@ vault/<folder-slug>/quiz-<id>.html   ← the generated quiz HTML
 vault/<folder-slug>/index.json       ← upsert the "quizzes" array entry
 ```
 
-Save via vaultd's `POST /quiz` endpoint (`{folder, id, slug, title, seq,
-html}`, mirrors `POST /lesson` — see
-[api-contract.md](../../docs/api-contract.md)). Make sure vaultd is
-running first (`node scripts/ensure-vaultd.mjs`).
+Write both files directly, same as `/lect` does for lessons — there is no
+service to POST to. Read the existing `index.json` if the folder has one,
+append (or update) the entry in its `quizzes` array, and write it back;
+create the directory and a new `index.json` when the folder is new. The app
+imports what lands here on its next tree load.
 
 **Naming rules (must follow):**
 - `<folder-slug>` = subject name lowercased, non-alphanumerics → `-`, trimmed

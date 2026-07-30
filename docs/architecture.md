@@ -3,27 +3,35 @@
 Loaded by `/feat` only. Canonical docs (kept at repo root, not
 duplicated here — read both before any architecture-affecting change):
 
-- [SPECIFICATION.md](../SPECIFICATION.md) — the two-layer contract
-  (Next.js reads and manages / Go helper is dumb filesystem I/O).
-  Claude Code is the author but is not a layer inside the app.
+- [SPECIFICATION.md](../SPECIFICATION.md) — the layer contract: Claude Code
+  authors content, the Next.js app reads and manages it. Claude Code is the
+  author but is not a layer inside the app.
 - [flow.md](../flow.md) — concrete request-by-request data flow:
   lesson creation (Claude Code → vault/), viewing, folder/lesson management.
 - [docs/desktop.md](desktop.md) — the Tauri shell (`desktop/`): startup
-  orchestration, splash screen, dev vs production sidecar layout.
-The primary model is cross-device sync: each machine runs the desktop app and
-the `stored` sidecar reconciles its SQLite database with Supabase in the
-background (see "Primary datastore" below). The former filesystem-based cloud
-reader channels (`VAULT_SOURCE=gcs`/`worker`) were retired in favour of this —
-see git history for their setup docs.
+  orchestration, splash screen, dev vs production layout.
 
-A hosted reader is still supported through the same Supabase data, selected by
-**`VAULT_SOURCE=supabase`** (e.g. the Vercel deployment). In that mode the Next.js
-read helpers (`lib/vault/supabase.ts`) query the `notes_folders`/`notes_documents`
-tables directly over PostgREST instead of a local `stored` — a serverless box has
-no sidecar, SQLite, or vault on disk. Search, which needs the local `indexd`, is
-unavailable there. Reads carry the signed-in user's JWT and are scoped by RLS, so
-a hosted reader shows exactly the folders that user owns, belongs to, or may
-discover.
+## Supabase is the store
+
+Every read and write goes straight to Supabase as the signed-in user, on the
+desktop app, in development and on a VPS alike. There is no local database, no
+sync worker and no per-instance state: what a device shows is what the server
+has.
+
+This replaced (2026-07) an offline-first design in which each machine ran three
+Go sidecars — `vaultd` (files), `stored` (a local SQLite source of truth plus a
+background Supabase sync engine) and `indexd` (SQLite FTS5 search). They are
+gone from the repo; read the git history if you need to know how they worked.
+Three things went with them, all of them the point of the change: a device could
+be a sync cycle behind, "which copy is right" was a real question, and every
+deployment had to build and run a Go trio to show a lesson. The
+`VAULT_SOURCE=gcs`/`worker`/`supabase` flags are retired too — there is one
+source now, so there is nothing to select.
+
+What remains local is `vault/`: the folder Claude Code writes generated lessons
+into. The app only ever **reads** it — `lib/vault/import.ts` ingests those files
+into Supabase on the next tree load. A box without a `vault/` directory (a VPS)
+simply has nothing to import.
 
 ## There is no read-only mode
 
@@ -42,100 +50,88 @@ serves several people from one subscription: the first two mean per-token charge
 on top of a subscription the user already pays for, and the third breaks
 Anthropic's terms for consumer subscriptions.
 
-Capability, not configuration, decides the rest. A `VAULT_SOURCE=supabase` box
-fails a content write because it has no `stored` and no vault to write to — the
-error names the missing dependency, which is the truth, instead of a flag
-restating it.
+Capability, not configuration, decides the rest. A VPS fails a generate because
+it has no `claude` binary — the error names the missing dependency, which is the
+truth, instead of a flag restating it.
 
 ## Access control
 
 Folders are the unit of sharing (owner, members with roles, visibility,
 discoverability, tags); documents inherit folder permissions. Enforcement lives
-entirely in Postgres RLS — **no service-role key exists in this app**, in the
-web deployment or in `stored`. `stored` authenticates to Supabase as the
-signed-in user, so it syncs only rows RLS lets that user see, and it holds no
-permission logic of its own. Contract: [collaboration.md](collaboration.md).
+entirely in Postgres RLS — **no service-role key exists in this app**. Every
+query runs through a user-scoped client (`lib/supabase/*`: anon key + the
+caller's JWT), so the database decides what comes back and whether a write is
+allowed. No route handler, data-layer function or React component re-checks
+permissions; a second copy of the rules would only be a weaker one. Contract:
+[collaboration.md](collaboration.md).
 
 ## The one rule that must never break
 
 Don't move logic across the layers when fixing or extending the app:
 
-- Don't add naming/slug/sequence logic to the Go helper (`tools/vaultd/`)
-  — that's Next.js's job (`lib/vault/slug.ts`).
-- Don't add persistence to a React component or API route directly —
-  always through `lib/vault/helper.ts` → `stored` (which mirrors to the
-  filesystem via `vaultd`). Content sync lives only inside `stored`. Two
-  sanctioned exceptions read Supabase from the app, both server-side and both
-  through a **user-scoped** client (`lib/supabase/*`, anon key + the caller's
-  JWT), never a service key: the hosted reader (`VAULT_SOURCE=supabase`,
-  `lib/vault/supabase.ts`) — a serverless box has no `stored`, so it reads the
-  synced tables directly — and the collaboration surface (`lib/collab/*`,
-  `app/api/collab/**`), which manages folder membership, invitations, join
-  requests, tags and search. Neither touches lesson content persistence.
+- Don't add persistence to a React component or API route directly — always
+  through `lib/vault/store.ts` (documents and folders) or `lib/collab/*`
+  (membership, invitations, join requests, tags, folder search). Those two are
+  the only places that touch the `notes_*` tables.
+- Don't write files from the app. `vault/` is generation output, read by
+  `lib/vault/import.ts` and never written back. A feature that wants to persist
+  something wants a table.
 - Don't add any AI generation logic or Anthropic API calls to the Next.js
   app. One delegation is the sanctioned exception (2026-07): the generation
   job runner (`lib/generate/runner.ts` spawns the local Claude Code CLI to
   run `/lect`/`/quiz`). The app orchestrates; it never implements
   generation and never stores an API key.
-- Don't add business logic to `desktop/` (the Tauri shell). It only
-  starts/stops vaultd and Next, shows the splash/main window, and cleans up
-  on exit — it has no opinion on vault content, naming, or UI.
-- Don't add chunking or ranking logic to vaultd or to Next.js — search
-  intelligence lives only in `indexd` (below).
+- Don't add business logic to `desktop/` (the Tauri shell). It only starts and
+  stops the Next.js server, shows the splash/main window, and cleans up on exit
+  — it has no opinion on content, naming, or UI.
+- Don't add ranking logic to TypeScript. Retrieval belongs in SQL (below).
 
-## Primary datastore: stored (`tools/stored/`)
+## Data layer: `lib/vault/store.ts`
 
-A third Go service (default `127.0.0.1:4323`) that owns the app's live
-SQLite database (`<vault>/.data/notes.db`) and the Supabase sync engine.
-Since the offline-first migration (2026-07) it — not the filesystem — is the
-source of truth while the app runs:
+The whole persistence surface, and small enough to read in one sitting:
+`listTree`, `createFolder`, `deleteFolder`, `loadDoc`, `saveDoc`, `deleteDoc`,
+`renameDoc`. `lib/vault/helper.ts` sits on top purely to translate the routes'
+lesson/quiz vocabulary into a document `kind`.
 
-- The Next.js helpers (`lib/vault/helper.ts`) read and write **stored**
-  over the same wire contract vaultd had; only the base URL changed.
-- Every mutation commits atomically with one `sync_queue` row; a background
-  worker inside stored reconciles with Supabase every 30s (batched upserts,
-  tombstone deletes, Last-Write-Wins by `version` with `updated_at`
-  tiebreak, exponential backoff). UI code never uploads anything.
-- After every DB mutation stored **mirrors the change to `vault/` by
-  calling vaultd**, so the legacy file tree stays a live export: indexd
-  keeps indexing files, Claude Code keeps writing files, and a vault import
-  (`POST /import`, awaited by `/api/tree`) ingests Claude-authored files
-  back into SQLite.
-- Supabase credentials live in `<vault>/.data/sync.env` (`SUPABASE_URL`,
-  `SUPABASE_ANON_KEY`, plus `SUPABASE_REFRESH_TOKEN` or a one-time
-  `SUPABASE_EMAIL`/`SUPABASE_PASSWORD`); without them stored runs fully local
-  and just logs that sync is disabled. It signs in as that user and sends the
-  access token, so RLS — not this process — decides what it may push and pull.
-  A push refused with 403 (a folder the user only reads) drops its queue row
-  instead of retrying forever.
+Two rules it inherits from the sidecar it replaced:
 
-Endpoints: [api-contract.md](api-contract.md). Division of responsibility:
-vaultd stays dumb filesystem I/O, indexd stays search-only, stored owns
-persistence + sync and holds **no** naming/slug/seq logic — every value it
-stores arrives fully resolved from the app, same rule as vaultd.
+- **Naming stays in the app.** Slugs, folder-local document keys and sequence
+  numbers arrive fully resolved (`lib/vault/slug.ts`, the generated
+  `index.json`); the database invents none of them.
+- **Deletes are tombstones** — `deleted = true`, `version + 1`. A row that
+  simply vanished would reappear the moment a client holding an older copy wrote
+  anything, and the collaboration UI still needs to tell "removed" from "never
+  existed".
 
-## Search layer: indexd (`tools/indexd/`)
+Slugs are unique per owner, not globally (`notes_folders_owner_slug_key`), so
+one slug can name several readable folders once folders are shared. Reads span
+all of them; writes prefer the caller's own folder and let RLS settle the rest.
 
-A second Go service (default `127.0.0.1:4322`) that turns the vault into a
-searchable knowledge base. It chunks lesson HTML by educational sections
-(h2/h3) and serves SQLite FTS5 keyword retrieval over those chunks. There is
-no model and no external service behind it: search is local and offline by
-construction.
+## Search: Postgres
 
-Division of responsibility, in one line each:
-- **vaultd** stays dumb filesystem I/O — it knows nothing about search.
-- **indexd** owns all indexing/retrieval intelligence and its own storage:
-  one SQLite file at `vault/.index/index.db` (metadata + FTS5). Derived data
-  — deleting it is safe; a reindex rebuilds it.
-- **Next.js** only proxies queries (`/api/search`, `/api/related/...` →
-  `lib/search/indexd.ts`) and never chunks or ranks anything.
-- **Claude Code** can query indexd over HTTP to retrieve only the relevant
-  sections of a lesson instead of whole files (token reduction).
+Lesson HTML is split into educational sections — every `<h2>` opens a topic,
+every `<h3>` a chunk inside it, content before the first heading becomes
+"Overview". Fixed token windows would cut explanations mid-thought; heading
+boundaries are how the lessons are actually taught.
 
-Freshness: indexd scans on startup and on `POST /reindex`; the Next.js
-`/api/tree` route fire-and-forgets a reindex on every tree fetch (page
-load, window focus, refresh button), so the index follows vault changes
-without a file watcher. Scans are hash-based and near-free when nothing
-changed.
+- **Splitting** lives in `lib/search/chunker.ts`, because it reads the lesson
+  HTML contract ([html-output-contract.md](html-output-contract.md)) — a content
+  concern, not a database one. It needs no HTML parser: generated lessons are a
+  flat fragment whose headings are never nested.
+- **Storage** is `notes_doc_chunks` (migration `0015`), with a generated
+  `tsvector` and a GIN index. Derived data: it can be rebuilt from
+  `notes_documents.html` at any time, which `reindexStale()` does for anything
+  written by another device.
+- **Ranking** is two SQL functions, `notes_search_chunks` and
+  `notes_related_docs`. Both are SECURITY INVOKER, so the chunk table's own
+  SELECT policy decides what may be searched. `websearch_to_tsquery` ANDs bare
+  words on purpose: with OR, one shared filler word ("how", "to") drags in dozens
+  of unrelated chunks as soon as a query grows past two words.
+- **Next.js** (`lib/search/search.ts`, `/api/search`, `/api/related/...`) only
+  forwards the query and formats the answer.
+
+Freshness: `/api/tree` runs the vault import and a stale-chunk reindex on every
+tree fetch (page load, window focus, refresh button). Both are near-free when
+there is nothing to do, and neither may take the tree down with it.
 
 Endpoints: [api-contract.md](api-contract.md).

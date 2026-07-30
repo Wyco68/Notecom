@@ -6,17 +6,19 @@
   "specVersion": "1.0.0",
   "purpose": "Notes are written in plain high-school-level language with technically correct terminology (Information Systems & Network Engineering program). Content creation happens entirely outside the web application — Claude Code is the sole author; the Next.js app is the reader/manager.",
   "principles": [
-    "Two-layer contract: Next.js reads and manages, the Go helper (vaultd) is dumb filesystem I/O.",
-    "Claude Code is the author but is not a layer inside the app.",
-    "No naming/slug/sequence logic in vaultd — that is Next.js's job.",
-    "No filesystem writes from a React component or API route directly — always through lib/vault/helper.ts -> vaultd.",
+    "Claude Code authors content as files; the Next.js app reads and manages it in Supabase. Claude Code is the author but is not a layer inside the app.",
+    "Supabase is the source of truth. No local database, no sync worker, no per-instance state.",
+    "Naming/slug/sequence logic lives in the app (lib/vault/slug.ts, the generated index.json) — every value reaches the database fully resolved.",
+    "No content persistence from a React component or API route directly — always through lib/vault/store.ts.",
+    "The app writes no files. vault/ is generation output, ingested one-way by lib/vault/import.ts.",
     "No AI generation logic or Anthropic API calls in the Next.js app itself; one sanctioned delegation exists (the generation job runner).",
-    "No chunking/embedding/ranking logic in vaultd or Next.js — that intelligence lives only in indexd.",
+    "Retrieval and ranking live in SQL (notes_search_chunks, notes_related_docs), not in TypeScript.",
+    "Authorization is Row Level Security. No service-role key exists anywhere in this app; every query carries the caller's JWT.",
     "No business logic in the desktop shell (Tauri) — only start/stop orchestration."
   ],
   "components": {
     "webapp": {
-      "role": "UI, routing, API proxying, vault management (create/rename/delete/list)",
+      "role": "UI, routing, API handlers, content management (create/rename/delete/list) against Supabase",
       "path": "app/, components/, lib/",
       "framework": "Next.js 15 (App Router)",
       "language": "TypeScript",
@@ -35,132 +37,62 @@
         }
       ]
     },
-    "vaultd": {
-      "role": "filesystem CRUD only, zero business logic",
-      "path": "tools/vaultd/main.go",
-      "language": "Go",
-      "defaultAddr": "127.0.0.1:4321",
-      "envAddr": "VAULTD_ADDR",
-      "envRoot": "VAULT_ROOT",
-      "envToken": "VAULTD_TOKEN",
-      "authHeader": "X-Auth-Token",
-      "endpoints": [
-        {
-          "method": "POST",
-          "path": "/folder",
-          "body": "{name}"
-        },
-        {
-          "method": "DELETE",
-          "path": "/folder/{name}"
-        },
-        {
-          "method": "POST",
-          "path": "/lesson",
-          "body": "{folder,id,slug,title,seq,html}",
-          "usedBy": "Claude Code"
-        },
-        {
-          "method": "GET",
-          "path": "/lesson/{folder}/{id}"
-        },
-        {
-          "method": "DELETE",
-          "path": "/lesson/{folder}/{id}"
-        },
-        {
-          "method": "POST",
-          "path": "/lesson/{folder}/{id}/rename",
-          "body": "{newTitle}"
-        },
-        {
-          "method": "POST",
-          "path": "/quiz",
-          "body": "{folder,id,slug,title,seq,html}",
-          "usedBy": "Claude Code"
-        },
-        {
-          "method": "GET",
-          "path": "/quiz/{folder}/{id}"
-        },
-        {
-          "method": "DELETE",
-          "path": "/quiz/{folder}/{id}"
-        },
-        {
-          "method": "POST",
-          "path": "/quiz/{folder}/{id}/rename",
-          "body": "{newTitle}"
-        },
-        {
-          "method": "GET",
-          "path": "/tree"
-        }
-      ]
+    "dataLayer": {
+      "role": "all content persistence; no permission logic of its own",
+      "path": "lib/vault/store.ts",
+      "language": "TypeScript",
+      "client": "user-scoped Supabase client (anon key + caller's JWT)",
+      "tables": [
+        "notes_folders",
+        "notes_documents",
+        "notes_doc_chunks"
+      ],
+      "functions": [
+        "listTree",
+        "createFolder",
+        "deleteFolder",
+        "loadDoc",
+        "saveDoc",
+        "deleteDoc",
+        "renameDoc",
+        "reindexStale"
+      ],
+      "deletesAreTombstones": true
     },
-    "indexd": {
-      "role": "search/RAG backend only — chunking, embedding, hybrid retrieval",
-      "path": "tools/indexd/",
-      "language": "Go",
-      "defaultAddr": "127.0.0.1:4322",
-      "envAddr": "INDEXD_ADDR",
+    "vaultImport": {
+      "role": "one-way ingest of Claude-authored vault files into Supabase",
+      "path": "lib/vault/import.ts",
       "envRoot": "VAULT_ROOT",
-      "envToken": "INDEXD_TOKEN",
-      "authHeader": "X-Auth-Token",
-      "storage": "vault/.index/index.db (SQLite: metadata + FTS5 + embedding BLOBs, derived/safe to delete)",
-      "embeddingBackend": {
-        "defaultEmbedModel": "nomic-embed-text",
-        "degradesGracefully": true
-      },
-      "endpoints": [
+      "writesFiles": false,
+      "noOpWithoutVaultDir": true
+    },
+    "search": {
+      "role": "section chunking in the app, ranking in Postgres",
+      "path": [
+        "lib/search/chunker.ts",
+        "lib/search/search.ts",
+        "supabase/migrations/0015_notes_search_chunks.sql"
+      ],
+      "storage": "notes_doc_chunks (generated tsvector + GIN index; derived, rebuildable from notes_documents.html)",
+      "functions": [
         {
-          "method": "POST",
-          "path": "/index",
-          "body": "{folder,id,kind}"
+          "name": "notes_search_chunks",
+          "params": "p_q, p_folder, p_kind, p_limit",
+          "security": "invoker"
         },
         {
-          "method": "DELETE",
-          "path": "/index/{folder}/{id}",
-          "query": "?kind="
-        },
-        {
-          "method": "POST",
-          "path": "/reindex",
-          "response": "202 async"
-        },
-        {
-          "method": "GET",
-          "path": "/search",
-          "query": "?q&folder&kind&limit&html=1"
-        },
-        {
-          "method": "GET",
-          "path": "/related/{folder}/{id}",
-          "query": "?kind&limit"
-        },
-        {
-          "method": "GET",
-          "path": "/topics",
-          "query": "?q&limit"
-        },
-        {
-          "method": "POST",
-          "body": "{message,history}",
-          "response": "SSE"
-        },
-        {
-          "method": "GET",
-          "path": "/status"
+          "name": "notes_related_docs",
+          "params": "p_folder, p_id, p_kind, p_limit",
+          "security": "invoker"
         }
-      ]
+      ],
+      "queryParser": "websearch_to_tsquery('simple', q) — bare words are ANDed"
     },
     "desktop": {
       "role": "Tauri shell: orchestration only, no business logic",
       "path": "desktop/",
       "language": "Rust",
       "sidecars": [
-        "vaultd",
-        "indexd",
         "node (Next standalone server)"
       ],
       "vaultLocation": "checkout's vault/, baked in at compile time (single-vault, checkout-centric design)"
@@ -210,17 +142,17 @@
     {
       "path": "/api/search",
       "method": "GET",
-      "proxiesTo": "indexd"
+      "backedBy": "notes_search_chunks"
     },
     {
       "path": "/api/related/[folder]/[id]",
       "method": "GET",
-      "proxiesTo": "indexd"
+      "backedBy": "notes_related_docs"
     },
     {
       "method": "POST",
-      "proxiesTo": "indexd",
-      "readOnlyExempt": true
+      "readOnlyExempt": true,
+      "backedBy": "notes_search_chunks"
     },
     {
       "path": "/api/generate",
@@ -240,15 +172,18 @@
     }
   ],
   "storageModel": {
-    "root": "vault/",
-    "layout": [
-      "<folder-slug>/index.json",
-      "<folder-slug>/<seq>-<slug>.html (lesson)",
-      "<folder-slug>/quiz-<seq>-<slug>.html (quiz)",
-      "vault/.index/index.db (derived search index, indexd-owned)"
-    ],
-    "gitignored": true,
-    "sourceOfTruth": "filesystem, no database"
+    "sourceOfTruth": "Supabase Postgres (notes_folders, notes_documents; notes_doc_chunks is the derived search index)",
+    "generationOutput": {
+      "root": "vault/",
+      "layout": [
+        "<folder-slug>/index.json",
+        "<folder-slug>/<seq>-<slug>.html (lesson)",
+        "<folder-slug>/quiz-<seq>-<slug>.html (quiz)"
+      ],
+      "gitignored": true,
+      "writtenBy": "Claude Code only",
+      "readBy": "lib/vault/import.ts only"
+    }
   },
   "commands": {
     "/lect": {
@@ -268,23 +203,23 @@
   },
   "deploymentModes": {
     "local-desktop": {
-      "description": "Tauri native window, single machine, single vault",
+      "description": "Tauri native window; one Node process, reading and writing Supabase directly",
       "command": "npm run dev:desktop | npm run build:desktop"
     },
     "local-browser": {
       "description": "plain Next.js dev/prod server on the writer machine, full read/write + generation",
       "command": "npm run dev | npm run build && npm run start"
     },
-    "remote-reader": {
-      "description": "read-only instance for other devices (iPad/laptop); generation and folder/lesson mutation disabled at middleware.ts, gated by READ_ONLY/NEXT_PUBLIC_READ_ONLY",
+    "vps": {
+      "description": "single stateless web container behind a reverse proxy; identical app, no local vault, so no generation",
+      "command": "docker compose up -d --build",
       "requires": [
-        "vaultd/indexd reachable from the reader instance (shared filesystem sync or a tunnel + VAULTD_TOKEN/INDEXD_TOKEN)"
+        "SUPABASE_URL and SUPABASE_ANON_KEY at build time (NEXT_PUBLIC_* are inlined into the client bundle)"
       ],
-      "command": "READ_ONLY=1 NEXT_PUBLIC_READ_ONLY=1 npm run build && npm run start",
-      "recommendedTunnel": "Cloudflare Tunnel (free) + Cloudflare Access in front of vaultd/indexd public hostnames",
       "cannotRunRemotely": [
-        "/api/generate (requires local claude CLI + subscription auth on the writer machine only)"
-      ]
+        "/api/generate (requires a local claude CLI signed in to that person's own subscription)"
+      ],
+      "docs": "docs/deploy-vps.md"
     }
   },
   "techStack": {
@@ -295,16 +230,18 @@
     "codeHighlighting": "highlight.js",
     "diagrams": "mermaid",
     "animation": "framer-motion",
-    "filesystemHelper": "Go HTTP service (vaultd)",
-    "searchRag": "Go HTTP service (indexd) + SQLite (FTS5 + vector BLOBs)",
+    "searchRag": "Postgres full-text (notes_doc_chunks + two SQL functions)",
     "desktopShell": "Tauri (Rust)",
-    "auth": "none for the app itself; optional shared-secret header (X-Auth-Token) between Next.js and vaultd/indexd when exposed remotely"
+    "auth": "Supabase accounts (password + emailed code); RLS is the authorization boundary; no service-role key",
+    "datastore": "Supabase Postgres (notes_* tables, RLS-enforced)",
+    "dataLayer": "lib/vault/store.ts over a user-scoped Supabase client"
   },
   "outOfScope": [
-    "No database as source of truth",
-    "No multi-tenancy",
-    "No user authentication of any kind",
+    "No offline mode — every read and write goes to Supabase as it happens",
+    "No service-role key, anywhere",
+    "No anonymous access — anon is granted nothing on any notes_* table",
+    "No per-document permissions — folders are the unit of sharing",
     "No AI generation logic inside the application itself",
-    "No hosting/deployment pipeline beyond what's documented in README.md"
+    "No hosting/deployment pipeline beyond what's documented in README.md and docs/deploy-vps.md"
   ]
 }

@@ -1,9 +1,11 @@
 // One-command project setup: `npm run setup` (after `npm install`).
 //
 // Checks every tool the project needs, installs what it can (the
-// markitdown MCP server), builds both Go services, and prints exactly
-// what's left to do by hand (claude login). Safe to
-// re-run any time — every step is a check-then-act.
+// markitdown MCP server), and prints exactly what's left to do by hand
+// (claude login). Safe to re-run any time — every step is a check-then-act.
+//
+// No Go toolchain any more: the app talks to Supabase directly, so the three
+// Go sidecars it used to build here no longer exist.
 
 import { spawnSync } from "child_process";
 import { existsSync } from "fs";
@@ -37,10 +39,6 @@ console.log("\nChecking required tools...\n");
 const nodeV = process.version;
 ok("Node.js", nodeV);
 
-const goV = tryRun("go", ["version"]);
-if (goV) ok("Go", goV.replace("go version ", ""));
-else bad("Go (builds the two backend services)", "Install Go 1.21+ from https://go.dev/dl, then re-run `npm run setup`.");
-
 const claudeV = tryRun("claude", ["--version"]);
 if (claudeV) ok("Claude Code CLI", claudeV);
 else
@@ -69,16 +67,6 @@ if (markitdown) {
       "Python/pip (needed for markitdown-mcp, which /lect uses to read PDFs/slides)",
       "Install Python 3 from https://python.org, then run `pip install markitdown-mcp`."
     );
-  }
-}
-
-// --- build the Go services ---
-if (goV) {
-  console.log("\nBuilding backend services...\n");
-  for (const name of ["vaultd", "indexd"]) {
-    const exe = process.platform === "win32" ? `${name}.exe` : name;
-    run("go", ["build", "-o", exe, "."], { cwd: path.join(ROOT, "tools", name) });
-    ok(`${name} built`, `tools/${name}/${exe}`);
   }
 }
 
