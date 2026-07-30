@@ -215,7 +215,13 @@ export async function listJoinRequests(folderId: string): Promise<JoinRequest[]>
 async function rpc(fn: string, args: Record<string, unknown>) {
   const supabase = await createClient();
   const { data, error } = await supabase.rpc(fn, args);
-  if (error) throw new Error(error.message);
+  if (error) {
+    // Preserve the Postgres SQLSTATE (42501, P0002, ...) the RPCs raise —
+    // route-helpers.ts maps on it first, before falling back to message text.
+    const wrapped = new Error(error.message) as Error & { code?: string };
+    wrapped.code = error.code;
+    throw wrapped;
+  }
   return data;
 }
 
