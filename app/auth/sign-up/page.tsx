@@ -2,7 +2,7 @@
 
 import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { collabAuth, safeNext } from "@/lib/auth/collab";
+import { CollabAuthError, collabAuth, safeNext } from "@/lib/auth/collab";
 
 // Create a collaboration account: email + password, then confirm ownership of
 // the inbox with the 8-digit code Supabase emails. The account exists after
@@ -30,6 +30,20 @@ function SignUpForm() {
       await collabAuth("signup", { email: email.trim(), password });
       setStep("code");
     } catch (err: any) {
+      // A code was never sent for this one — Supabase won't confirm-email an
+      // address that's already registered. Send them to sign in instead of
+      // leaving them on a code screen waiting for an email that never comes.
+      if (err instanceof CollabAuthError && err.code === "email_taken") {
+        const to = new URL("/auth/sign-in", window.location.origin);
+        to.searchParams.set("next", next);
+        to.searchParams.set("email", email.trim());
+        to.searchParams.set(
+          "error",
+          "An account already exists for that email — sign in instead."
+        );
+        window.location.assign(to.pathname + to.search);
+        return;
+      }
       setError(err.message);
     } finally {
       setBusy(false);

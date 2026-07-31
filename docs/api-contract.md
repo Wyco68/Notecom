@@ -170,7 +170,7 @@ link must be opened in the browser that requested it.
 
 | Endpoint | Method | Body | Response |
 |---|---|---|---|
-| `/api/auth/collab` | POST | `{ action: "signup", email, password }` | `{ ok, factor: "signup" }` — creates the account, emails a confirm code |
+| `/api/auth/collab` | POST | `{ action: "signup", email, password }` | `{ ok, factor: "signup" }` — creates the account, emails a confirm code. `409 { error, code: "email_taken" }` when the email is already registered — Supabase ships zero `identities` on a repeat signup instead of an error, so no code goes out and the client redirects to sign-in rather than leave the reader on a code screen waiting for an email that never comes |
 | `/api/auth/collab` | POST | `{ action: "password", email, password }` | `{ ok, factor: "email" }` — verifies the password (no session), emails a login code; `401` on bad creds |
 | `/api/auth/collab` | POST | `{ action: "verify", email, token, factor }` | `{ ok }` — `verifyOtp` on the 8-digit `token` mints the session (`factor` `"email"`\|`"signup"`); a non-numeric token is rejected |
 | `/api/auth/collab` | POST | `{ action: "reset", email }` | `{ ok, factor: "recovery" }` — emails a recovery **link** pointing at `/auth/callback`; never reveals if the email exists |

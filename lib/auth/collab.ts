@@ -11,6 +11,16 @@ export type CollabAction =
   | "reset"
   | "set-password";
 
+/** Same as Error, plus the route's machine-readable `code` when it sent one —
+ *  `"email_taken"` is the only one a caller currently branches on. */
+export class CollabAuthError extends Error {
+  code?: string;
+  constructor(message: string, code?: string) {
+    super(message);
+    this.code = code;
+  }
+}
+
 export async function collabAuth(
   action: CollabAction,
   payload: Record<string, unknown>
@@ -22,7 +32,7 @@ export async function collabAuth(
   });
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
-    throw new Error(data.error || `request failed (${res.status})`);
+    throw new CollabAuthError(data.error || `request failed (${res.status})`, data.code);
   }
 }
 

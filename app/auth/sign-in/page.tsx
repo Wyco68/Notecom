@@ -19,7 +19,9 @@ function SignInForm() {
   const params = useSearchParams();
   const next = safeNext(params.get("next"));
   const [step, setStep] = useState<"password" | "code">("password");
-  const [email, setEmail] = useState("");
+  // Prefilled when redirected here from sign-up after "an account already
+  // exists for that email" — the reader shouldn't have to retype it.
+  const [email, setEmail] = useState(params.get("email") ?? "");
   const [password, setPassword] = useState("");
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);

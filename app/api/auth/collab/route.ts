@@ -82,10 +82,21 @@ export async function POST(req: NextRequest) {
       if (!email || password.length < 8) {
         return bad("email and a password of at least 8 characters are required");
       }
-      const { error } = await ephemeralClient().auth.signUp({ email, password });
-      // A duplicate email is reported generically so this can't be used to
-      // enumerate who already has an account.
+      const { data, error } = await ephemeralClient().auth.signUp({ email, password });
       if (error) return bad("could not create the account", 400);
+      // Supabase's own anti-enumeration behaviour: signing an email up again
+      // returns 200/no error either way, but ships zero identities when the
+      // account already exists and is confirmed — that's the documented signal
+      // to tell "already registered" apart from "created". Surfacing it here is
+      // a deliberate product choice (an emailed code that will never arrive is
+      // a worse experience than "sign in instead"), not an oversight — anyone
+      // could already learn the same thing by trying to sign in.
+      if (data.user?.identities?.length === 0) {
+        return NextResponse.json(
+          { error: "an account already exists for that email", code: "email_taken" },
+          { status: 409 }
+        );
+      }
       return NextResponse.json({ ok: true, factor: "signup" });
     }
 
