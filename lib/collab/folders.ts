@@ -162,12 +162,24 @@ const INVITATION_SELECT =
   "inviter:profiles!notes_folder_invitations_inviter_id_fkey(username, avatar_url), " +
   "invitee:profiles!notes_folder_invitations_invitee_id_fkey(username, avatar_url)";
 
-/** Pending invitations addressed to the caller. */
+/**
+ * Pending invitations addressed to the caller — the sidebar's accept/decline
+ * inbox. Explicitly filtered to `invitee_id`, not left to the table's SELECT
+ * policy alone: that policy is deliberately broader (invitee, inviter, or a
+ * folder manager may all see a pending row, e.g. so a manager can audit
+ * what's outstanding), which is correct for other readers of this table but
+ * would otherwise show the *inviter* their own sent invitation here too, with
+ * nothing for them to actually accept or decline.
+ */
 export async function myInvitations(): Promise<Invitation[]> {
   const supabase = await createClient();
+  const { data: user } = await supabase.auth.getUser();
+  if (!user.user) return [];
+
   const { data, error } = await supabase
     .from("notes_folder_invitations")
     .select(INVITATION_SELECT)
+    .eq("invitee_id", user.user.id)
     .eq("status", "pending")
     .order("created_at", { ascending: false });
   if (error) throw new Error(error.message);
