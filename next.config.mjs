@@ -12,9 +12,12 @@ const SECURITY_HEADERS = [
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
   // Every browser feature this app doesn't use, switched off so an XSS that
   // slips past CSP still can't reach the camera, mic or location.
+  // (No `interest-cohort` — FLoC shipped and was killed before this app
+  // existed; current browsers don't recognize it as a feature at all and log
+  // a console warning for including it, not an opt-out of anything real.)
   {
     key: "Permissions-Policy",
-    value: "camera=(), microphone=(), geolocation=(), interest-cohort=()",
+    value: "camera=(), microphone=(), geolocation=()",
   },
   // HTTPS is already enforced by the hosting platform; this additionally
   // tells the browser to never even try plain HTTP for this origin again,

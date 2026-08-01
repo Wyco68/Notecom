@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import "./globals.css";
 import { ToastProvider } from "@/components/toast/ToastProvider";
 import { ThemeProvider } from "@/components/theme/ThemeProvider";
@@ -8,11 +9,23 @@ export const metadata: Metadata = {
   description: "Lesson notes vault",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  // Load-bearing, despite nothing below reading the return value: Next.js
+  // only auto-applies middleware.ts's per-request CSP nonce to its OWN
+  // inline hydration/RSC-streaming scripts when a Server Component in the
+  // render tree calls headers() — omit this and every one of those scripts
+  // ships with no nonce and a strict script-src blocks all of them outright.
+  // Removed once already (mistaking dev-mode Turbopack's silence for proof
+  // it was unnecessary) and that broke production: real `next build` output
+  // serves several separate inline scripts, none of which the dev server's
+  // hot-reload path happened to exercise the same way. Don't remove this
+  // again without testing against an actual production build.
+  await headers();
+
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
