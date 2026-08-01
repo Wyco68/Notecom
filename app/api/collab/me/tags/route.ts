@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { myTags, removeMyTag } from "@/lib/collab/folders";
+import { myCreatedTags, myTags, removeMyTag } from "@/lib/collab/folders";
 import { errorResponse, isResponse, requireUser } from "../../route-helpers";
 
 // The caller's own tags. There is no POST: a tag cannot be self-assigned, only
@@ -9,13 +9,20 @@ import { errorResponse, isResponse, requireUser } from "../../route-helpers";
 //
 // DELETE stays, because dropping a tag is always the holder's right, and it
 // revokes every folder that tag was granting in one step.
+//
+// GET also returns `created`: tags the caller has authored in notes_tags'
+// shared vocabulary, separate from `tags` (tags the caller holds). This is
+// what backs "pick from tags you've already created" when adding a tag to a
+// folder — bundled onto this route rather than a new one because it is
+// already the caller-scoped tag endpoint.
 
 export async function GET(req: NextRequest) {
   const user = await requireUser(req);
   if (isResponse(user)) return user;
 
   try {
-    return NextResponse.json({ tags: await myTags() });
+    const [tags, created] = await Promise.all([myTags(), myCreatedTags()]);
+    return NextResponse.json({ tags, created });
   } catch (err: any) {
     return errorResponse(err);
   }

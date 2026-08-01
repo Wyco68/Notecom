@@ -13,6 +13,7 @@ import type {
   Invitation,
   JoinRequest,
   Member,
+  UserTag,
   Visibility,
 } from "@/lib/collab/types";
 
@@ -67,8 +68,11 @@ export default function FolderManagePanel({
   const [followerQuery, setFollowerQuery] = useState("");
   const [followerSearch, setFollowerSearch] = useState("");
   const [inviteRole, setInviteRole] = useState<FolderRole>("viewer");
-  const [tagLabel, setTagLabel] = useState("");
-  const [tagGrantsJoin, setTagGrantsJoin] = useState(false);
+  // Tags placed on a folder are picked from tags the caller has already
+  // created elsewhere (Account settings), not typed fresh here — a folder's
+  // tag list is not where a new tag gets invented.
+  const [createdTags, setCreatedTags] = useState<UserTag[]>([]);
+  const [selectedTag, setSelectedTag] = useState("");
   const [removing, setRemoving] = useState<Member | null>(null);
   const [transferTo, setTransferTo] = useState("");
   // Both destructive actions route through ConfirmModal, so one bit of state
@@ -152,6 +156,15 @@ export default function FolderManagePanel({
       .then((d) => setFollowers(d.people ?? []))
       .catch(() => {});
   }, [followerSearch]);
+
+  // The "add a tag" picker offers tags the caller has already created
+  // (Account settings), never a fresh free-text one.
+  useEffect(() => {
+    fetch("/api/collab/me/tags")
+      .then((r) => (r.ok ? r.json() : { created: [] }))
+      .then((d) => setCreatedTags(d.created ?? []))
+      .catch(() => {});
+  }, []);
 
   async function send(path: string, init: RequestInit, okMessage: string) {
     setBusy(true);
@@ -514,51 +527,50 @@ export default function FolderManagePanel({
 
         {canManage && (
           <p className="mb-4 max-w-prose text-xs leading-relaxed text-gray-500 dark:text-gray-400">
-            A tag marked <span className="text-emerald-600 dark:text-emerald-300">allows joining</span>{" "}
-            opens this folder to everyone carrying the same tag, as a viewer, with no
-            request to approve. Remove the tag to close it again.
+            Every tag on a folder opens it to anyone carrying the same tag, as a viewer,
+            with no request to approve. Remove the tag to close it again.
           </p>
         )}
 
-        {canManage && (
-          <div className="flex flex-wrap items-center gap-2">
-            <input
-              value={tagLabel}
-              onChange={(e) => setTagLabel(e.target.value)}
-              placeholder="e.g. algorithms"
-              className="ui-field ui-field-sm min-w-0 flex-1"
-            />
-            <label className="flex shrink-0 cursor-pointer items-center gap-1.5 text-xs text-gray-600 dark:text-gray-300">
-              <input
-                type="checkbox"
-                checked={tagGrantsJoin}
-                onChange={(e) => setTagGrantsJoin(e.target.checked)}
-                className="ui-focus h-4 w-4 rounded accent-blue-600"
-              />
-              allows joining
-            </label>
-            <button
-              disabled={busy || tagLabel.trim().length < 2}
-              onClick={async () => {
-                const ok = await send(
-                  `${base}/tags`,
-                  {
-                    method: "POST",
-                    body: JSON.stringify({ tag: tagLabel.trim(), grantsJoin: tagGrantsJoin }),
-                  },
-                  "Tag added"
-                );
-                if (ok) {
-                  setTagLabel("");
-                  setTagGrantsJoin(false);
-                }
-              }}
-              className="ui-btn ui-btn-sm ui-btn-primary shrink-0"
-            >
-              Add
-            </button>
-          </div>
-        )}
+        {canManage && (() => {
+          const available = createdTags.filter((ct) => !tags.some((t) => t.slug === ct.slug));
+          return available.length === 0 ? (
+            <Empty>
+              {createdTags.length === 0
+                ? "You haven't created any tags yet — add one from Account settings first."
+                : "Every tag you've created is already on this folder."}
+            </Empty>
+          ) : (
+            <div className="flex flex-wrap items-center gap-2">
+              <select
+                value={selectedTag}
+                onChange={(e) => setSelectedTag(e.target.value)}
+                className="ui-field ui-field-sm min-w-0 flex-1"
+              >
+                <option value="">Choose a tag...</option>
+                {available.map((ct) => (
+                  <option key={ct.slug} value={ct.label}>
+                    {ct.label}
+                  </option>
+                ))}
+              </select>
+              <button
+                disabled={busy || !selectedTag}
+                onClick={async () => {
+                  const ok = await send(
+                    `${base}/tags`,
+                    { method: "POST", body: JSON.stringify({ tag: selectedTag }) },
+                    "Tag added"
+                  );
+                  if (ok) setSelectedTag("");
+                }}
+                className="ui-btn ui-btn-sm ui-btn-primary shrink-0"
+              >
+                Add
+              </button>
+            </div>
+          );
+        })()}
       </Section>
 
       {canManage && (

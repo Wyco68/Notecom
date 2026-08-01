@@ -85,6 +85,11 @@ rollback;
 | 9 | `notes_search_folders` as non-member | never returns a private folder |
 | 9b | `notes_request_join` as non-member on a public folder | returns `requested`, creates **no** membership row |
 | 10 | repeat 1–9 as `role anon` | 0 rows / rejected everywhere |
+| 11 | a caller holding a `grants_join` tag (no `notes_folder_members` row) SELECTs `notes_folders`, calls `notes_search_folders`, calls `notes_my_folders` for a folder carrying only that tag | folder row/summary present in all three; `my_role` is `null` (no explicit role exists) |
+| 12 | same tag-implied caller, after the folder is tombstoned (`deleted = true`) | 0 rows / absent from all three — tag-implied access does not survive a tombstone, unlike an explicit member's view of their own tombstone |
+| 13 | tag-implied caller reads `notes_folder_tags` for that folder, or the `tags`/`join_tags` arrays from `notes_search_folders`/`notes_my_folders` | only the tags they personally hold (a `notes_user_tags` row for that `tag_id`) — never a tag on the folder they don't hold |
+| 14 | the folder's manager (`notes_can_manage_folder`) reads the same, even for a tag they created but don't hold | every tag on their own folder, unconditionally |
+| 15 | an explicit member who is neither the manager nor a holder of a folder's tags | sees the folder itself, but 0 tags in `notes_folder_tags` / empty `tags` arrays |
 
 Then `mcp__supabase__get_advisors` with `type: "security"` and resolve what it
 flags (unindexed foreign keys, RLS gaps, mutable search paths).

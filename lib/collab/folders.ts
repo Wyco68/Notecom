@@ -335,15 +335,12 @@ async function ensureTag(label: string): Promise<number> {
   return created.id;
 }
 
-export async function addFolderTag(
-  folderId: string,
-  label: string,
-  grantsJoin: boolean
-): Promise<void> {
+/** Every folder-tag association grants joining now — there is no toggle. */
+export async function addFolderTag(folderId: string, label: string): Promise<void> {
   const supabase = await createClient();
   const { error } = await supabase
     .from("notes_folder_tags")
-    .upsert({ folder_id: folderId, tag_id: await ensureTag(label), grants_join: grantsJoin });
+    .upsert({ folder_id: folderId, tag_id: await ensureTag(label), grants_join: true });
   if (error) throw new Error(error.message);
 }
 
@@ -381,6 +378,25 @@ export async function myTags(): Promise<UserTag[]> {
     slug: row.notes_tags?.slug ?? "",
     label: row.notes_tags?.label ?? "",
   }));
+}
+
+/**
+ * Tags the caller created, for the "pick from tags you've already created"
+ * flow on FolderManagePanel. notes_tags is a shared vocabulary with a broad
+ * SELECT policy (`true`), so this needs the created_by filter to mean
+ * anything — it is not RLS restricting the result.
+ */
+export async function myCreatedTags(): Promise<UserTag[]> {
+  const supabase = await createClient();
+  const { data: user } = await supabase.auth.getUser();
+  if (!user.user) return [];
+  const { data, error } = await supabase
+    .from("notes_tags")
+    .select("slug, label")
+    .eq("created_by", user.user.id)
+    .order("label");
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((row: any) => ({ slug: row.slug, label: row.label }));
 }
 
 /**

@@ -138,10 +138,16 @@ A follows B  →  B grants tag T to A  →  A accepts  →  A holds T
                                                        (grants_join) is readable by A
 ```
 
-Holding a tag grants read access to every folder carrying that tag with
-`grants_join = true`, with **no join step and no membership row** —
-`notes_is_folder_member()` treats a held tag as implied membership. Two
-consequences that matter:
+Every folder-tag association grants joining: holding a tag grants read access
+to every folder carrying it, with **no join step and no membership row** —
+`notes_is_folder_member()` treats a held tag as implied membership. There used
+to be a per-tag `grants_join` toggle letting an owner attach a tag purely as a
+description, without opening the folder; that distinction is retired as a
+product concept, the same way `discoverable`/`join_policy` were (0012). The
+`notes_folder_tags.grants_join` column survives — dropping it is not worth a
+migration — and `notes_is_folder_member()` still checks it as harmless
+redundancy, but every row reads `true` and the app no longer offers a way to
+write `false`. Two consequences that matter:
 
 - Dropping a tag revokes every folder it was opening, at once. That is the
   point of granting by tag rather than by invitation. Either side can do it:
@@ -157,6 +163,17 @@ folders does ISNE3RD open" would publish exactly the list worth acquiring it
 for. Folder tags stay visible on a folder you can already see; they are simply
 not a way to find one.
 
+**A folder's tag list is itself gated by holding.** Seeing a folder does not
+mean seeing every tag on it: `notes_folder_tags` SELECT (and the equivalent
+filter inside `notes_search_folders()`/`notes_my_folders()`'s lateral joins,
+which are `SECURITY DEFINER` and so don't inherit table RLS) only surfaces a
+tag to someone who holds it (a `notes_user_tags` row for that tag) — with one
+exception: **a folder's manager (`notes_can_manage_folder()`) always sees
+every tag on their own folder**, since `FolderManagePanel`'s tag list is how
+they remove one, and hiding a tag from its own manager would make it
+unmanageable. A tag a viewer doesn't hold is simply absent from what they see
+of that folder, not shown-but-locked.
+
 ## Tables and why each exists
 
 Existing tables are extended in preference to new ones.
@@ -169,7 +186,7 @@ Existing tables are extended in preference to new ones.
 | `notes_folder_roles` | makes roles data instead of code, so the set is extensible |
 | `notes_folder_members` | the membership edge; composite PK `(folder_id, user_id)` |
 | `notes_tags` | normalized free-form tag vocabulary, user-created — deliberately not the hardcoded `categories` table |
-| `notes_folder_tags` | folder↔tag edge, plus the per-tag `grants_join` flag |
+| `notes_folder_tags` | folder↔tag edge. Carries `grants_join`, a retired per-tag toggle nothing reads as `false` any more — every association grants joining (see "Follows, and tags as credentials") |
 | `notes_user_tags` | user↔tag edge — the other half of the match; written only by accepting a grant |
 | `notes_tag_grants` | a tag offered to a follower, `pending` → `accepted` \| `declined` \| `revoked` |
 | `notes_follows` | follow edge, `pending` → `accepted` (or deleted on decline); the gate for tagging and inviting, only once accepted |
@@ -200,13 +217,17 @@ Existing tables are extended in preference to new ones.
 
 ### Tombstones and visibility
 
-`notes_folders`' SELECT policy lets a member see their folders **including
-tombstones** (`deleted = true`), so a client holding an older copy can tell
-"removed" from "never existed". `notes_can_read_folder()` deliberately does
-*not*: it requires `deleted = false`, so documents and membership rows belonging
-to a deleted folder stop being readable the moment the folder is tombstoned.
-That is the intended asymmetry — the folder tombstone alone is enough to
-propagate the delete, and a cascade removes the rest locally.
+`notes_folders`' SELECT policy is
+`notes_folder_role(id) IS NOT NULL OR notes_can_read_folder(id)`: an explicit
+member sees their folders **including tombstones** (`deleted = true`), via the
+first clause, so a client holding an older copy can tell "removed" from
+"never existed". `notes_can_read_folder()` deliberately does *not* include
+tombstones — it requires `deleted = false` — so documents and membership rows
+belonging to a deleted folder stop being readable the moment the folder is
+tombstoned, and so does tag-implied access: a tombstoned folder stops granting
+entry to its tag holders rather than continuing to. That is the intended
+asymmetry — the folder tombstone alone is enough to propagate the delete for
+everyone but an explicit member, and a cascade removes the rest locally.
 
 ## Helper functions and RPCs
 

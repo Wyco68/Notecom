@@ -9,10 +9,11 @@ import {
   requireUser,
 } from "../../../route-helpers";
 
-// Folder tags. grantsJoin is the per-tag access grant: with it set, anyone who
-// found the folder through that tag may join without approval. It is a
-// property of the folder-tag edge, not of the tag, so the same tag can open
-// one folder and merely describe another.
+// Folder tags. Every tag placed on a folder grants joining now — anyone who
+// holds it gets tag-implied viewer access to the folder, with no join step
+// and no approval. grants_join survives as a column (see the
+// notes_tag_implied_folder_access migration) but the app no longer offers a
+// way to set it false, so addFolderTag always writes true.
 
 export async function GET(req: NextRequest, ctx: { params: Promise<{ slug: string }> }) {
   const user = await requireUser(req);
@@ -36,14 +37,14 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ slug: stri
     const { slug } = await ctx.params;
     const body = await readJSON(req);
     if (isResponse(body)) return body;
-    const { tag, grantsJoin, owner } = body;
+    const { tag, owner } = body;
     if (!tag || typeof tag !== "string" || tag.length > MAX_SHORT_TEXT_LENGTH) {
       return NextResponse.json({ error: "tag required" }, { status: 400 });
     }
     const folder = await requireFolder(slug, owner);
     if (isResponse(folder)) return folder;
 
-    await addFolderTag(folder.id, tag, !!grantsJoin);
+    await addFolderTag(folder.id, tag);
     return NextResponse.json({ ok: true });
   } catch (err: any) {
     return errorResponse(err);
