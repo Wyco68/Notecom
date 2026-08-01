@@ -15,7 +15,14 @@ import { reindexStale } from "@/lib/vault/store";
 // can actually differ.
 export async function GET() {
   try {
-    return NextResponse.json(await listFolders());
+    const res = NextResponse.json(await listFolders());
+    // Per-user (RLS-scoped) data — `private` keeps it out of any shared/CDN
+    // cache. The focus/visibility auto-check is the caller that actually
+    // benefits: it opts into reusing a near-fresh response instead of forcing
+    // a Supabase round trip on every alt-tab (see AppShell.tsx's
+    // `refreshFolderNames`); every other caller still asks for `no-store`.
+    res.headers.set("Cache-Control", "private, max-age=0, stale-while-revalidate=20");
+    return res;
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 502 });
   }

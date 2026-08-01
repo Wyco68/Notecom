@@ -161,33 +161,47 @@ export default function GenerateJobsProvider({ children }: { children: React.Rea
   // A reload drops the SSE reader but not the run behind it. Ask what is still
   // going and re-attach, so a refresh mid-generation doesn't orphan a job the
   // user can no longer see.
+  //
+  // This provider mounts above AppShell, so its own mount coincides with the
+  // tree/tags/auth requests that draw the first screen. A job is running only
+  // rarely, so this check loses nothing by waiting for the browser to be idle
+  // first rather than competing with the requests the reader is actually
+  // looking at — `requestIdleCallback` falls back to a same-tick `setTimeout`
+  // where it doesn't exist (Safari).
   useEffect(() => {
     let cancelled = false;
-    fetch("/api/generate")
-      .then((r) => (r.ok ? r.json() : { jobs: [] }))
-      .then((data) => {
-        if (cancelled) return;
-        const running = (data.jobs ?? []).filter((j: any) => j.status === "running");
-        if (!running.length) return;
-        setJobs(
-          running.map((j: any) => ({
-            id: j.id,
-            folder: j.folder,
-            kind: j.kind,
-            status: "running" as JobStatus,
-            // The tail replays the whole log from the beginning, so starting
-            // empty is correct — it fills in immediately.
-            log: [],
-            tokens: j.tokens ?? { input: 0, output: 0 },
-            startedAt: j.startedAt ?? Date.now(),
-            lastActivity: Date.now(),
-          }))
-        );
-        for (const j of running) follow(j.id);
-      })
-      .catch(() => {});
+    const recover = () => {
+      if (cancelled) return;
+      fetch("/api/generate")
+        .then((r) => (r.ok ? r.json() : { jobs: [] }))
+        .then((data) => {
+          if (cancelled) return;
+          const running = (data.jobs ?? []).filter((j: any) => j.status === "running");
+          if (!running.length) return;
+          setJobs(
+            running.map((j: any) => ({
+              id: j.id,
+              folder: j.folder,
+              kind: j.kind,
+              status: "running" as JobStatus,
+              // The tail replays the whole log from the beginning, so starting
+              // empty is correct — it fills in immediately.
+              log: [],
+              tokens: j.tokens ?? { input: 0, output: 0 },
+              startedAt: j.startedAt ?? Date.now(),
+              lastActivity: Date.now(),
+            }))
+          );
+          for (const j of running) follow(j.id);
+        })
+        .catch(() => {});
+    };
+    const idle = window.requestIdleCallback ?? ((fn: () => void) => setTimeout(fn, 0));
+    const cancelIdle = window.cancelIdleCallback ?? clearTimeout;
+    const handle = idle(recover);
     return () => {
       cancelled = true;
+      cancelIdle(handle);
     };
   }, [follow]);
 
