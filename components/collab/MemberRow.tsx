@@ -1,6 +1,7 @@
 "use client";
 
 import TrashIcon from "@/components/icons/TrashIcon";
+import Avatar from "./Avatar";
 import RoleBadge from "./RoleBadge";
 import type { FolderRole, Member } from "@/lib/collab/types";
 
@@ -25,9 +26,7 @@ export default function MemberRow({
 
   return (
     <div className="group flex items-center gap-3 rounded px-2 py-2 transition-colors duration-150 ease-out hover:bg-black/[0.04] dark:hover:bg-white/[0.06]">
-      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-black/[0.06] text-xs font-medium text-gray-600 dark:bg-white/10 dark:text-gray-300">
-        {member.username.slice(0, 2).toUpperCase()}
-      </div>
+      <Avatar username={member.username} avatarUrl={member.avatarUrl} />
       <div className="min-w-0 flex-1">
         <div className="truncate text-sm text-gray-900 dark:text-gray-100">
           {member.username}

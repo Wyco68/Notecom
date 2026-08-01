@@ -51,6 +51,10 @@ The bucket is private, so a stored path is not a usable `src`: reads go through 
 short-lived signed URL minted with the caller's own JWT (`lib/collab/avatar.ts`).
 Storage policies confine writes to a `{auth.uid()}/…` prefix and allow reads to
 any authenticated user, which is what lets one person see another's avatar.
+`resolveAvatarUrl` signs one path; every list that shows more than one person
+(members, follows, follow requests, invitations, tag grants, folder search)
+uses the batch form, `resolveAvatarUrls` — one `createSignedUrls` call per
+function, not one per row.
 
 Note that `lib/auth/*` and `/api/auth` are the **Claude Code CLI's** sign-in and
 have nothing to do with user accounts. Don't extend them for user auth.
@@ -108,11 +112,23 @@ Invitations are `notes_folder_invitations` rows
 
 ## Follows, and tags as credentials
 
-Following is a **one-sided** edge (`notes_follows`) needing no approval. Its only
-power is permissive in one direction: following someone lets *them* offer you a
-tag or invite you to a folder. Both `notes_grant_tag()` and
-`notes_invite_member()` refuse unless the target follows the caller, which is
-what keeps strangers from tagging or inviting anyone they like.
+Following (`notes_follows`) is **one-sided in direction but requires the other
+side's consent**: it starts `pending` when the follower requests it, and only
+counts once the followee accepts (`notes_respond_follow()`) — declining deletes
+the request outright. `notes_follows_me()`, the predicate both
+`notes_grant_tag()` and `notes_invite_member()` check, only sees `accepted`
+rows, so a pending request grants nothing. Its only power, once accepted, is
+permissive in one direction: following someone lets *them* offer you a tag or
+invite you to a folder — never the reverse, and never before they say yes. This
+is what keeps strangers from tagging or inviting anyone they like, and now also
+what keeps them from being followed by anyone they'd rather not be.
+
+Existing rows created before this model shipped were backfilled to `accepted`
+— the access they already granted was not retroactively revoked. `GET
+/api/collab/me/follows` (both directions) only ever returns `accepted` edges;
+incoming pending requests are a separate list, `GET
+/api/collab/me/follow-requests`, surfaced in the sidebar next to invitations
+and tag offers so they don't get buried in a searchable list.
 
 A tag is therefore **a claim someone else makes about you**, never self-assigned:
 
@@ -156,7 +172,7 @@ Existing tables are extended in preference to new ones.
 | `notes_folder_tags` | folder↔tag edge, plus the per-tag `grants_join` flag |
 | `notes_user_tags` | user↔tag edge — the other half of the match; written only by accepting a grant |
 | `notes_tag_grants` | a tag offered to a follower, `pending` → `accepted` \| `declined` \| `revoked` |
-| `notes_follows` | one-sided follow edge; the gate for tagging and inviting |
+| `notes_follows` | follow edge, `pending` → `accepted` (or deleted on decline); the gate for tagging and inviting, only once accepted |
 | `notes_folder_invitations` | owner → user direction |
 | `notes_folder_join_requests` | user → owner direction |
 
@@ -201,7 +217,7 @@ Predicates used by policies (`STABLE SECURITY DEFINER`):
 | `notes_folder_role(folder)` | returns the caller's role text, or NULL |
 | `notes_is_folder_member(folder)` | member row ∨ holds a `grants_join` tag the folder carries — **the gate on files** |
 | `notes_can_read_folder(folder)` | owner ∨ member ∨ tag-implied ∨ `visibility = 'public'` — folder metadata only, and the only axis discovery consults |
-| `notes_follows_me(user)` | that user follows the caller |
+| `notes_follows_me(user)` | that user follows the caller with an **accepted** `notes_follows` row — a pending request doesn't count |
 | `notes_can_write_folder(folder)` | the caller's role has `can_write` |
 | `notes_can_manage_folder(folder)` | the caller's role has `can_manage` |
 
@@ -213,6 +229,7 @@ Action RPCs — the only writers of `notes_folder_members`:
 `notes_respond_join_request(request, approve)`,
 `notes_grant_tag(username, label)` *(requires the grantee follows the caller)*,
 `notes_respond_tag_grant(grant, accept)`,
+`notes_respond_follow(follower, accept)` *(caller must be the followee on a `pending` row; decline deletes it)*,
 `notes_set_member_role(folder, user, role)`,
 `notes_remove_member(folder, user)`,
 `notes_leave_folder(folder)`,
@@ -233,7 +250,7 @@ Invite-by-username resolves `profiles.username` inside the function, so the
 | Supabase client factories | `lib/supabase/server.ts`, `lib/supabase/client.ts` — anon key only, no business logic |
 | Collaboration data layer | `lib/collab/*.ts` — typed wrappers over the RPCs |
 | HTTP surface | `app/api/collab/**` — see [api-contract.md](api-contract.md) |
-| UI | `components/collab/` — `DiscoverPanel` and `FolderManagePanel` render in the workspace's content column (AppShell) and as the standalone `app/discover/`, `app/vault/[folder]/manage/` routes a deep link lands on |
+| UI | `components/collab/` — `DiscoverPanel`, `PeoplePanel` and `FolderManagePanel` render in the workspace's content column (AppShell) and as the standalone `app/discover/`, `app/people/`, `app/vault/[folder]/manage/` routes a deep link lands on. `InvitationsInbox`, `FollowRequestsInbox` and `TagGrantsInbox` are the sidebar notification stack — each renders nothing when empty |
 
 Content persistence (`lib/vault/store.ts`) runs on the same user-scoped client
 and holds no permission logic of its own — same rule as slugs and sequences:

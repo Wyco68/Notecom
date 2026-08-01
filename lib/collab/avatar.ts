@@ -63,3 +63,44 @@ export async function resolveAvatarUrl(
     return null;
   }
 }
+
+/**
+ * The same resolution, batched for a list of rows. Dedupes the stored paths,
+ * passes absolute URLs through without a storage call, and signs the rest in
+ * one `createSignedUrls` round trip — a list of N people costs one call, not
+ * N. Returned map is keyed by the original stored path, so a caller looks up
+ * each row by whatever `avatar_url` it read. Never throws: a signing failure
+ * resolves those paths to null rather than failing the whole list.
+ */
+export async function resolveAvatarUrls(
+  supabase: SupabaseClient,
+  storedPaths: (string | null | undefined)[]
+): Promise<Map<string, string | null>> {
+  const result = new Map<string, string | null>();
+  const toSign = new Set<string>();
+
+  for (const stored of storedPaths) {
+    if (!stored || result.has(stored) || toSign.has(stored)) continue;
+    if (isAbsolute(stored)) result.set(stored, stored);
+    else toSign.add(stored);
+  }
+  if (!toSign.size) return result;
+
+  try {
+    const { data, error } = await supabase.storage
+      .from(AVATAR_BUCKET)
+      .createSignedUrls(Array.from(toSign), SIGNED_URL_TTL_SECONDS);
+    if (error || !data) {
+      for (const path of toSign) result.set(path, null);
+      return result;
+    }
+    for (const entry of data) {
+      if (entry.path) result.set(entry.path, entry.error ? null : entry.signedUrl);
+    }
+    // Storage may omit a path it couldn't resolve at all; fill any gap null.
+    for (const path of toSign) if (!result.has(path)) result.set(path, null);
+  } catch {
+    for (const path of toSign) result.set(path, null);
+  }
+  return result;
+}

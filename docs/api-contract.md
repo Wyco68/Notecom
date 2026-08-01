@@ -63,13 +63,14 @@ the boundary. Model: [collaboration.md](collaboration.md).
 
 | Route | Method | Body/params | Response |
 |---|---|---|---|
-| `/api/collab/discover` | GET | `?q&limit&offset` | `{ folders: [...] }` — `notes_search_folders`; returns public folders plus the caller's own, never a private one they don't belong to. **No tag filter**: tags are access grants, so looking up what a tag opens is not offered |
+| `/api/collab/discover` | GET | `?q&limit&offset` | `{ folders: [...] }` — `notes_search_folders`; returns public folders plus the caller's own, never a private one they don't belong to. **No tag filter**: tags are access grants, so looking up what a tag opens is not offered. Search-only: a missing/empty `q` returns `{ folders: [] }` without querying — there is no unfiltered browse-all |
 | `/api/collab/my-folders` | GET | — | `{ folders: [...] }` — the caller's own folders with tags/role, used to group the sidebar |
 | `/api/collab/me/profile` | GET·POST | `{ username }` | `{ profile }` / `{ ok }` — GET adds `avatarUrl` (a signed URL, not the stored path), `usernameChangeableAt` and `usernameCooldownDays`. POST takes the username only: the rename cooldown is a trigger on `profiles`, so an early attempt comes back 400 with the database's message. Email, password and the photo are **not** changed here — those go through `/auth/reset` and `me/avatar` |
 | `/api/collab/me/avatar` | POST·DELETE | multipart `file` | `{ avatarUrl }` / `{ ok }` — uploads to the `profile-avatars` bucket at `{user_id}/avatar.{jpg\|png\|webp}` (JPEG/PNG/WebP, ≤2 MB) and stores that path on the profile. Storage RLS pins the object to the caller's own prefix; the checks in the handler only fail fast with a readable message |
 | `/api/collab/me/tags` | GET·DELETE | `?tag` | `{ tags }` / `{ ok }` — **no POST**: a tag cannot be self-assigned, only accepted from a grant |
 | `/api/collab/me/grants` | GET·POST·DELETE | `{ username, tag }` / `{ grantId, accept }` / `?username&tag` | GET returns `{ grants, given }`; POST offers a tag to a follower or answers an offer; DELETE revokes a tag you gave, closing every folder it opened |
-| `/api/collab/me/follows` | GET·POST·DELETE | `?direction=following\|followers&q&limit&offset` / `{ username }` / `?userId&direction` | GET returns one paged, searchable direction as `{ direction, people, total }` — never the whole graph. Following someone lets **them** tag or invite you |
+| `/api/collab/me/follows` | GET·POST·DELETE | `?direction=following\|followers&q&limit&offset` / `{ username }` / `?userId&direction` | GET returns one paged, searchable direction as `{ direction, people, total }` — **accepted edges only**, never the whole graph and never a pending one. POST sends a follow **request** (no immediate edge — see "Following requires acceptance" below); following someone lets **them** tag or invite you, but only once they accept |
+| `/api/collab/me/follow-requests` | GET·POST | — / `{ followerId, accept }` | `{ requests: [{ followerId, username, avatarUrl, createdAt }] }` / `{ ok }` — GET is the caller's *incoming* pending follow requests; POST answers one via `notes_respond_follow`. Accept turns it into a real (accepted) follow edge, decline deletes the request outright |
 | `/api/collab/folders/[slug]` | GET | — | `{ folder, role, members, memberTotal, tags }` — `members` is the first page of 10; 404 when RLS hides it |
 | `/api/collab/folders/[slug]/settings` | POST | `{ visibility?, description? }` | `{ ok }` — manage-level; written once by the console's "Save changes", not per keystroke. `discoverable`/`joinPolicy` are retired and rejected as unknown fields |
 | `/api/collab/folders/[slug]/tags` | POST | `{ tag, grantsJoin }` | `{ ok }` |
@@ -87,9 +88,28 @@ the boundary. Model: [collaboration.md](collaboration.md).
 | `/api/collab/invitations` | POST | `{ invitationId, accept }` | `{ ok }` |
 
 `middleware.ts` holds two gates. **Sign-in is required for everything** it
-matches — `/api/*`, `/vault/*`, `/discover`, `/account` — with `/api/auth/*`
-exempt because that is how a session is obtained; a signed-out page request
-redirects to `/auth/sign-in?next=…` and an API request gets 401. An install with
+matches — `/api/*`, `/vault/*`, `/discover`, `/people`, `/account` — with
+`/api/auth/*` exempt because that is how a session is obtained; a signed-out
+page request redirects to `/auth/sign-in?next=…` and an API request gets 401.
+
+The same middleware also rate-limits everything it matches: 10 requests/10min
+per IP on `/api/auth/*`, 5/hour per user on `POST /api/generate`, 60/min per
+identity on everything else — a 429 with a `Retry-After` header past the
+limit. In-memory per Edge isolate, not a distributed guarantee (see the
+comment above `rateLimit()` in `middleware.ts`).
+
+`middleware.ts` also generates a fresh Content-Security-Policy nonce per
+request and sets it as the response's `Content-Security-Policy` header
+(`script-src 'self' 'nonce-…'`, scoped `img-src`/`connect-src` to the app's own
+Supabase project origin, `object-src 'none'`, `frame-ancestors 'none'`). The
+nonce is why this needs middleware rather than a static header in
+`next.config.mjs` (which still carries the request-invariant headers —
+HSTS, X-Frame-Options, X-Content-Type-Options, Referrer-Policy,
+Permissions-Policy): Next's own App Router injects inline hydration scripts
+on every page, and a static `script-src` with no nonce would silently block
+them.
+
+An install with
 no Supabase configured fails the gate rather than skipping it — Supabase is the
 store, so there is nothing to show a signed-out visitor either way.
 

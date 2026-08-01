@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import FolderCard from "@/components/collab/FolderCard";
 import SearchIcon from "@/components/icons/SearchIcon";
 import { SkeletonCard } from "@/components/layout/Skeleton";
@@ -23,18 +23,20 @@ export default function DiscoverPanel({
   onJoined?: () => void;
 }) {
   const [q, setQ] = useState("");
+  // The submitted term — empty string means "never searched" as well as "just
+  // cleared", and both show nothing. This is a search box, not a directory:
+  // there is deliberately no browse-all default.
+  const [submitted, setSubmitted] = useState("");
   const [folders, setFolders] = useState<FolderSummary[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [needsAuth, setNeedsAuth] = useState(false);
 
-  const search = useCallback(async () => {
+  const runSearch = useCallback(async (term: string) => {
     setLoading(true);
     setError(null);
     try {
-      const params = new URLSearchParams();
-      if (q.trim()) params.set("q", q.trim());
-      const res = await fetch(`/api/collab/discover?${params}`);
+      const res = await fetch(`/api/collab/discover?q=${encodeURIComponent(term)}`);
       if (res.status === 401) {
         setNeedsAuth(true);
         setFolders([]);
@@ -50,13 +52,17 @@ export default function DiscoverPanel({
     } finally {
       setLoading(false);
     }
-  }, [q]);
+  }, []);
 
-  // Debounced so typing doesn't fire a query per keystroke.
-  useEffect(() => {
-    const t = setTimeout(search, 250);
-    return () => clearTimeout(t);
-  }, [search]);
+  const submit = useCallback(() => {
+    const term = q.trim();
+    setSubmitted(term);
+    if (!term) {
+      setFolders([]);
+      return;
+    }
+    runSearch(term);
+  }, [q, runSearch]);
 
   return (
     <div className="mx-auto max-w-5xl p-4 sm:p-8">
@@ -89,7 +95,8 @@ export default function DiscoverPanel({
           autoFocus
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="Search by name, description or owner"
+          onKeyDown={(e) => e.key === "Enter" && submit()}
+          placeholder="Search by name, description or owner — press Enter"
           className="ui-field py-2.5 pl-10 pr-3"
         />
       </div>
@@ -113,9 +120,13 @@ export default function DiscoverPanel({
             <SkeletonCard key={i} lines={2} />
           ))}
         </div>
+      ) : !submitted ? (
+        <p className="py-16 text-center text-sm text-gray-500 dark:text-gray-400">
+          Search for a folder by name, description or owner.
+        </p>
       ) : folders.length === 0 ? (
         <p className="py-16 text-center text-sm text-gray-500 dark:text-gray-400">
-          No folders match.
+          No folders match &quot;{submitted}&quot;.
         </p>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2">
@@ -124,7 +135,7 @@ export default function DiscoverPanel({
               key={f.id}
               folder={f}
               onJoined={() => {
-                search();
+                runSearch(submitted);
                 onJoined?.();
               }}
             />

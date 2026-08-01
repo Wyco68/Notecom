@@ -11,13 +11,18 @@ import { errorResponse, isResponse, requireUser } from "../route-helpers";
 // open" would publish the list of folders worth acquiring it for.
 
 export async function GET(req: NextRequest) {
-  const user = await requireUser();
+  const user = await requireUser(req);
   if (isResponse(user)) return user;
 
   try {
     const params = req.nextUrl.searchParams;
+    const q = params.get("q")?.trim();
+    // This is a search box, not a directory: an empty query returns nothing
+    // rather than every public folder, so there is no unfiltered browse-all.
+    if (!q) return NextResponse.json({ folders: [] });
+
     const folders = await searchFolders(
-      params.get("q") ?? undefined,
+      q,
       Number(params.get("limit") ?? 20),
       Number(params.get("offset") ?? 0)
     );

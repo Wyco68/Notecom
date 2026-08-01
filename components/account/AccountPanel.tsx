@@ -32,7 +32,14 @@ interface Profile {
   usernameCooldownDays: number;
 }
 
-export default function AccountPanel({ onClose }: { onClose?: () => void }) {
+export default function AccountPanel({
+  onClose,
+  onOpenPeople,
+}: {
+  onClose?: () => void;
+  /** Opens the People panel in the content column; falls back to `/people`. */
+  onOpenPeople?: () => void;
+}) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [tags, setTags] = useState<UserTag[]>([]);
   const [username, setUsername] = useState("");
@@ -41,6 +48,7 @@ export default function AccountPanel({ onClose }: { onClose?: () => void }) {
   const [followRevision, setFollowRevision] = useState(0);
   const [grantCandidates, setGrantCandidates] = useState<FollowEdge[]>([]);
   const [grantQuery, setGrantQuery] = useState("");
+  const [grantSearch, setGrantSearch] = useState("");
   const [followName, setFollowName] = useState("");
   const [grantTo, setGrantTo] = useState("");
   const [grantTag, setGrantTag] = useState("");
@@ -105,13 +113,6 @@ export default function AccountPanel({ onClose }: { onClose?: () => void }) {
     if (ok) setFollowName("");
   }
 
-  const doUnfollow = (userId: string, direction: "following" | "followers") =>
-    act(
-      `/api/collab/me/follows?userId=${encodeURIComponent(userId)}&direction=${direction}`,
-      { method: "DELETE" },
-      direction === "following" ? "Unfollowed" : "Follower removed"
-    );
-
   const doRevoke = (username: string, slug: string) =>
     act(
       `/api/collab/me/grants?username=${encodeURIComponent(username)}&tag=${encodeURIComponent(slug)}`,
@@ -133,18 +134,16 @@ export default function AccountPanel({ onClose }: { onClose?: () => void }) {
   }, [load]);
 
   // The tag picker offers a page of followers, searchable — the same rule the
-  // lists below follow: never fetch an unbounded people list.
+  // lists below follow: never fetch an unbounded people list. Fires on mount,
+  // after a follow/unfollow, and on a submitted search — never per keystroke.
   useEffect(() => {
-    const t = setTimeout(() => {
-      const params = new URLSearchParams({ direction: "followers", limit: String(PAGE) });
-      if (grantQuery.trim()) params.set("q", grantQuery.trim());
-      fetch(`/api/collab/me/follows?${params}`)
-        .then((r) => (r.ok ? r.json() : { people: [] }))
-        .then((d) => setGrantCandidates(d.people ?? []))
-        .catch(() => {});
-    }, 250);
-    return () => clearTimeout(t);
-  }, [grantQuery, followRevision]);
+    const params = new URLSearchParams({ direction: "followers", limit: String(PAGE) });
+    if (grantSearch) params.set("q", grantSearch);
+    fetch(`/api/collab/me/follows?${params}`)
+      .then((r) => (r.ok ? r.json() : { people: [] }))
+      .then((d) => setGrantCandidates(d.people ?? []))
+      .catch(() => {});
+  }, [grantSearch, followRevision]);
 
   const saveUsername = () =>
     act(
@@ -293,8 +292,9 @@ export default function AccountPanel({ onClose }: { onClose?: () => void }) {
 
       <Section title="Following" index={3}>
         <p className="mb-4 max-w-prose text-xs leading-relaxed text-gray-500 dark:text-gray-400">
-          Following someone lets them offer you tags and invite you to folders. It is
-          one-sided and needs no approval.
+          Following someone lets them offer you tags and invite you to folders — but
+          only once they accept your follow. Answer requests you receive from the
+          sidebar.
         </p>
         <div className="mb-4 flex gap-2">
           <input
@@ -312,22 +312,15 @@ export default function AccountPanel({ onClose }: { onClose?: () => void }) {
             Follow
           </button>
         </div>
-        <PeopleList
-          label="You follow"
-          direction="following"
-          revision={followRevision}
-          emptyText="Not following anyone."
-          actionLabel="Unfollow"
-          onAction={(id) => doUnfollow(id, "following")}
-        />
-        <PeopleList
-          label="Follows you"
-          direction="followers"
-          revision={followRevision}
-          emptyText="No followers yet."
-          actionLabel="Remove"
-          onAction={(id) => doUnfollow(id, "followers")}
-        />
+        {onOpenPeople ? (
+          <button onClick={onOpenPeople} className="ui-btn ui-btn-sm ui-btn-secondary">
+            Search people you follow
+          </button>
+        ) : (
+          <a href="/people" className="ui-btn ui-btn-sm ui-btn-secondary inline-flex">
+            Search people you follow
+          </a>
+        )}
       </Section>
 
       <Section title="Give a tag" index={4}>
@@ -338,12 +331,13 @@ export default function AccountPanel({ onClose }: { onClose?: () => void }) {
         <input
           value={grantQuery}
           onChange={(e) => setGrantQuery(e.target.value)}
-          placeholder="Search your followers"
+          onKeyDown={(e) => e.key === "Enter" && setGrantSearch(grantQuery.trim())}
+          placeholder="Search your followers — press Enter"
           className="ui-field ui-field-sm mb-2"
         />
         {grantCandidates.length === 0 ? (
           <p className="text-sm text-gray-500 dark:text-gray-400">
-            {grantQuery.trim()
+            {grantSearch
               ? "No follower matches."
               : "Nobody follows you yet, so there is no one to tag."}
           </p>
@@ -413,7 +407,8 @@ export default function AccountPanel({ onClose }: { onClose?: () => void }) {
 
       <Section title="Notifications" index={6}>
         <p className="text-sm text-gray-500 dark:text-gray-400">
-          Not available yet. Invitations and folder suggestions appear in the sidebar.
+          Follow requests, folder invitations and tag offers appear at the top of
+          the sidebar as soon as they arrive — there is no separate inbox to check.
         </p>
       </Section>
     </div>
@@ -544,115 +539,6 @@ function AvatarField({
   );
 }
 
-/**
- * One side of the follow graph, a page at a time. It owns its own query and
- * offset so a long list never arrives in one response, and re-reads whenever
- * `revision` changes (i.e. after a follow or unfollow elsewhere on the page).
- */
-function PeopleList({
-  label,
-  direction,
-  revision,
-  emptyText,
-  actionLabel,
-  onAction,
-}: {
-  label: string;
-  direction: "following" | "followers";
-  revision: number;
-  emptyText: string;
-  actionLabel: string;
-  onAction: (userId: string) => void;
-}) {
-  const [people, setPeople] = useState<FollowEdge[]>([]);
-  const [total, setTotal] = useState(0);
-  const [query, setQuery] = useState("");
-  const [offset, setOffset] = useState(0);
-
-  useEffect(() => {
-    const t = setTimeout(() => {
-      const params = new URLSearchParams({
-        direction,
-        limit: String(PAGE),
-        offset: String(offset),
-      });
-      if (query.trim()) params.set("q", query.trim());
-      fetch(`/api/collab/me/follows?${params}`)
-        .then((r) => (r.ok ? r.json() : { people: [], total: 0 }))
-        .then((d) => {
-          setPeople(d.people ?? []);
-          setTotal(d.total ?? 0);
-        })
-        .catch(() => {});
-    }, 250);
-    return () => clearTimeout(t);
-  }, [direction, query, offset, revision]);
-
-  return (
-    <div className="mt-5">
-      <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
-        {label} ({total})
-      </p>
-      {total > PAGE && (
-        <input
-          value={query}
-          onChange={(e) => {
-            setQuery(e.target.value);
-            setOffset(0);
-          }}
-          placeholder="Search by username"
-          className="ui-field ui-field-sm mb-2"
-        />
-      )}
-      {people.length === 0 ? (
-        <p className="text-sm text-gray-500 dark:text-gray-400">
-          {query.trim() ? "Nobody matches." : emptyText}
-        </p>
-      ) : (
-        <ul className="-mx-1.5">
-          {people.map((p, i) => (
-            <li
-              key={p.userId}
-              style={{ animationDelay: `${Math.min(i, 6) * 25}ms` }}
-              className="ui-rise ui-row group flex items-center justify-between gap-2 px-1.5 py-1"
-            >
-              <span className="truncate text-sm text-gray-700 dark:text-gray-200">
-                {p.username}
-              </span>
-              <button
-                onClick={() => onAction(p.userId)}
-                className="ui-btn ui-btn-xs ui-reveal shrink-0 font-normal text-gray-500 hover:bg-red-500/10 hover:text-red-600 dark:hover:text-red-400"
-              >
-                {actionLabel}
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-      {total > PAGE && (
-        <div className="mt-3 flex items-center gap-2 text-xs tabular-nums text-gray-500 dark:text-gray-400">
-          <button
-            disabled={offset === 0}
-            onClick={() => setOffset(Math.max(0, offset - PAGE))}
-            className="ui-btn ui-btn-xs ui-btn-secondary font-normal"
-          >
-            Previous
-          </button>
-          <span>
-            {offset + 1}–{Math.min(offset + PAGE, total)} of {total}
-          </span>
-          <button
-            disabled={offset + PAGE >= total}
-            onClick={() => setOffset(offset + PAGE)}
-            className="ui-btn ui-btn-xs ui-btn-secondary font-normal"
-          >
-            Next
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
 
 /** A settings card. `index` staggers its entrance so the page assembles. */
 function Section({

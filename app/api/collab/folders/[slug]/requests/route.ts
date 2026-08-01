@@ -1,13 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { listJoinRequests, respondJoinRequest } from "@/lib/collab/folders";
-import { errorResponse, isResponse, requireFolder, requireUser } from "../../../route-helpers";
+import {
+  errorResponse,
+  isResponse,
+  readJSON,
+  requireFolder,
+  requireUser,
+} from "../../../route-helpers";
 
 // Pending join requests for one folder, and the owner's decision on them.
 // Both directions are manager-only, enforced by the select policy and by
 // notes_respond_join_request respectively.
 
 export async function GET(req: NextRequest, ctx: { params: Promise<{ slug: string }> }) {
-  const user = await requireUser();
+  const user = await requireUser(req);
   if (isResponse(user)) return user;
 
   try {
@@ -21,12 +27,14 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ slug: strin
 }
 
 export async function POST(req: NextRequest, ctx: { params: Promise<{ slug: string }> }) {
-  const user = await requireUser();
+  const user = await requireUser(req);
   if (isResponse(user)) return user;
 
   try {
     await ctx.params;
-    const { requestId, approve } = await req.json();
+    const body = await readJSON(req);
+    if (isResponse(body)) return body;
+    const { requestId, approve } = body;
     if (!requestId || typeof requestId !== "string") {
       return NextResponse.json({ error: "requestId required" }, { status: 400 });
     }

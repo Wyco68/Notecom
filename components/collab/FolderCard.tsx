@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useToast } from "@/components/toast/ToastProvider";
+import Avatar from "./Avatar";
 import RoleBadge from "./RoleBadge";
 import TagChip from "./TagChip";
 import type { FolderSummary } from "@/lib/collab/types";
@@ -48,7 +49,8 @@ export default function FolderCard({
         <RoleBadge role={folder.myRole} />
       </div>
 
-      <p className="mb-3 text-xs text-gray-500 dark:text-gray-400">
+      <p className="mb-3 flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
+        <Avatar username={folder.ownerUsername} avatarUrl={folder.ownerAvatar} size={5} />
         by {folder.ownerUsername} · {folder.documentCount} notes · {folder.memberCount} members
         {folder.visibility === "private" && " · private"}
       </p>

@@ -45,19 +45,21 @@ export interface TagGrant {
   slug: string;
   label: string;
   granterUsername: string;
+  granterAvatarUrl: string | null;
   createdAt: string;
 }
 
 /** A tag the caller has given someone, and can take back. */
 export interface GrantedTag {
   username: string;
+  avatarUrl: string | null;
   slug: string;
   label: string;
   grantedAt: string;
 }
 
 /**
- * One direction of a follow. Following is one-sided and needs no approval; its
+ * One direction of a follow edge that has been accepted by both sides. Its
  * only power is that it lets the followee tag or invite the follower.
  */
 export interface FollowEdge {
@@ -65,6 +67,18 @@ export interface FollowEdge {
   username: string;
   avatarUrl: string | null;
   since: string;
+}
+
+/**
+ * An incoming follow request, still awaiting the caller's answer as the
+ * followee. Answered through `respondFollow` — accepting turns it into a
+ * `FollowEdge`, declining deletes it outright.
+ */
+export interface FollowRequest {
+  followerId: string;
+  username: string;
+  avatarUrl: string | null;
+  createdAt: string;
 }
 
 export interface Member {
@@ -83,7 +97,9 @@ export interface Invitation {
   role: FolderRole;
   status: "pending" | "accepted" | "declined" | "revoked";
   inviterUsername: string;
+  inviterAvatarUrl: string | null;
   inviteeUsername: string;
+  inviteeAvatarUrl: string | null;
   createdAt: string;
 }
 

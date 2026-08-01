@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useToast } from "@/components/toast/ToastProvider";
+import Avatar from "./Avatar";
 import TagChip from "./TagChip";
 import type { TagGrant } from "@/lib/collab/types";
 
@@ -68,7 +69,8 @@ export default function TagGrantsInbox({ onChanged }: { onChanged?: () => void }
             <div className="mb-1.5 flex items-center gap-2">
               <TagChip label={grant.label || grant.slug} grantsJoin />
             </div>
-            <p className="mb-2 text-xs text-gray-500 dark:text-gray-400">
+            <p className="mb-2 flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
+              <Avatar username={grant.granterUsername} avatarUrl={grant.granterAvatarUrl} size={5} />
               from {grant.granterUsername} — accepting shares folders tagged this way with
               you
             </p>

@@ -7,13 +7,16 @@
 // Adding a permission check here would create a second, weaker answer to a
 // question Postgres has already answered.
 
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
+import { resolveAvatarUrls } from "./avatar";
 import type {
   FolderDetail,
   FolderRole,
   FolderSummary,
   FolderTag,
   FollowEdge,
+  FollowRequest,
   Invitation,
   JoinRequest,
   Member,
@@ -25,7 +28,7 @@ import type {
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-function toSummary(row: any): FolderSummary {
+function toSummary(row: any, ownerAvatar: string | null): FolderSummary {
   return {
     id: row.id,
     slug: row.slug,
@@ -34,7 +37,7 @@ function toSummary(row: any): FolderSummary {
     visibility: row.visibility,
     ownerId: row.owner_id,
     ownerUsername: row.owner_username,
-    ownerAvatar: row.owner_avatar ?? null,
+    ownerAvatar,
     tags: row.tags ?? [],
     joinTags: row.join_tags ?? [],
     memberCount: Number(row.member_count ?? 0),
@@ -42,6 +45,12 @@ function toSummary(row: any): FolderSummary {
     myRole: (row.my_role as FolderRole) ?? null,
     createdAt: row.created_at,
   };
+}
+
+/** Batch-sign every row's `owner_avatar` and map it back through `toSummary`. */
+async function toSummaries(supabase: SupabaseClient, rows: any[]): Promise<FolderSummary[]> {
+  const avatars = await resolveAvatarUrls(supabase, rows.map((row) => row.owner_avatar));
+  return rows.map((row) => toSummary(row, avatars.get(row.owner_avatar ?? "") ?? null));
 }
 
 /**
@@ -55,13 +64,19 @@ export async function searchFolders(
   offset = 0
 ): Promise<FolderSummary[]> {
   const supabase = await createClient();
+  // Clamped here, not left to the RPC's own greatest/least: a non-finite or
+  // absurd value (NaN, negative, a client-supplied 1e30) would otherwise
+  // reach notes_search_folders as an out-of-range `integer` argument and come
+  // back as a raw Postgres cast error instead of just using a sane default.
+  const p_limit = Math.min(Math.max(Number.isFinite(limit) ? limit : 20, 1), 100);
+  const p_offset = Math.max(Number.isFinite(offset) ? offset : 0, 0);
   const { data, error } = await supabase.rpc("notes_search_folders", {
     p_q: q?.trim() || null,
-    p_limit: limit,
-    p_offset: offset,
+    p_limit,
+    p_offset,
   });
   if (error) throw new Error(error.message);
-  return (data ?? []).map(toSummary);
+  return toSummaries(supabase, data ?? []);
 }
 
 /** Folders the caller owns or belongs to, for their own sidebar/dashboard. */
@@ -69,7 +84,7 @@ export async function myFolders(): Promise<FolderSummary[]> {
   const supabase = await createClient();
   const { data, error } = await supabase.rpc("notes_my_folders");
   if (error) throw new Error(error.message);
-  return (data ?? []).map(toSummary);
+  return toSummaries(supabase, data ?? []);
 }
 
 /**
@@ -113,11 +128,13 @@ export async function listMembers(
     .order("joined_at")
     .range(offset, offset + limit - 1);
   if (error) throw new Error(error.message);
+  const rows = data ?? [];
+  const avatars = await resolveAvatarUrls(supabase, rows.map((row: any) => row.profiles?.avatar_url));
   return {
-    members: (data ?? []).map((row: any) => ({
+    members: rows.map((row: any) => ({
       userId: row.user_id,
       username: row.profiles?.username ?? "unknown",
-      avatarUrl: row.profiles?.avatar_url ?? null,
+      avatarUrl: avatars.get(row.profiles?.avatar_url ?? "") ?? null,
       role: row.role,
       joinedAt: row.joined_at,
     })),
@@ -139,21 +156,22 @@ export async function listFolderTags(folderId: string): Promise<FolderTag[]> {
   }));
 }
 
+const INVITATION_SELECT =
+  "id, folder_id, role, status, created_at, " +
+  "notes_folders(name, slug), " +
+  "inviter:profiles!notes_folder_invitations_inviter_id_fkey(username, avatar_url), " +
+  "invitee:profiles!notes_folder_invitations_invitee_id_fkey(username, avatar_url)";
+
 /** Pending invitations addressed to the caller. */
 export async function myInvitations(): Promise<Invitation[]> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("notes_folder_invitations")
-    .select(
-      "id, folder_id, role, status, created_at, " +
-        "notes_folders(name, slug), " +
-        "inviter:profiles!notes_folder_invitations_inviter_id_fkey(username), " +
-        "invitee:profiles!notes_folder_invitations_invitee_id_fkey(username)"
-    )
+    .select(INVITATION_SELECT)
     .eq("status", "pending")
     .order("created_at", { ascending: false });
   if (error) throw new Error(error.message);
-  return (data ?? []).map(toInvitation);
+  return toInvitations(supabase, data ?? []);
 }
 
 /** Invitations issued for one folder — visible to managers only, via RLS. */
@@ -161,21 +179,20 @@ export async function listFolderInvitations(folderId: string): Promise<Invitatio
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("notes_folder_invitations")
-    .select(
-      "id, folder_id, role, status, created_at, " +
-        "notes_folders(name, slug), " +
-        "inviter:profiles!notes_folder_invitations_inviter_id_fkey(username), " +
-        "invitee:profiles!notes_folder_invitations_invitee_id_fkey(username)"
-    )
+    .select(INVITATION_SELECT)
     .eq("folder_id", folderId)
     .eq("status", "pending")
     .order("created_at", { ascending: false });
   if (error) throw new Error(error.message);
-  return (data ?? []).map(toInvitation);
+  return toInvitations(supabase, data ?? []);
 }
 
-function toInvitation(row: any): Invitation {
-  return {
+async function toInvitations(supabase: SupabaseClient, rows: any[]): Promise<Invitation[]> {
+  const avatars = await resolveAvatarUrls(
+    supabase,
+    rows.flatMap((row) => [row.inviter?.avatar_url, row.invitee?.avatar_url])
+  );
+  return rows.map((row) => ({
     id: row.id,
     folderId: row.folder_id,
     folderName: row.notes_folders?.name ?? "",
@@ -183,9 +200,11 @@ function toInvitation(row: any): Invitation {
     role: row.role,
     status: row.status,
     inviterUsername: row.inviter?.username ?? "someone",
+    inviterAvatarUrl: avatars.get(row.inviter?.avatar_url ?? "") ?? null,
     inviteeUsername: row.invitee?.username ?? "",
+    inviteeAvatarUrl: avatars.get(row.invitee?.avatar_url ?? "") ?? null,
     createdAt: row.created_at,
-  };
+  }));
 }
 
 export async function listJoinRequests(folderId: string): Promise<JoinRequest[]> {
@@ -197,13 +216,15 @@ export async function listJoinRequests(folderId: string): Promise<JoinRequest[]>
     .eq("status", "pending")
     .order("created_at", { ascending: false });
   if (error) throw new Error(error.message);
-  return (data ?? []).map((row: any) => ({
+  const rows = data ?? [];
+  const avatars = await resolveAvatarUrls(supabase, rows.map((row: any) => row.profiles?.avatar_url));
+  return rows.map((row: any) => ({
     id: row.id,
     folderId: row.folder_id,
     folderName: row.notes_folders?.name ?? "",
     userId: row.user_id,
     username: row.profiles?.username ?? "unknown",
-    avatarUrl: row.profiles?.avatar_url ?? null,
+    avatarUrl: avatars.get(row.profiles?.avatar_url ?? "") ?? null,
     message: row.message,
     status: row.status,
     createdAt: row.created_at,
@@ -374,8 +395,11 @@ export async function grantedTags(): Promise<GrantedTag[]> {
   const supabase = await createClient();
   const { data, error } = await supabase.rpc("notes_granted_tags");
   if (error) throw new Error(error.message);
-  return (data ?? []).map((row: any) => ({
+  const rows = data ?? [];
+  const avatars = await resolveAvatarUrls(supabase, rows.map((row: any) => row.avatar_url));
+  return rows.map((row: any) => ({
     username: row.username,
+    avatarUrl: avatars.get(row.avatar_url ?? "") ?? null,
     slug: row.tag_slug,
     label: row.tag_label,
     grantedAt: row.granted_at,
@@ -389,22 +413,32 @@ export async function myTagGrants(): Promise<TagGrant[]> {
     .from("notes_tag_grants")
     .select(
       "id, status, created_at, notes_tags(slug, label), " +
-        "granter:profiles!notes_tag_grants_granter_id_fkey(username)"
+        "granter:profiles!notes_tag_grants_granter_id_fkey(username, avatar_url)"
     )
     .eq("status", "pending")
     .order("created_at", { ascending: false });
   if (error) throw new Error(error.message);
-  return (data ?? []).map((row: any) => ({
+  const rows = data ?? [];
+  const avatars = await resolveAvatarUrls(supabase, rows.map((row: any) => row.granter?.avatar_url));
+  return rows.map((row: any) => ({
     id: row.id,
     slug: row.notes_tags?.slug ?? "",
     label: row.notes_tags?.label ?? "",
     granterUsername: row.granter?.username ?? "someone",
+    granterAvatarUrl: avatars.get(row.granter?.avatar_url ?? "") ?? null,
     createdAt: row.created_at,
   }));
 }
 
-/* --- follows: one-sided, and the gate for tagging and inviting ------------ */
+/* --- follows: request/accept, and the gate for tagging and inviting ------- */
 
+/**
+ * Ask to follow someone. Writes the caller's own row as `pending` — the RLS
+ * `WITH CHECK` pins that, so this can never pre-accept itself — and the
+ * followee answers later with `respondFollow`. Re-following an edge that is
+ * already pending or accepted is a silent no-op, not an error: the primary
+ * key conflict is swallowed rather than resetting anything.
+ */
 export async function follow(username: string): Promise<void> {
   const supabase = await createClient();
   const { data: user } = await supabase.auth.getUser();
@@ -419,13 +453,17 @@ export async function follow(username: string): Promise<void> {
 
   const { error } = await supabase
     .from("notes_follows")
-    .upsert({ follower_id: user.user.id, followee_id: target.id });
+    .upsert(
+      { follower_id: user.user.id, followee_id: target.id },
+      { ignoreDuplicates: true }
+    );
   if (error) throw new Error(error.message);
 }
 
 /**
- * Break a follow edge. RLS lets either side delete it, so this covers both
- * "unfollow someone" and "remove a follower who may then no longer tag me".
+ * Break a follow edge, at any status. RLS lets either side delete it, so this
+ * covers unfollowing, withdrawing a still-pending request, and a followee
+ * removing a follower (pending or accepted) who may then no longer tag them.
  */
 export async function unfollow(userId: string, direction: "following" | "followers"): Promise<void> {
   const supabase = await createClient();
@@ -440,11 +478,45 @@ export async function unfollow(userId: string, direction: "following" | "followe
   if (error) throw new Error(error.message);
 }
 
+/** Answer an incoming follow request, as the followee. */
+export const respondFollow = (followerId: string, accept: boolean) =>
+  rpc("notes_respond_follow", { p_follower: followerId, p_accept: accept }) as Promise<string>;
+
 /**
- * One page of the caller's follow edges in a single direction. RLS returns
- * only their own edges, so this needs no ownership filter beyond the side
- * being asked for. Paged and searchable for the same reason members are: the
- * UI shows a handful, and the list has no natural ceiling.
+ * The caller's incoming, still-pending follow requests — the ones
+ * `respondFollow` can answer. RLS already scopes `notes_follows` to rows the
+ * caller is a side of, so this needs no owner filter beyond `followee_id`.
+ */
+export async function myFollowRequests(): Promise<FollowRequest[]> {
+  const supabase = await createClient();
+  const { data: user } = await supabase.auth.getUser();
+  if (!user.user) return [];
+
+  const { data, error } = await supabase
+    .from("notes_follows")
+    .select("follower_id, created_at, profiles!notes_follows_follower_id_fkey!inner(username, avatar_url)")
+    .eq("followee_id", user.user.id)
+    .eq("status", "pending")
+    .order("created_at", { ascending: false });
+  if (error) throw new Error(error.message);
+
+  const rows = data ?? [];
+  const avatars = await resolveAvatarUrls(supabase, rows.map((row: any) => row.profiles?.avatar_url));
+  return rows.map((row: any) => ({
+    followerId: row.follower_id,
+    username: row.profiles?.username ?? "unknown",
+    avatarUrl: avatars.get(row.profiles?.avatar_url ?? "") ?? null,
+    createdAt: row.created_at,
+  }));
+}
+
+/**
+ * One page of the caller's *accepted* follow edges in a single direction —
+ * the real, mutually-established network `notes_follows_me` also reads.
+ * Outgoing pending requests (the caller followed someone who has not
+ * answered) are deliberately excluded, not just this direction's incoming
+ * ones. Paged and searchable for the same reason members are: the UI shows a
+ * handful, and the list has no natural ceiling.
  */
 export async function listFollows(
   direction: "following" | "followers",
@@ -469,7 +541,8 @@ export async function listFollows(
   let query = supabase
     .from("notes_follows")
     .select(`created_at, ${join}`, { count: "exact" })
-    .eq(own, user.user.id);
+    .eq(own, user.user.id)
+    .eq("status", "accepted");
   if (q) query = query.ilike("profiles.username", `%${q}%`);
 
   const { data, error, count } = await query
@@ -477,11 +550,13 @@ export async function listFollows(
     .range(offset, offset + limit - 1);
   if (error) throw new Error(error.message);
 
+  const rows = data ?? [];
+  const avatars = await resolveAvatarUrls(supabase, rows.map((row: any) => row.profiles?.avatar_url));
   return {
-    people: (data ?? []).map((row: any) => ({
+    people: rows.map((row: any) => ({
       userId: row.profiles?.id ?? "",
       username: row.profiles?.username ?? "unknown",
-      avatarUrl: row.profiles?.avatar_url ?? null,
+      avatarUrl: avatars.get(row.profiles?.avatar_url ?? "") ?? null,
       since: row.created_at,
     })),
     total: count ?? 0,

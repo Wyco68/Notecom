@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { transferOwnership } from "@/lib/collab/folders";
-import { errorResponse, isResponse, requireFolder, requireUser } from "../../../route-helpers";
+import {
+  errorResponse,
+  isResponse,
+  readJSON,
+  requireFolder,
+  requireUser,
+} from "../../../route-helpers";
 
 // Ownership transfer. Owners are never demoted by anyone else, so this is the
 // only way the owner role moves. The RPC re-checks that the caller is the
@@ -8,12 +14,14 @@ import { errorResponse, isResponse, requireFolder, requireUser } from "../../../
 // authorization of its own, same as every other collab route.
 
 export async function POST(req: NextRequest, ctx: { params: Promise<{ slug: string }> }) {
-  const user = await requireUser();
+  const user = await requireUser(req);
   if (isResponse(user)) return user;
 
   try {
     const { slug } = await ctx.params;
-    const { userId, owner } = await req.json();
+    const body = await readJSON(req);
+    if (isResponse(body)) return body;
+    const { userId, owner } = body;
     if (!userId || typeof userId !== "string") {
       return NextResponse.json({ error: "userId required" }, { status: 400 });
     }

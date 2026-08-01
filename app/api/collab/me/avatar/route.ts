@@ -18,7 +18,7 @@ import { errorResponse, isResponse, requireUser } from "../../route-helpers";
 // there to fail fast with a readable message, not to be the protection.
 
 export async function POST(req: NextRequest) {
-  const user = await requireUser();
+  const user = await requireUser(req);
   if (isResponse(user)) return user;
 
   try {
@@ -73,8 +73,8 @@ export async function POST(req: NextRequest) {
   }
 }
 
-export async function DELETE() {
-  const user = await requireUser();
+export async function DELETE(req: NextRequest) {
+  const user = await requireUser(req);
   if (isResponse(user)) return user;
 
   try {

@@ -1,6 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { addFolderTag, listFolderTags, removeFolderTag } from "@/lib/collab/folders";
-import { errorResponse, isResponse, requireFolder, requireUser } from "../../../route-helpers";
+import {
+  errorResponse,
+  isResponse,
+  MAX_SHORT_TEXT_LENGTH,
+  readJSON,
+  requireFolder,
+  requireUser,
+} from "../../../route-helpers";
 
 // Folder tags. grantsJoin is the per-tag access grant: with it set, anyone who
 // found the folder through that tag may join without approval. It is a
@@ -8,7 +15,7 @@ import { errorResponse, isResponse, requireFolder, requireUser } from "../../../
 // one folder and merely describe another.
 
 export async function GET(req: NextRequest, ctx: { params: Promise<{ slug: string }> }) {
-  const user = await requireUser();
+  const user = await requireUser(req);
   if (isResponse(user)) return user;
 
   try {
@@ -22,13 +29,15 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ slug: strin
 }
 
 export async function POST(req: NextRequest, ctx: { params: Promise<{ slug: string }> }) {
-  const user = await requireUser();
+  const user = await requireUser(req);
   if (isResponse(user)) return user;
 
   try {
     const { slug } = await ctx.params;
-    const { tag, grantsJoin, owner } = await req.json();
-    if (!tag || typeof tag !== "string") {
+    const body = await readJSON(req);
+    if (isResponse(body)) return body;
+    const { tag, grantsJoin, owner } = body;
+    if (!tag || typeof tag !== "string" || tag.length > MAX_SHORT_TEXT_LENGTH) {
       return NextResponse.json({ error: "tag required" }, { status: 400 });
     }
     const folder = await requireFolder(slug, owner);
@@ -42,7 +51,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ slug: stri
 }
 
 export async function DELETE(req: NextRequest, ctx: { params: Promise<{ slug: string }> }) {
-  const user = await requireUser();
+  const user = await requireUser(req);
   if (isResponse(user)) return user;
 
   try {

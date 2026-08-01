@@ -7,7 +7,7 @@ import { errorResponse, isResponse, requireFolder, requireUser } from "../../rou
 // list rather than a 403 — that is what makes a useful discovery card.
 
 export async function GET(req: NextRequest, ctx: { params: Promise<{ slug: string }> }) {
-  const user = await requireUser();
+  const user = await requireUser(req);
   if (isResponse(user)) return user;
 
   try {

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useToast } from "@/components/toast/ToastProvider";
+import Avatar from "./Avatar";
 import RoleBadge from "./RoleBadge";
 import type { Invitation } from "@/lib/collab/types";
 
@@ -66,7 +67,8 @@ export default function InvitationsInbox({ onChanged }: { onChanged?: () => void
               </span>
               <RoleBadge role={inv.role} />
             </div>
-            <p className="mb-2 text-xs text-gray-500 dark:text-gray-400">
+            <p className="mb-2 flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
+              <Avatar username={inv.inviterUsername} avatarUrl={inv.inviterAvatarUrl} size={5} />
               from {inv.inviterUsername}
             </p>
             <div className="flex gap-2">

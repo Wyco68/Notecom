@@ -6,7 +6,13 @@ import {
   respondTagGrant,
   revokeTag,
 } from "@/lib/collab/folders";
-import { errorResponse, isResponse, requireUser } from "../../route-helpers";
+import {
+  errorResponse,
+  isResponse,
+  MAX_SHORT_TEXT_LENGTH,
+  readJSON,
+  requireUser,
+} from "../../route-helpers";
 
 // Tag offers. GET returns both directions — the caller's inbox and what they
 // have handed out. POST is either "offer a tag to a follower" (username + tag)
@@ -16,8 +22,8 @@ import { errorResponse, isResponse, requireUser } from "../../route-helpers";
 // Every branch is refused by the RPC unless the follow edge exists and the
 // caller is the right party — no check lives here.
 
-export async function GET() {
-  const user = await requireUser();
+export async function GET(req: NextRequest) {
+  const user = await requireUser(req);
   if (isResponse(user)) return user;
 
   try {
@@ -29,16 +35,28 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const user = await requireUser();
+  const user = await requireUser(req);
   if (isResponse(user)) return user;
 
   try {
-    const { username, tag, grantId, accept } = await req.json();
+    const body = await readJSON(req);
+    if (isResponse(body)) return body;
+    const { username, tag, grantId, accept } = body;
 
     if (grantId) {
+      if (typeof grantId !== "string") {
+        return NextResponse.json({ error: "grantId must be a string" }, { status: 400 });
+      }
       return NextResponse.json({ status: await respondTagGrant(grantId, !!accept) });
     }
-    if (!username || !tag) {
+    if (
+      !username ||
+      typeof username !== "string" ||
+      username.length > MAX_SHORT_TEXT_LENGTH ||
+      !tag ||
+      typeof tag !== "string" ||
+      tag.length > MAX_SHORT_TEXT_LENGTH
+    ) {
       return NextResponse.json(
         { error: "username and tag required, or grantId and accept" },
         { status: 400 }
@@ -51,7 +69,7 @@ export async function POST(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  const user = await requireUser();
+  const user = await requireUser(req);
   if (isResponse(user)) return user;
 
   try {

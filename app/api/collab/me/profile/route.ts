@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { resolveAvatarUrl } from "@/lib/collab/avatar";
-import { errorResponse, isResponse, requireUser } from "../../route-helpers";
+import { errorResponse, isResponse, readJSON, requireUser } from "../../route-helpers";
 
 // The caller's own profile row. Email lives on auth.users, not profiles, so it
 // is read from the session and is display-only here — changing an email or a
@@ -19,8 +19,12 @@ import { errorResponse, isResponse, requireUser } from "../../route-helpers";
 // an early rename through.
 const USERNAME_COOLDOWN_DAYS = 15;
 
-export async function GET() {
-  const user = await requireUser();
+// Mirrors is_valid_username's char_length(...) <= 32 check — caught here so an
+// over-long username comes back as a clean 400 instead of a raw trigger error.
+const MAX_USERNAME_LENGTH = 32;
+
+export async function GET(req: NextRequest) {
+  const user = await requireUser(req);
   if (isResponse(user)) return user;
 
   try {
@@ -58,13 +62,21 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const user = await requireUser();
+  const user = await requireUser(req);
   if (isResponse(user)) return user;
 
   try {
-    const { username } = await req.json();
+    const body = await readJSON(req);
+    if (isResponse(body)) return body;
+    const { username } = body;
     if (typeof username !== "string" || !username.trim()) {
       return NextResponse.json({ error: "username is required" }, { status: 400 });
+    }
+    if (username.trim().length > MAX_USERNAME_LENGTH) {
+      return NextResponse.json(
+        { error: `username must be at most ${MAX_USERNAME_LENGTH} characters` },
+        { status: 400 }
+      );
     }
 
     const supabase = await createClient();

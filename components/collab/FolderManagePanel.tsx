@@ -43,7 +43,11 @@ export default function FolderManagePanel({
   const [detail, setDetail] = useState<FolderDetail | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
   const [memberTotal, setMemberTotal] = useState(0);
+  // `memberQuery` is the live input; `memberSearch` is what's actually applied
+  // — search waits for Enter rather than firing per keystroke, and clearing
+  // the box back to empty removes the filter rather than blanking the roster.
   const [memberQuery, setMemberQuery] = useState("");
+  const [memberSearch, setMemberSearch] = useState("");
   const [memberOffset, setMemberOffset] = useState(0);
   const [tags, setTags] = useState<FolderTag[]>([]);
   // Folder settings are edited as a draft and written by "Save changes", so a
@@ -61,6 +65,7 @@ export default function FolderManagePanel({
   // and receive a refusal.
   const [followers, setFollowers] = useState<{ userId: string; username: string }[]>([]);
   const [followerQuery, setFollowerQuery] = useState("");
+  const [followerSearch, setFollowerSearch] = useState("");
   const [inviteRole, setInviteRole] = useState<FolderRole>("viewer");
   const [tagLabel, setTagLabel] = useState("");
   const [tagGrantsJoin, setTagGrantsJoin] = useState(false);
@@ -112,38 +117,41 @@ export default function FolderManagePanel({
   }, [load]);
 
   // Members are their own request so paging and searching don't re-fetch the
-  // whole console. Debounced, since it runs per keystroke.
-  const loadMembers = useCallback(async () => {
-    const params = new URLSearchParams({ limit: String(PAGE), offset: String(memberOffset) });
-    if (memberQuery.trim()) params.set("q", memberQuery.trim());
-    const res = await fetch(`${base}/members?${params}`);
-    if (!res.ok) return;
-    const data = await res.json();
-    setMembers(data.members ?? []);
-    setMemberTotal(data.total ?? 0);
-  }, [base, memberQuery, memberOffset]);
+  // whole console. Fires on mount/offset/submitted-search change only — never
+  // per keystroke.
+  const loadMembers = useCallback(
+    async (offset: number) => {
+      const params = new URLSearchParams({ limit: String(PAGE), offset: String(offset) });
+      if (memberSearch) params.set("q", memberSearch);
+      const res = await fetch(`${base}/members?${params}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      setMembers(data.members ?? []);
+      setMemberTotal(data.total ?? 0);
+    },
+    [base, memberSearch]
+  );
 
   useEffect(() => {
-    const t = setTimeout(loadMembers, 250);
-    return () => clearTimeout(t);
-  }, [loadMembers]);
+    loadMembers(memberOffset);
+  }, [loadMembers, memberOffset]);
+
+  const submitMemberSearch = () => {
+    setMemberSearch(memberQuery.trim());
+    setMemberOffset(0);
+  };
 
   // Only followers can be invited, and only a page of them is fetched — the
-  // search box is what reaches the rest.
+  // search box is what reaches the rest. Fires on mount and on a submitted
+  // search, never per keystroke.
   useEffect(() => {
-    const t = setTimeout(() => {
-      const params = new URLSearchParams({
-        direction: "followers",
-        limit: String(PAGE),
-      });
-      if (followerQuery.trim()) params.set("q", followerQuery.trim());
-      fetch(`/api/collab/me/follows?${params}`)
-        .then((r) => (r.ok ? r.json() : { people: [] }))
-        .then((d) => setFollowers(d.people ?? []))
-        .catch(() => {});
-    }, 250);
-    return () => clearTimeout(t);
-  }, [followerQuery]);
+    const params = new URLSearchParams({ direction: "followers", limit: String(PAGE) });
+    if (followerSearch) params.set("q", followerSearch);
+    fetch(`/api/collab/me/follows?${params}`)
+      .then((r) => (r.ok ? r.json() : { people: [] }))
+      .then((d) => setFollowers(d.people ?? []))
+      .catch(() => {});
+  }, [followerSearch]);
 
   async function send(path: string, init: RequestInit, okMessage: string) {
     setBusy(true);
@@ -155,7 +163,7 @@ export default function FolderManagePanel({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "failed");
       toast.success(okMessage);
-      await Promise.all([load(), loadMembers()]);
+      await Promise.all([load(), loadMembers(memberOffset)]);
       return true;
     } catch (err: any) {
       toast.error(err.message);
@@ -295,15 +303,13 @@ export default function FolderManagePanel({
       <Section title={`Members (${memberTotal})`} index={1}>
         <input
           value={memberQuery}
-          onChange={(e) => {
-            setMemberQuery(e.target.value);
-            setMemberOffset(0);
-          }}
-          placeholder="Search members by username"
+          onChange={(e) => setMemberQuery(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && submitMemberSearch()}
+          placeholder="Search members by username — press Enter"
           className="ui-field ui-field-sm mb-3"
         />
         {members.length === 0 ? (
-          <Empty>{memberQuery.trim() ? "Nobody matches." : "No members yet."}</Empty>
+          <Empty>{memberSearch ? "Nobody matches." : "No members yet."}</Empty>
         ) : (
           <div className="-mx-2">
             {members.map((m, i) => (
@@ -361,12 +367,13 @@ export default function FolderManagePanel({
           <input
             value={followerQuery}
             onChange={(e) => setFollowerQuery(e.target.value)}
-            placeholder="Search your followers"
+            onKeyDown={(e) => e.key === "Enter" && setFollowerSearch(followerQuery.trim())}
+            placeholder="Search your followers — press Enter"
             className="ui-field ui-field-sm mb-2"
           />
           {followers.length === 0 ? (
             <Empty>
-              {followerQuery.trim()
+              {followerSearch
                 ? "No follower matches."
                 : "Nobody follows you yet, so there is no one to invite."}
             </Empty>

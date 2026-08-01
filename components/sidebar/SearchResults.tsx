@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import type { LessonRef } from "@/lib/vault/types";
 import { SkeletonRows } from "../layout/Skeleton";
 
@@ -17,6 +17,7 @@ interface Result {
 }
 
 type State =
+  | { status: "idle" }
   | { status: "loading" }
   | { status: "offline" }
   | { status: "done"; mode: string; results: Result[] };
@@ -51,34 +52,40 @@ export default function SearchResults({
   query,
   onSelect,
 }: {
+  /** The *submitted* search term — the sidebar only updates this on Enter. */
   query: string;
   onSelect: (ref: LessonRef) => void;
 }) {
-  const [state, setState] = useState<State>({ status: "loading" });
-  const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [state, setState] = useState<State>(query ? { status: "loading" } : { status: "idle" });
 
   useEffect(() => {
-    if (debounce.current) clearTimeout(debounce.current);
+    if (!query) {
+      setState({ status: "idle" });
+      return;
+    }
     setState({ status: "loading" });
     const controller = new AbortController();
-    debounce.current = setTimeout(() => {
-      fetch(`/api/search?q=${encodeURIComponent(query)}&limit=12`, {
-        signal: controller.signal,
+    fetch(`/api/search?q=${encodeURIComponent(query)}&limit=12`, {
+      signal: controller.signal,
+    })
+      .then(async (r) => {
+        if (!r.ok) throw new Error("offline");
+        const data = await r.json();
+        setState({ status: "done", mode: data.mode, results: data.results ?? [] });
       })
-        .then(async (r) => {
-          if (!r.ok) throw new Error("offline");
-          const data = await r.json();
-          setState({ status: "done", mode: data.mode, results: data.results ?? [] });
-        })
-        .catch((err) => {
-          if (err.name !== "AbortError") setState({ status: "offline" });
-        });
-    }, 250);
-    return () => {
-      controller.abort();
-      if (debounce.current) clearTimeout(debounce.current);
-    };
+      .catch((err) => {
+        if (err.name !== "AbortError") setState({ status: "offline" });
+      });
+    return () => controller.abort();
   }, [query]);
+
+  if (state.status === "idle") {
+    return (
+      <p className="px-2 py-2 text-sm text-gray-500">
+        Type a search term and press Enter.
+      </p>
+    );
+  }
 
   if (state.status === "loading") {
     // A result is a heading over a subtitle, so the placeholder is too — the

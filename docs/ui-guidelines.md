@@ -45,8 +45,10 @@ and anything that can be wider than the column (tables) scrolls inside its own
 
 ### Sidebar sections
 
-Top to bottom: header, search, the two inboxes, Favorites, **Folders**,
-**Recent**, account. Folders takes whatever height is left and scrolls;
+Top to bottom: header, search, the notification stack (invitations, follow
+requests, tag offers — each renders nothing when empty), Favorites,
+**Folders**, **Recent**, account. Folders takes whatever height is left and
+scrolls;
 **Recent sits under it at a fixed `h-56`** — exactly the eight rows
 `lib/vault/recent.ts` caps its history at (8 × 1.75rem, a row being `text-sm`'s
 1.25rem line plus `py-1`). No padding inside that box, or it eats a row; the
@@ -61,15 +63,16 @@ screen is never also listed above as history.
 
 ### Panels in the content column
 
-The account editor and a folder's sharing console render **inside the
-workspace's content column**, not as a navigation — `AccountPanel` and
+The account editor, folder discovery, the people search panel and a folder's
+sharing console render **inside the workspace's content column**, not as a
+navigation — `AccountPanel`, `DiscoverPanel`, `PeoplePanel` and
 `FolderManagePanel` each take an optional `onClose`, and `AppShell` holds one
 `overlay` value (never a boolean per pane) so two cannot be open at once. Their
-routes (`/account`, `/vault/[folder]/manage`) still exist and render the same
-component without `onClose`, for a deep link or an auth `?next=`. A control that
-opens a panel in place is a `<button>`; the same control on a page that must
-navigate is an `<a>` — a link that doesn't navigate and a button that does are
-both lies about what will happen.
+routes (`/account`, `/discover`, `/people`, `/vault/[folder]/manage`) still
+exist and render the same component without `onClose`, for a deep link or an
+auth `?next=`. A control that opens a panel in place is a `<button>`; the same
+control on a page that must navigate is an `<a>` — a link that doesn't navigate
+and a button that does are both lies about what will happen.
 
 ## App icon
 [app/icon.svg](../app/icon.svg) is the master mark (a page + lens on the

@@ -10,8 +10,8 @@ import { errorResponse, isResponse, requireUser } from "../../route-helpers";
 // DELETE stays, because dropping a tag is always the holder's right, and it
 // revokes every folder that tag was granting in one step.
 
-export async function GET() {
-  const user = await requireUser();
+export async function GET(req: NextRequest) {
+  const user = await requireUser(req);
   if (isResponse(user)) return user;
 
   try {
@@ -22,7 +22,7 @@ export async function GET() {
 }
 
 export async function DELETE(req: NextRequest) {
-  const user = await requireUser();
+  const user = await requireUser(req);
   if (isResponse(user)) return user;
 
   try {

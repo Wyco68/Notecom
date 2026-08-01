@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { follow, listFollows, unfollow } from "@/lib/collab/folders";
-import { errorResponse, isResponse, requireUser } from "../../route-helpers";
+import {
+  errorResponse,
+  isResponse,
+  MAX_SHORT_TEXT_LENGTH,
+  readJSON,
+  requireUser,
+} from "../../route-helpers";
 
 // Following is one-sided and needs no approval from the other person. Its only
 // power is permissive in one direction: following someone lets *them* offer
@@ -11,7 +17,7 @@ import { errorResponse, isResponse, requireUser } from "../../route-helpers";
 // &offset`). Nobody needs every edge at once, and the caller that wants both
 // sides asks twice.
 export async function GET(req: NextRequest) {
-  const user = await requireUser();
+  const user = await requireUser(req);
   if (isResponse(user)) return user;
 
   try {
@@ -31,12 +37,14 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const user = await requireUser();
+  const user = await requireUser(req);
   if (isResponse(user)) return user;
 
   try {
-    const { username } = await req.json();
-    if (!username || typeof username !== "string") {
+    const body = await readJSON(req);
+    if (isResponse(body)) return body;
+    const { username } = body;
+    if (!username || typeof username !== "string" || username.length > MAX_SHORT_TEXT_LENGTH) {
       return NextResponse.json({ error: "username required" }, { status: 400 });
     }
     await follow(username);
@@ -47,7 +55,7 @@ export async function POST(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  const user = await requireUser();
+  const user = await requireUser(req);
   if (isResponse(user)) return user;
 
   try {

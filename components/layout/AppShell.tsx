@@ -21,13 +21,16 @@ import GenerateJobList from "../generate/GenerateJobList";
 import { useGenerateJobs } from "../generate/GenerateJobsProvider";
 import InvitationsInbox from "../collab/InvitationsInbox";
 import TagGrantsInbox from "../collab/TagGrantsInbox";
+import FollowRequestsInbox from "../collab/FollowRequestsInbox";
 import AccountControl from "../collab/AccountControl";
 import AccountPanel from "../account/AccountPanel";
 import DiscoverPanel from "../collab/DiscoverPanel";
+import PeoplePanel from "../collab/PeoplePanel";
 import FolderManagePanel from "../collab/FolderManagePanel";
 import ThemeToggle from "../theme/ThemeToggle";
 import RefreshIcon from "../icons/RefreshIcon";
 import SearchIcon from "../icons/SearchIcon";
+import UserIcon from "../icons/UserIcon";
 import MenuIcon from "../icons/MenuIcon";
 import UploadIcon from "../icons/UploadIcon";
 
@@ -48,7 +51,11 @@ export default function AppShell() {
   // the reader back on the document they left. One value, not a boolean each:
   // two panes cannot be open at once, and this is what says so.
   const [overlay, setOverlay] = useState<
-    { kind: "profile" } | { kind: "discover" } | { kind: "manage"; slug: string } | null
+    | { kind: "profile" }
+    | { kind: "discover" }
+    | { kind: "people" }
+    | { kind: "manage"; slug: string }
+    | null
   >(null);
   // undefined until the first status check answers — avoids flashing a
   // "signed out" warning during the initial load.
@@ -59,6 +66,10 @@ export default function AppShell() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [query, setQuery] = useState("");
+  // The submitted search term — separate from `query` (the live input value)
+  // because search now waits for Enter instead of firing per keystroke, and an
+  // empty search must show nothing rather than everything.
+  const [submittedQuery, setSubmittedQuery] = useState("");
   // Collaboration metadata for the local tree, keyed by folder slug. Stays
   // empty on a purely-local install, which keeps the sidebar flat.
   const [tagsByFolder, setTagsByFolder] = useState<Record<string, string[]>>({});
@@ -141,8 +152,16 @@ export default function AppShell() {
   // automatic path (focus, visibility, the interval below): it answers "did a
   // folder appear or disappear" without paying for every open folder's
   // documents or the tag list on every check.
-  const refreshFolderNames = useCallback(async () => {
-    const res = await fetch("/api/tree", { cache: "no-store" });
+  //
+  // `passive` is only true for the focus/visibility auto-check below, where a
+  // few seconds of staleness is fine — it lets the browser reuse a cached
+  // response instead of forcing a Supabase round trip on every alt-tab (the
+  // route's own `stale-while-revalidate`, see app/api/tree/route.ts). Every
+  // caller that must see the effect of its own action immediately — mount,
+  // the manual refresh button, a folder create/delete — keeps forcing
+  // `no-store`.
+  const refreshFolderNames = useCallback(async (passive = false) => {
+    const res = await fetch("/api/tree", passive ? {} : { cache: "no-store" });
     const data: VaultTree = await res.json();
     const list = data.folders ?? [];
     setFolders(list);
@@ -266,7 +285,13 @@ export default function AppShell() {
   // Both overlays are opened from the sidebar, which on a narrow screen is
   // covering the column they render into.
   const openOverlay = useCallback(
-    (next: { kind: "profile" } | { kind: "discover" } | { kind: "manage"; slug: string }) => {
+    (
+      next:
+        | { kind: "profile" }
+        | { kind: "discover" }
+        | { kind: "people" }
+        | { kind: "manage"; slug: string }
+    ) => {
       setOverlay(next);
       if (!window.matchMedia("(min-width: 1024px)").matches) setSidebarOpen(false);
     },
@@ -338,7 +363,7 @@ export default function AppShell() {
       const now = Date.now();
       if (now - lastAutoRefresh.current < MIN_INTERVAL_MS) return;
       lastAutoRefresh.current = now;
-      refreshFolderNames();
+      refreshFolderNames(true);
     };
     const onFocus = () => maybeRefresh();
     const onVisible = () => {
@@ -402,12 +427,18 @@ export default function AppShell() {
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search notes..."
+              onKeyDown={(e) => {
+                if (e.key === "Enter") setSubmittedQuery(query.trim());
+              }}
+              placeholder="Search notes... (press Enter)"
               className="w-full bg-transparent text-sm text-gray-800 outline-none placeholder:text-gray-400 dark:text-gray-200 dark:placeholder:text-gray-500"
             />
             {query && (
               <button
-                onClick={() => setQuery("")}
+                onClick={() => {
+                  setQuery("");
+                  setSubmittedQuery("");
+                }}
                 title="Clear search"
                 className="ui-icon-btn h-5 w-5 text-xs"
               >
@@ -420,6 +451,10 @@ export default function AppShell() {
         {/* Renders nothing unless the user actually has invitations, and
             nothing at all when collaboration isn't configured. */}
         <InvitationsInbox onChanged={refreshTree} />
+
+        {/* People who asked to follow the user — accepting is what lets them
+            be offered a tag or invited to a folder. */}
+        <FollowRequestsInbox onChanged={refreshTree} />
 
         {/* Tags offered by people the user follows. Accepting one is what
             grants access to the folders carrying it. */}
@@ -487,6 +522,13 @@ export default function AppShell() {
                     <SearchIcon className="h-3.5 w-3.5" />
                   </button>
                   <button
+                    onClick={() => openOverlay({ kind: "people" })}
+                    title="Search people you follow"
+                    className="ui-icon-btn h-6 w-6"
+                  >
+                    <UserIcon className="h-3.5 w-3.5" />
+                  </button>
+                  <button
                     onClick={() => setShowNewFolder(true)}
                     title="New Folder"
                     className="ui-icon-btn h-6 w-6 text-base leading-none"
@@ -499,7 +541,7 @@ export default function AppShell() {
 
             <div className="ui-scroll flex-1 px-2 pb-2">
               {query.trim() ? (
-                <SearchResults query={query.trim()} onSelect={onSelect} />
+                <SearchResults query={submittedQuery} onSelect={onSelect} />
               ) : (
                 <FileTree
                   folders={folders}
@@ -555,7 +597,10 @@ export default function AppShell() {
             switching folders remounts the console instead of showing the
             previous folder's state while the new one loads. */}
         {overlay?.kind === "profile" ? (
-          <AccountPanel onClose={() => setOverlay(null)} />
+          <AccountPanel
+            onClose={() => setOverlay(null)}
+            onOpenPeople={() => openOverlay({ kind: "people" })}
+          />
         ) : overlay?.kind === "discover" ? (
           <DiscoverPanel
             onClose={() => setOverlay(null)}
@@ -563,6 +608,8 @@ export default function AppShell() {
             // this panel should already show it when they close it.
             onJoined={refreshTree}
           />
+        ) : overlay?.kind === "people" ? (
+          <PeoplePanel onClose={() => setOverlay(null)} />
         ) : overlay?.kind === "manage" ? (
           <FolderManagePanel
             key={overlay.slug}

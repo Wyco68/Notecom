@@ -5,10 +5,11 @@
 // { error } shape. The only check here is "is anyone signed in", which is
 // about giving a 401 instead of a confusing empty result.
 
-import { NextResponse } from "next/server";
-import { collabEnabled, createClient } from "@/lib/supabase/server";
+import { NextRequest, NextResponse } from "next/server";
+import { collabEnabled } from "@/lib/supabase/server";
 import { getFolder } from "@/lib/collab/folders";
 import type { FolderDetail } from "@/lib/collab/types";
+import { VERIFIED_USER_HEADER } from "@/middleware";
 
 export function collabDisabled() {
   return NextResponse.json(
@@ -17,15 +18,48 @@ export function collabDisabled() {
   );
 }
 
-/** The signed-in user's id, or a 401 response to return as-is. */
-export async function requireUser(): Promise<{ userId: string } | NextResponse> {
+/**
+ * A generous ceiling for one free-text body field (a username, a tag label)
+ * before it reaches Supabase. Not a business rule — the database's own
+ * constraints and triggers (e.g. is_valid_username, the 40-char tag label
+ * check) are that, and stay the real limit — this just stops a client handing
+ * a handler an enormous string to parse and forward for no legitimate reason.
+ */
+export const MAX_SHORT_TEXT_LENGTH = 200;
+
+/**
+ * Parse the request body as JSON, or a 400 to return as-is. A malformed body
+ * is a client mistake, not a server error: without this it falls into the
+ * same catch block as a refused RPC and comes back 500 via errorResponse
+ * instead of a clean 400.
+ */
+export async function readJSON(req: NextRequest): Promise<any> {
+  try {
+    return await req.json();
+  } catch {
+    return NextResponse.json({ error: "invalid JSON body" }, { status: 400 });
+  }
+}
+
+/**
+ * The signed-in user's id, or a 401 response to return as-is.
+ *
+ * Every route this guards sits behind middleware.ts's matcher, which has
+ * already called supabase.auth.getUser() once for this request and refused
+ * anything unauthenticated — calling it again here would be a second Supabase
+ * Auth round trip to reconfirm what middleware already knows. Trust its
+ * verified header instead; middleware always overwrites it, so nothing a
+ * client sends can reach here as this header. A request that somehow arrives
+ * without it (matcher misconfigured, direct invocation in a test) is treated
+ * as unauthenticated rather than re-checked — fail closed, not fail open.
+ */
+export async function requireUser(req: NextRequest): Promise<{ userId: string } | NextResponse> {
   if (!collabEnabled()) return collabDisabled();
-  const supabase = await createClient();
-  const { data } = await supabase.auth.getUser();
-  if (!data.user) {
+  const userId = req.headers.get(VERIFIED_USER_HEADER);
+  if (!userId) {
     return NextResponse.json({ error: "sign in required" }, { status: 401 });
   }
-  return { userId: data.user.id };
+  return { userId };
 }
 
 /**

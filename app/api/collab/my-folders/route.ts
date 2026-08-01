@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { myFolders } from "@/lib/collab/folders";
 import { errorResponse, isResponse, requireUser } from "../route-helpers";
 
@@ -8,8 +8,8 @@ import { errorResponse, isResponse, requireUser } from "../route-helpers";
 // group folders by tag. Kept separate rather than teaching stored about tags:
 // collaboration state belongs to Supabase, not to the local datastore.
 
-export async function GET() {
-  const user = await requireUser();
+export async function GET(req: NextRequest) {
+  const user = await requireUser(req);
   if (isResponse(user)) return user;
 
   try {
