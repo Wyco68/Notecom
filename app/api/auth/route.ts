@@ -10,6 +10,10 @@ import { readStatus, startLogin, submitCode, cancelLogin, logout } from "@/lib/a
 // flow works) or it does not (and the CLI's own commands fail, with a message
 // saying so). A server-wide flag added nothing that reality doesn't already say.
 
+// The pasted login code is a handful of characters at most; this only stops a
+// client writing an enormous string to the CLI child process's stdin.
+const MAX_CODE_LENGTH = 200;
+
 export async function GET() {
   return NextResponse.json(await readStatus());
 }
@@ -20,7 +24,7 @@ export async function POST(req: NextRequest) {
 
   if (action === "code") {
     const code = String(body.code ?? "");
-    if (!code.trim()) {
+    if (!code.trim() || code.length > MAX_CODE_LENGTH) {
       return NextResponse.json({ error: "code required" }, { status: 400 });
     }
     if (!submitCode(code)) {

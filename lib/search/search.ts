@@ -44,11 +44,16 @@ export async function search(params: {
   html?: boolean;
 }): Promise<{ mode: "keyword"; results: SearchResult[] }> {
   const supabase = await createClient();
+  // Clamped here rather than left to the RPC's own greatest/least: a
+  // non-finite or absurd value from the query string would otherwise reach
+  // notes_search_chunks as an out-of-range `integer` argument and come back
+  // as a raw Postgres cast error instead of a bounded, valid limit.
+  const limit = Math.min(Math.max(Number.isFinite(params.limit) ? params.limit! : 10, 1), 50);
   const { data, error } = await supabase.rpc("notes_search_chunks", {
     p_q: params.q,
     p_folder: params.folder ?? null,
     p_kind: params.kind ?? null,
-    p_limit: params.limit ?? 10,
+    p_limit: limit,
   });
   if (error) throw new Error(error.message);
 

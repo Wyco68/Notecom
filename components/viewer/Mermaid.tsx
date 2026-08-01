@@ -65,7 +65,14 @@ async function getMermaid(isDark: boolean) {
     mermaid.initialize({
       startOnLoad: false,
       theme: "base",
-      securityLevel: "loose",
+      // "strict" (mermaid's own default) sanitizes labels and drops
+      // click/script interactivity from the rendered SVG before it reaches
+      // dangerouslySetInnerHTML below. Diagram source can come from another
+      // member's shared folder, not just the viewer's own lessons, and the
+      // documented contract (docs/html-output-contract.md) never asks for
+      // click handlers or inline styling — "loose" was buying no feature,
+      // only a stored-XSS surface.
+      securityLevel: "strict",
       fontFamily: "ui-sans-serif, system-ui, sans-serif",
       themeVariables: isDark ? DARK_VARS : LIGHT_VARS,
     });
