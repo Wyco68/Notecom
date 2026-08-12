@@ -14,12 +14,15 @@
 // second place for it to leak from, and would break the "no API key, runs on
 // the user's subscription" property the whole design rests on.
 
-import { spawn, type ChildProcess } from "child_process";
+import { spawn, spawnSync, type ChildProcess } from "child_process";
 
 export interface AuthStatus {
   loggedIn: boolean;
   /** "claudeai" | "console" | "none" — as reported by the CLI */
   authMethod: string;
+  /** false when `claude` isn't on PATH at all — this machine cannot generate
+   *  no matter who signs in. True even when installed but logged out. */
+  installed: boolean;
 }
 
 export interface LoginSession {
@@ -50,6 +53,22 @@ const bin = () => process.env.CLAUDE_BIN || "claude";
 // The CLI is a .cmd shim on Windows, which only resolves through a shell.
 const useShell = () => process.platform === "win32";
 
+// Cached: PATH doesn't change mid-process, and this runs on every /api/auth
+// poll otherwise. A hosted instance has no `claude` on PATH by design (see
+// docs/architecture.md) — this is the signal the UI uses to say so instead of
+// dead-ending on a failed sign-in attempt.
+let cachedInstalled: boolean | null = null;
+export function cliInstalled(): boolean {
+  if (cachedInstalled !== null) return cachedInstalled;
+  const result = spawnSync(bin(), ["--version"], { shell: useShell(), stdio: "ignore" });
+  // Under shell:true (Windows), a missing binary doesn't set `.error` — the
+  // shim (cmd.exe) itself spawns fine and just exits non-zero ("not
+  // recognized"). `.error` alone only catches the non-shell (POSIX) ENOENT
+  // case, so both must hold.
+  cachedInstalled = !result.error && result.status === 0;
+  return cachedInstalled;
+}
+
 // eslint-disable-next-line no-control-regex
 const stripAnsi = (s: string) => s.replace(/\x1b\[[0-9;]*m/g, "");
 
@@ -73,13 +92,17 @@ export async function readStatus(): Promise<AuthStatus> {
     child.stdout.on("data", (d: Buffer) => (out += d.toString()));
     // A missing CLI is not an error state to shout about — it just means not
     // signed in, and the UI says how to install it.
-    child.on("error", () => resolve({ loggedIn: false, authMethod: "none" }));
+    child.on("error", () => resolve({ loggedIn: false, authMethod: "none", installed: false }));
     child.on("close", () => {
       try {
         const j = JSON.parse(stripAnsi(out));
-        resolve({ loggedIn: !!j.loggedIn, authMethod: String(j.authMethod ?? "none") });
+        resolve({
+          loggedIn: !!j.loggedIn,
+          authMethod: String(j.authMethod ?? "none"),
+          installed: cliInstalled(),
+        });
       } catch {
-        resolve({ loggedIn: false, authMethod: "none" });
+        resolve({ loggedIn: false, authMethod: "none", installed: cliInstalled() });
       }
     });
   });

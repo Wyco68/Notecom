@@ -3,6 +3,7 @@ import { writeFile, mkdir } from "fs/promises";
 import { tmpdir } from "os";
 import path from "path";
 import { listJobs, startJob } from "@/lib/generate/runner";
+import { cliInstalled } from "@/lib/auth/cli";
 
 const KINDS = new Set(["lect", "quiz"]);
 // Folder lands in a CLI prompt and a filesystem path, so it gets the same
@@ -28,6 +29,17 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
+  // Belt and braces: startJob's own ENOENT handling already fails a run with
+  // no local `claude`, but that's after a file upload and a temp-file write.
+  // Reject before doing either — this is capability, not a config toggle: a
+  // box with no CLI on PATH can never generate, on this request or the next.
+  if (!cliInstalled()) {
+    return NextResponse.json(
+      { error: "no Claude Code CLI on this server — generate from the desktop app or your own checkout instead" },
+      { status: 501 }
+    );
+  }
+
   const declaredLength = Number(req.headers.get("content-length"));
   if (Number.isFinite(declaredLength) && declaredLength > MAX_UPLOAD_BYTES) {
     return NextResponse.json(

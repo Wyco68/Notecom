@@ -33,26 +33,33 @@ into. The app only ever **reads** it — `lib/vault/import.ts` ingests those fil
 into Supabase on the next tree load. A box without a `vault/` directory (a VPS)
 simply has nothing to import.
 
-## There is no read-only mode
+## No broad read-only mode — but a capability signal (2026-08)
 
-Retired 2026-07, along with `READ_ONLY` / `NEXT_PUBLIC_READ_ONLY`, the middleware
-gate and `/api/tree`'s `readOnly` flag. Every instance is writable by whoever runs
-it, and the reason is billing: generating a lesson spawns **that user's own Claude
-Code CLI** on **their own Claude subscription** (`lib/generate/runner.ts`), so
-there is no shared, chargeable resource for a server-wide flag to protect. The app
-holds no API key and bills no one.
+The 2026-07 `READ_ONLY` / `NEXT_PUBLIC_READ_ONLY` flag, the middleware gate and
+`/api/tree`'s `readOnly` field are still gone and stay gone — that was a
+blanket write-lock from the old `stored`-sidecar architecture, where "local"
+meant something. Every vault/folder/collab write now goes straight to
+Supabase under RLS regardless of which machine sent it, so there is nothing
+left for a server-wide write-lock to protect: a VPS can create folders, tag,
+share and delete exactly as well as a desktop install.
 
-That is also the boundary, and it is a hard one. A consumer subscription
-authenticates on the machine it belongs to, so a hosted server cannot generate on
-a visitor's behalf — an instance can generate exactly when it has a local `claude`
-on PATH. **Don't** add server-side generation, a shared API key, or a relay that
-serves several people from one subscription: the first two mean per-token charges
-on top of a subscription the user already pays for, and the third breaks
-Anthropic's terms for consumer subscriptions.
+Generate is the one exception, and the reason is unchanged: it spawns **that
+user's own Claude Code CLI** on **their own subscription**
+(`lib/generate/runner.ts`), so it only works on a machine with `claude` on
+PATH. **Don't** add server-side generation, a shared API key, or a relay that
+serves several people from one subscription: the first two mean per-token
+charges on top of a subscription the user already pays for, and the third
+breaks Anthropic's terms for consumer subscriptions.
 
-Capability, not configuration, decides the rest. A VPS fails a generate because
-it has no `claude` binary — the error names the missing dependency, which is the
-truth, instead of a flag restating it.
+What changed: that capability is now surfaced proactively instead of only
+failing after the fact. `lib/auth/cli.ts`'s `cliInstalled()` (`claude
+--version`, cached per process) feeds `installed` onto `GET /api/auth`, and
+`POST /api/generate` rejects early (501) when it's false rather than after an
+upload and a temp-file write. The client (`AppShell.tsx`) reads it to show a
+plain "Read-only" badge in place of the Generate button — distinct from
+"installed but logged out", which still offers sign-in. This is a read
+of reality, not a toggle: there is no env var to flip it, and nothing else in
+the app is gated by it.
 
 ## Access control
 
