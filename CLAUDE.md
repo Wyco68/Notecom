@@ -38,6 +38,11 @@ Generated lesson/quiz files (`vault/**/*.html`, `vault/**/index.json`,
 Application work never edits them except for an explicit, requested migration
 or format conversion.
 
+## Caveman mode scope
+Caveman mode (ultra): use aggressive for dev work (`/feat`, code edits, debugging,
+chat replies). Never for generated files — lesson HTML (`/lect`), quiz content
+(`/quiz`), commits, PRs. Those stay full normal prose per their own docs.
+
 ## Collaboration and access control
 Folders are the unit of sharing: owner, members with roles, visibility, tags.
 Documents inherit folder permissions and never carry their own. Access is enforced by Supabase Row Level Security — no

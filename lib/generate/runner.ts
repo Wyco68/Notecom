@@ -209,9 +209,9 @@ export function startJob(
   child.on("close", (code) => {
     if (job.status === "running") {
       if (code === 0 && sawResult && !resultFailed) {
-        // Lesson saved to vault/. The next /api/tree fetch ingests it into
-        // SQLite, and the stored sync worker publishes it to Supabase —
-        // nothing to do here.
+        // Lesson saved to vault/. The client's sync() call (fired on
+        // completedTick, see GenerateJobsProvider.tsx) POSTs /api/tree, which
+        // ingests it straight into Supabase — nothing to do here.
         job.status = "done";
       } else {
         job.status = "error";

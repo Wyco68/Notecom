@@ -5,7 +5,7 @@ import FileTreeNode from "./FileTreeNode";
 import TagGroup from "./TagGroup";
 import { SkeletonRows } from "../layout/Skeleton";
 
-// The tree itself comes from stored/SQLite (/api/tree) and knows nothing about
+// The tree itself comes from Supabase (/api/tree) and knows nothing about
 // tags — tags are collaboration state and live in Supabase. AppShell fetches
 // them separately and passes them in here as a slug→tags map, so this stays a
 // flat list on a purely-local install and groups only when there is something

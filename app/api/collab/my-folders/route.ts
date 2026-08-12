@@ -3,10 +3,10 @@ import { myFolders } from "@/lib/collab/folders";
 import { errorResponse, isResponse, requireUser } from "../route-helpers";
 
 // The caller's folders with their collaboration metadata — tags, role, member
-// and document counts. The sidebar merges this onto the local tree from
-// /api/tree (which comes from stored/SQLite and knows nothing about tags) to
-// group folders by tag. Kept separate rather than teaching stored about tags:
-// collaboration state belongs to Supabase, not to the local datastore.
+// and document counts. The sidebar merges this onto the tree from /api/tree
+// (which knows nothing about tags) to group folders by tag. Kept as a
+// separate query rather than folded into the tree route, since it's
+// collaboration-specific and most tree reads don't need it.
 
 export async function GET(req: NextRequest) {
   const user = await requireUser(req);

@@ -141,6 +141,26 @@ export default function GenerateJobsProvider({ children }: { children: React.Rea
         following.current.delete(id);
       }
 
+      // The stream can drop (window closed, network blip, `break` from a
+      // truncated `done` with no `end` event) after the job actually finished
+      // server-side. Defaulting to "error" here would both misreport a
+      // successful run and skip the sync trigger below, leaving a file sitting
+      // in vault/ that never reaches Supabase. Ask the server for the
+      // authoritative status before giving up on it.
+      if (status === "error") {
+        try {
+          const r = await fetch("/api/generate");
+          const data = r.ok ? await r.json() : null;
+          const job = (data?.jobs ?? []).find((j: any) => j.id === id);
+          if (job && job.status !== "running") {
+            status = job.status;
+            needsAuth = !!job.needsAuth;
+          }
+        } catch {
+          // Best effort — falls through to "error" below.
+        }
+      }
+
       patch(id, (j) => ({ ...j, status, needsAuth }));
       // Announce the outcome here rather than in the modal: by now the reader
       // may well have closed the modal and moved on, and a finished run they

@@ -19,6 +19,7 @@ import GenerateModal from "../modals/GenerateModal";
 import SignInModal from "../modals/SignInModal";
 import GenerateJobList from "../generate/GenerateJobList";
 import { useGenerateJobs } from "../generate/GenerateJobsProvider";
+import { useToast } from "../toast/ToastProvider";
 import InvitationsInbox from "../collab/InvitationsInbox";
 import TagGrantsInbox from "../collab/TagGrantsInbox";
 import FollowRequestsInbox from "../collab/FollowRequestsInbox";
@@ -60,6 +61,10 @@ export default function AppShell() {
   // undefined until the first status check answers — avoids flashing a
   // "signed out" warning during the initial load.
   const [signedIn, setSignedIn] = useState<boolean | undefined>(undefined);
+  // undefined until the first check answers. false means this machine has no
+  // `claude` on PATH at all — distinct from signedIn===false (installed but
+  // logged out), which offers a sign-in button instead of this dead end.
+  const [cliInstalled, setCliInstalled] = useState<boolean | undefined>(undefined);
   // Hideable at every width: an off-canvas drawer below `lg`, a static column
   // from `lg` up. Starts closed and opens on wide screens after mount, since
   // the viewport isn't known during the server render.
@@ -78,6 +83,7 @@ export default function AppShell() {
   // Generation jobs are owned above this component so they survive the dialog
   // closing; this only reads them.
   const { completedTick } = useGenerateJobs();
+  const toast = useToast();
 
   // Null until the open document's folder has been fetched, which is why
   // onSelect asks for it: the title is what files the document under "Recent".
@@ -208,14 +214,24 @@ export default function AppShell() {
   const sync = useCallback(async () => {
     try {
       const res = await fetch("/api/tree", { method: "POST" });
-      if (!res.ok) return;
+      if (!res.ok) {
+        toast.error("Couldn't sync the vault — see the server log.");
+        return;
+      }
       const data = await res.json();
+      if (data.errors > 0) {
+        toast.error(
+          data.importError
+            ? `Vault sync failed: ${data.importError}`
+            : `${data.errors} file(s) failed to sync — see the server log.`
+        );
+      }
       if (data.imported > 0 || data.reindexed > 0) refreshTree();
     } catch {
       // A box with no vault/ has nothing to ingest — the common case, not an
       // error worth showing.
     }
-  }, [refreshTree]);
+  }, [refreshTree, toast]);
 
   // The document on screen, held so it can be filed under "Recent" when the
   // reader leaves it. A ref, not state: it must not trigger a render, and the
@@ -335,7 +351,13 @@ export default function AppShell() {
   const refreshAuth = useCallback(async () => {
     try {
       const res = await fetch("/api/auth");
-      setSignedIn(res.ok ? (await res.json()).loggedIn : false);
+      if (!res.ok) {
+        setSignedIn(false);
+        return;
+      }
+      const data = await res.json();
+      setSignedIn(data.loggedIn);
+      setCliInstalled(data.installed);
     } catch {
       setSignedIn(false);
     }
@@ -489,10 +511,20 @@ export default function AppShell() {
               </span>
               {!query.trim() && (
                 <div className="flex items-center gap-0.5">
-                  {/* Generating needs a Claude Code session, so when there isn't
-                      one the button that starts one takes its place — offering
-                      Generate first would only lead to a run that fails on auth. */}
-                  {signedIn === false ? (
+                  {/* Generating needs a local Claude Code CLI, then a session on it.
+                      No CLI at all (a hosted/VPS instance) is a dead end no sign-in
+                      fixes — that gets a plain read-only badge, not a button that
+                      leads nowhere. Installed-but-logged-out still offers sign-in;
+                      offering Generate first would only lead to a run that fails on
+                      auth. */}
+                  {cliInstalled === false ? (
+                    <span
+                      title="This server has no Claude Code CLI installed — generation runs on your own subscription, so it only works from the desktop app or your own checkout. Reading is unaffected."
+                      className="ui-btn ui-btn-xs cursor-default rounded border border-gray-500/20 bg-gray-500/10 font-medium text-gray-500 dark:text-gray-400"
+                    >
+                      Read-only
+                    </span>
+                  ) : signedIn === false ? (
                     <button
                       onClick={() => setShowSignIn(true)}
                       title="Claude Code is signed out — generating notes needs a session"
