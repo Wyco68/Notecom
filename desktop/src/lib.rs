@@ -150,33 +150,63 @@ mod dev {
 }
 
 // Release: a bundled Node runtime is the only sidecar, resolved from the
-// installed app's resources. The vault is the repo checkout's vault/ — the same
-// folder dev mode and Claude Code (/lect, /quiz) use, and the app only ever
-// reads it. This app is checkout-centric by design: content can only ever be
-// created through the repo's command files, so every user has the repo cloned,
-// and the packaged app is just a nicer window onto that same checkout.
-// (CARGO_MANIFEST_DIR is baked at compile time — always this checkout, because
-// you build the app from it.)
+// installed app's resources. The vault, and the /lect + /quiz command files
+// that write to it, live in a per-user app-data directory instead of the
+// checkout that built the app — CARGO_MANIFEST_DIR is baked in at compile
+// time, so an installer built on a CI runner would bake in that runner's
+// ephemeral checkout path and be unable to find anything once installed
+// somewhere else. Resolving the project dir at runtime (`app.path()
+// .app_data_dir()`) is what makes a CI-built installer usable by anyone who
+// downloads it, not just the machine that built it.
 #[cfg(not(debug_assertions))]
 mod release {
     use super::*;
-    use std::path::PathBuf;
+    use std::path::{Path, PathBuf};
     use tauri_plugin_shell::ShellExt;
 
-    fn repo_root() -> PathBuf {
-        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .parent()
-            .expect("desktop/ has a parent directory")
-            .to_path_buf()
+    fn project_root(app: &AppHandle) -> PathBuf {
+        app.path()
+            .app_data_dir()
+            .expect("no app data dir")
+            .join("project")
     }
 
-    fn vault_dir(_app: &AppHandle) -> PathBuf {
-        let dir = repo_root().join("vault");
+    fn vault_dir(app: &AppHandle) -> PathBuf {
+        let dir = project_root(app).join("vault");
         std::fs::create_dir_all(&dir).expect("failed to create vault dir");
         dir
     }
 
-    fn spawn_next(app: &AppHandle, port: u16, vault_root: &str) -> u32 {
+    fn copy_dir_recursive(src: &Path, dst: &Path) {
+        if !src.exists() {
+            return;
+        }
+        std::fs::create_dir_all(dst).expect("failed to create project dir");
+        for entry in std::fs::read_dir(src).expect("failed to read bundled resources") {
+            let entry = entry.expect("resource dir entry");
+            let dest_path = dst.join(entry.file_name());
+            if entry.file_type().expect("resource file type").is_dir() {
+                copy_dir_recursive(&entry.path(), &dest_path);
+            } else {
+                std::fs::copy(entry.path(), &dest_path).expect("failed to copy resource file");
+            }
+        }
+    }
+
+    // Re-synced on every launch, so an app update always ships the current
+    // /lect, /quiz, docs and validators. vault/ is never part of the bundled
+    // resource, so a user's actual notes are never touched by this.
+    fn sync_project_template(app: &AppHandle) {
+        let bundled = app
+            .path()
+            .resource_dir()
+            .expect("no resource dir")
+            .join("resources")
+            .join("claude-project");
+        copy_dir_recursive(&bundled, &project_root(app));
+    }
+
+    fn spawn_next(app: &AppHandle, port: u16, vault_root: &str, repo_root: &str) -> u32 {
         let frontend_dir = app
             .path()
             .resource_dir()
@@ -195,20 +225,22 @@ mod release {
             // app imports from here; it never writes back.
             .env("VAULT_ROOT", vault_root.to_string())
             // Generate (lib/generate/runner.ts) must run the claude CLI from
-            // the checkout, where .claude/commands/ lives — the standalone
-            // server's own cwd is the installed resources dir.
-            .env("REPO_ROOT", repo_root().to_string_lossy().to_string())
+            // a directory holding .claude/commands/ — the standalone
+            // server's own cwd is the installed resources dir, not this one.
+            .env("REPO_ROOT", repo_root.to_string())
             .spawn()
             .expect("failed to start next standalone server");
         child.pid()
     }
 
     pub fn orchestrate(app: AppHandle) {
+        sync_project_template(&app);
         let vault_root = vault_dir(&app).to_string_lossy().to_string();
+        let repo_root = project_root(&app).to_string_lossy().to_string();
         let next_port = free_port();
 
         emit_stage(&app, "Preparing interface...");
-        let next_pid = spawn_next(&app, next_port, &vault_root);
+        let next_pid = spawn_next(&app, next_port, &vault_root, &repo_root);
         wait_for_port(next_port, Duration::from_secs(30));
 
         track_pids(&app, &[next_pid]);

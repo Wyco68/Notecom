@@ -73,17 +73,35 @@ would be more confusing than two complete ones:
 
 | | Dev (`tauri dev`) | Release (`tauri build`) |
 |---|---|---|
-| Next | `npm run dev -- -p <port>` against the repo (`cmd /C npm` on Windows, `npm` directly elsewhere) | bundled Node sidecar running the standalone `server.js`, given `REPO_ROOT` so the in-app Generate button can run the claude CLI from the checkout |
-| Vault location | repo's `vault/` (`CARGO_MANIFEST_DIR`'s parent) | **same** — the checkout's `vault/`, baked in at compile time |
+| Next | `npm run dev -- -p <port>` against the repo (`cmd /C npm` on Windows, `npm` directly elsewhere) | bundled Node sidecar running the standalone `server.js`, given `REPO_ROOT` so the in-app Generate button can run the claude CLI from the project dir |
+| Vault location | repo's `vault/` (`CARGO_MANIFEST_DIR`'s parent) | a per-user app-data directory, resolved at runtime |
 
-One vault, deliberately: this project is checkout-centric. Notes can only be
-created through this repo's command files (`/lect`, `/quiz` in
-`.claude/commands/`), so every user has the checkout, and the packaged
-app is just a nicer window onto it. A per-user OS data-dir vault was tried
-and removed — it split content between two locations for zero benefit (see
-git history). The installers this produces are therefore **for the machine
-that built them**; distribution is "clone the repo and set up", per
-[GETTING_STARTED.md](GETTING_STARTED.md).
+Dev mode stays checkout-centric — `tauri dev` always runs against the repo
+it was launched from, and `/lect`/`/quiz` write straight to that repo's
+`vault/`. Release builds (2026-08) no longer are: `CARGO_MANIFEST_DIR` is
+baked in at *compile* time, so an installer built once and handed to someone
+else would bake in the *building* machine's checkout path — useless the
+moment it left that machine. A per-user OS data-dir vault was tried and
+removed once already for splitting content across two locations with no
+CI installer to justify it; now there is one, so the split earns its keep.
+
+`release::project_root()` (`desktop/src/lib.rs`) resolves
+`app.path().app_data_dir()/project` at launch instead, and
+`release::sync_project_template()` copies `.claude/commands/{lect,quiz}.md`,
+the docs they load, `CLAUDE.md`, `.mcp.json` and the validator scripts into
+it from `bundle.resources` (`desktop/resources/claude-project/`, assembled by
+`scripts/prepare-desktop-resources.mjs`) on every launch — an app update
+always ships current commands. `vault/` lives inside that same project dir
+but is never part of the bundled resource, so a user's actual notes are
+never touched by the sync. `REPO_ROOT` and `VAULT_ROOT` both point inside
+it, same as before.
+
+Net effect: a release build no longer depends on the checkout that built
+it, on any platform — a locally built install survives moving or deleting
+the original clone, and a CI-built install works for whoever downloads it.
+Distribution is still "get an installer and run it", not "clone the repo"
+— see [GETTING_STARTED.md](GETTING_STARTED.md) for the case where someone
+wants the dev workflow instead.
 
 Sidecars are referenced by **basename only** (`sidecar("node")`, not
 `sidecar("bin/node")`) — Tauri flattens `bundle.externalBin` entries to
@@ -185,13 +203,21 @@ npm run build:desktop   # production: installer under desktop/target/release/bun
 ## CI
 
 **[.github/workflows/ci.yml](../.github/workflows/ci.yml)** — every push/PR
-to `main` runs a fast check (tsc + `go build` for both services), so a
-change that breaks the build is caught early. There is deliberately **no**
-installer-publishing pipeline: installers bake in the building checkout's
-path (see the vault table above), so a CI-built installer would point at a
-runner's ephemeral checkout and be useless. Users clone and set up instead
-([GETTING_STARTED.md](GETTING_STARTED.md)); each machine builds its own
-installer with `npm run install:desktop` if wanted.
+to `main` runs a fast check (`tsc --noEmit`), so a change that breaks the
+build is caught early. It does not build installers; that's heavy and
+belongs on a release, not every push.
+
+**[.github/workflows/release.yml](../.github/workflows/release.yml)** — runs
+on a `v*.*.*` tag push (or manually via `workflow_dispatch` against an
+existing tag). Builds the installer on all three OSes (Windows NSIS+MSI,
+macOS universal DMG, Linux AppImage+deb) and attaches them to a GitHub
+Release named after the tag, with auto-generated release notes. Each tag is
+its own release, so older versions stay downloadable — nothing is
+overwritten by a newer tag. This only works because release builds resolve
+their project dir at runtime now (see the table above); it would have shipped
+broken installers under the old compile-time-baked path. A user who just
+wants a local build without cutting a release still runs `npm run
+install:desktop`, which is unaffected by any of this.
 
 ## Verifying a change here
 

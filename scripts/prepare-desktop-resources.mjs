@@ -19,6 +19,26 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const DESKTOP_DIR = path.join(ROOT, "desktop");
 const BIN_DIR = path.join(DESKTOP_DIR, "bin");
 const RESOURCES_DIR = path.join(DESKTOP_DIR, "resources", "frontend");
+const CLAUDE_PROJECT_DIR = path.join(DESKTOP_DIR, "resources", "claude-project");
+
+// Everything /lect and /quiz need to run stand-alone, with no source checkout
+// nearby: the command files themselves, the docs they load, the validators
+// they shell out to, and the project-level MCP config for markitdown. The app
+// copies this into a per-user data directory at runtime (desktop/src/lib.rs,
+// release::sync_project_template) so a CI-built installer works on whatever
+// machine it's installed on, not just the one that built it.
+const CLAUDE_PROJECT_FILES = [
+  "CLAUDE.md",
+  ".mcp.json",
+  ".claude/commands/lect.md",
+  ".claude/commands/quiz.md",
+  "docs/teaching-guidelines.md",
+  "docs/html-output-contract.md",
+  "docs/lesson-template.md",
+  "docs/quiz-guidelines.md",
+  "scripts/validate-lesson.mjs",
+  "scripts/validate-quiz.mjs",
+];
 
 function run(cmd, args, opts = {}) {
   const result = spawnSync(cmd, args, { stdio: "inherit", shell: process.platform === "win32", ...opts });
@@ -50,7 +70,17 @@ function copyNodeSidecar(triple) {
   copyFileSync(process.execPath, path.join(BIN_DIR, `node-${triple}${suffix}`));
 }
 
+function buildClaudeProject() {
+  rmSync(CLAUDE_PROJECT_DIR, { recursive: true, force: true });
+  for (const rel of CLAUDE_PROJECT_FILES) {
+    const dest = path.join(CLAUDE_PROJECT_DIR, rel);
+    mkdirSync(path.dirname(dest), { recursive: true });
+    copyFileSync(path.join(ROOT, rel), dest);
+  }
+}
+
 const triple = targetTriple();
 buildNextStandalone();
 copyNodeSidecar(triple);
+buildClaudeProject();
 console.log(`desktop resources prepared for ${triple}`);

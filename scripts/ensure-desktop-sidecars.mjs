@@ -13,6 +13,7 @@ import { targetTriple } from "./desktop-target-triple.mjs";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const BIN_DIR = path.join(ROOT, "desktop", "bin");
 const RESOURCES_DIR = path.join(ROOT, "desktop", "resources", "frontend");
+const CLAUDE_PROJECT_DIR = path.join(ROOT, "desktop", "resources", "claude-project");
 const suffix = process.platform === "win32" ? ".exe" : "";
 const triple = targetTriple();
 
@@ -22,9 +23,12 @@ for (const name of ["node"]) {
   if (!existsSync(file)) writeFileSync(file, "");
 }
 
-// bundle.resources is a glob (`resources/frontend/**/*`) that tauri-build
-// requires to match at least one file at compile time, even though dev mode
-// never reads it (only the release sidecar path does).
-mkdirSync(RESOURCES_DIR, { recursive: true });
-const placeholder = path.join(RESOURCES_DIR, ".gitkeep");
-if (!existsSync(placeholder)) writeFileSync(placeholder, "");
+// bundle.resources is a glob (`resources/frontend/**/*`, `resources/
+// claude-project/**/*`) that tauri-build requires to match at least one file
+// at compile time, even though dev mode never reads either (only the release
+// sidecar path does).
+for (const dir of [RESOURCES_DIR, CLAUDE_PROJECT_DIR]) {
+  mkdirSync(dir, { recursive: true });
+  const placeholder = path.join(dir, ".gitkeep");
+  if (!existsSync(placeholder)) writeFileSync(placeholder, "");
+}

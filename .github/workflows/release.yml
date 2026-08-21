@@ -1,0 +1,118 @@
+# Builds the desktop installer for Windows, macOS and Linux and attaches
+# them to a GitHub Release. Runs only on a version tag — pushes to main are
+# handled by ci.yml instead, which is fast on purpose. Each tag gets its own
+# release with its own installers, so older versions stay downloadable
+# alongside the newest one; nothing here ever overwrites a prior release.
+#
+# Triggered by tags matching v*.*.* (semver, e.g. v1.4.2):
+#   git tag v1.4.2 && git push origin v1.4.2
+
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to (re)build and release, e.g. v1.4.2"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            bundles: nsis,msi
+          - os: macos-latest
+            bundles: dmg
+            rust-target: universal-apple-darwin
+          - os: ubuntu-22.04
+            bundles: appimage,deb
+
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust-target == 'universal-apple-darwin' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: desktop
+
+      # Tauri v2 GTK/WebKit build deps — see docs/desktop.md's prerequisites
+      # table. Windows and macOS runners ship MSVC/WebView2 and Xcode CLT
+      # already, so only Linux needs anything installed here.
+      - name: Install Linux build dependencies
+        if: matrix.os == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential libwebkit2gtk-4.1-dev libssl-dev libgtk-3-dev librsvg2-dev
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      # tauri.conf.json's version is cosmetic (it names the installer file,
+      # e.g. Notecom_1.4.2_x64-setup.exe) but keeping it in step with the tag
+      # is what makes "which installer is this" a one-glance answer instead
+      # of a guess.
+      - name: Sync app version from tag
+        shell: bash
+        run: |
+          TAG="${{ github.event.inputs.tag || github.ref_name }}"
+          VERSION="${TAG#v}"
+          node -e "
+            const fs = require('fs');
+            const p = 'desktop/tauri.conf.json';
+            const j = JSON.parse(fs.readFileSync(p, 'utf8'));
+            j.version = '$VERSION';
+            fs.writeFileSync(p, JSON.stringify(j, null, 2) + '\n');
+          "
+          sed -i.bak -E "s/^version = \".*\"/version = \"$VERSION\"/" desktop/Cargo.toml
+          rm -f desktop/Cargo.toml.bak
+
+      # Runs tauri.conf.json's beforeBuildCommand (next build --output
+      # standalone + the Node/claude-project resources) as a normal part of
+      # `tauri build` — see scripts/prepare-desktop-resources.mjs. Bundles
+      # are constrained per OS instead of the config's default "all" so
+      # Linux doesn't also attempt an rpm build with no rpmbuild installed.
+      - name: Build installer
+        shell: bash
+        run: |
+          if [ -n "${{ matrix.rust-target }}" ]; then
+            npx tauri build --config desktop/tauri.conf.json --target ${{ matrix.rust-target }} --bundles ${{ matrix.bundles }}
+          else
+            npx tauri build --config desktop/tauri.conf.json --bundles ${{ matrix.bundles }}
+          fi
+
+      - name: Collect installer artifacts
+        shell: bash
+        run: |
+          mkdir -p installation
+          find desktop/target -type f \( -iname "*.exe" -o -iname "*.msi" -o -iname "*.dmg" -o -iname "*.AppImage" -o -iname "*.deb" \) -path "*/bundle/*" -exec cp {} installation/ \;
+          ls -la installation/
+
+      - name: Attach to release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.tag || github.ref_name }}
+          files: installation/*
+          generate_release_notes: true
+          fail_on_unmatched_files: true
