@@ -249,10 +249,9 @@
       <p class="eyebrow">How Notecom works</p>
       <h1>From lecture slides to notes you can search, in one command.</h1>
       <p class="lede">
-        Notecom turns a PDF or a slide deck into plain-language study notes,
-        filed under the right subject, and kept in one shared library your
-        classmates can read too. This page walks through how that actually
-        happens, step by step.
+        Notecom turns a PDF or slide deck into plain-language study notes,
+        filed by subject, in one shared library your classmates can read
+        too. Here's how that actually happens.
       </p>
     </div>
 
@@ -278,11 +277,10 @@
     <p class="eyebrow">The one rule</p>
     <h2>Every copy of Notecom reads the same notes. Only one kind can write new ones.</h2>
     <p class="lede" style="margin-top:10px;">
-      Writing a note runs <b style="color:var(--text)">your own Claude Code CLI</b>,
-      on <b style="color:var(--text)">your own Claude subscription</b>. That only
-      works on the machine the CLI is actually signed in on — so a shared,
-      teacher-run server can show every note perfectly, but it can't write new ones
-      for you.
+      Writing a note runs <b style="color:var(--text)">your own Claude Code CLI</b>
+      on <b style="color:var(--text)">your own subscription</b> — only the
+      machine it's signed in on can generate. A shared server reads and
+      shares perfectly; it just can't write for you.
     </p>
 
     <div class="cards">
@@ -362,7 +360,7 @@
           </g>
         </svg>
       </div>
-      <figcaption>Both kinds of Notecom talk to the same Supabase library. Only the one with a signed-in Claude Code CLI can add to it.</figcaption>
+      <figcaption>Same Supabase library either way. Only a signed-in Claude Code CLI can add to it.</figcaption>
     </figure>
   </div>
 </section>
@@ -377,10 +375,10 @@
     </p>
 
     <ol class="step-list">
-      <li><span class="n">1</span><div><b>You hand over a file.</b> <span class="sub">A lecture PDF, slide deck, or photo of a whiteboard — dragged into the terminal, or dropped on the Generate button in the app.</span></div></li>
-      <li><span class="n">2</span><div><b>Claude reads it and writes the note.</b> <span class="sub">Plain, high-school-level sentences, with the technical terms kept exactly right — grounded only in what's on the page, nothing added from memory.</span></div></li>
-      <li><span class="n">3</span><div><b>The note is saved to <code>vault/</code>, on your machine.</b> <span class="sub">One file per note, filed under the subject folder, with its place in the list recorded alongside it.</span></div></li>
-      <li><span class="n">4</span><div><b>The app picks it up and stores it for good.</b> <span class="sub">Next time the note list loads, Notecom copies the new file into Supabase — the shared library everyone actually reads from.</span></div></li>
+      <li><span class="n">1</span><div><b>You hand over a file.</b> <span class="sub">A lecture PDF, slide deck, or photo — dragged into the terminal, or dropped on the app's Generate button.</span></div></li>
+      <li><span class="n">2</span><div><b>Claude reads it and writes the note.</b> <span class="sub">Plain, high-school-level sentences, technical terms kept exact — grounded only in what's on the page.</span></div></li>
+      <li><span class="n">3</span><div><b>The note is saved to <code>vault/</code>, on your machine.</b> <span class="sub">One file per note, filed under its subject folder, its place in the list recorded alongside it.</span></div></li>
+      <li><span class="n">4</span><div><b>The app picks it up and stores it for good.</b> <span class="sub">Next time the note list loads, Notecom copies the file into Supabase — the shared library everyone reads from.</span></div></li>
     </ol>
 
     <figure>
@@ -423,7 +421,7 @@
           </g>
         </svg>
       </div>
-      <figcaption>One direction only: the CLI writes files, and the app copies them into Supabase. The app never writes back to <code class="mono">vault/</code>.</figcaption>
+      <figcaption>One direction only: the CLI writes files; the app copies them into Supabase and never writes back to <code class="mono">vault/</code>.</figcaption>
     </figure>
   </div>
 </section>
@@ -433,9 +431,9 @@
     <p class="eyebrow">Step by step — reading a note</p>
     <h2>What happens when you open the app</h2>
     <p class="lede" style="margin-top:10px;">
-      There's no separate sync step to wait for. Every device asks Supabase
-      directly, every time — so a note written on your laptop shows up on your
-      phone the next time you open it there.
+      No sync step to wait for. Every device asks Supabase directly, every
+      time — a note written on your laptop shows up on your phone the next
+      time you open it there.
     </p>
 
     <figure>
@@ -470,13 +468,12 @@
           </g>
         </svg>
       </div>
-      <figcaption>Access is checked in the database itself, on every read — not by the app, and not by trusting the browser.</figcaption>
+      <figcaption>Access is checked in the database on every read — never by the app, never by trusting the browser.</figcaption>
     </figure>
 
     <p style="margin-top:28px; color:var(--text-muted);">
-      Search works the same way: typing in the sidebar box asks Supabase to
-      rank the note sections that match, and only the ones you're allowed to
-      read come back.
+      Search works the same way: Supabase ranks the sections that match, and
+      only the ones you're allowed to read come back.
     </p>
   </div>
 </section>
@@ -490,17 +487,17 @@
       <div class="pillar">
         <span class="k">Folders, not files</span>
         <h3>Sharing is per subject</h3>
-        <p>You share a folder, not a single note. Everything inside it — every note, every quiz — opens for whoever you add, with the role you gave them: viewer or editor.</p>
+        <p>You share a folder, not single notes. Everything inside opens for whoever you add, at the role you gave them: viewer or editor.</p>
       </div>
       <div class="pillar">
         <span class="k">Deletes don't vanish</span>
         <h3>Removed, not erased</h3>
-        <p>Deleting a note marks it removed instead of dropping the row. That way the app can always tell "gone" apart from "never existed" — which matters once several people share a folder.</p>
+        <p>Deleting marks a note removed instead of dropping the row, so the app can always tell "gone" from "never existed" — it matters once a folder has more than one person.</p>
       </div>
       <div class="pillar">
         <span class="k">No hidden costs</span>
         <h3>Your subscription, nothing extra</h3>
-        <p>Writing a note spends nothing beyond the Claude subscription you already have. Notecom holds no API key of its own and never bills anyone on your behalf.</p>
+        <p>Writing spends nothing beyond the Claude subscription you already have. Notecom holds no API key and never bills you.</p>
       </div>
     </div>
   </div>
@@ -519,8 +516,8 @@
     </div>
     <p class="fine">
       Every read and write goes straight to Supabase, from any device, the
-      moment it happens — there's no local database and no background sync to
-      fall behind.
+      moment it happens — no local database, no background sync to fall
+      behind.
     </p>
   </div>
 </footer>
