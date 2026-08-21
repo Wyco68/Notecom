@@ -101,6 +101,7 @@ first request. Full setup with prerequisites:
 
 | Document | What's in it |
 |---|---|
+| [docs/how-it-works.md](docs/how-it-works.md) | Plain-language walkthrough, with diagrams |
 | [SPECIFICATION.md](SPECIFICATION.md) | The layer contract, end to end |
 | [flow.md](flow.md) | Request-by-request data flow |
 | [docs/architecture.md](docs/architecture.md) | Data flow, and the rules that must not break |

@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "folder name required" }, { status: 400 });
     }
     const folder = slugify(name);
-    await createFolder(folder);
+    await createFolder(folder, name.trim());
     return NextResponse.json({ ok: true, folder });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 502 });

@@ -156,10 +156,13 @@ export function startLogin(mode: "claudeai" | "console" = "claudeai"): LoginSess
   child.stderr.on("data", (d: Buffer) => onText(d.toString()));
 
   child.on("error", (err) => {
+    // Raw spawn errors (local binary path, errno) go to the server log only —
+    // this session's log is a UI stream, not a debug console.
+    if (!err.message.includes("ENOENT")) console.error("[auth] claude spawn error:", err.message);
     s.log.push(
       err.message.includes("ENOENT")
         ? "Claude Code CLI not found — install it and make sure `claude` is on PATH."
-        : `Error: ${err.message}`
+        : "Sign-in failed to start — check the server logs."
     );
     s.status = "error";
     s.child = undefined;

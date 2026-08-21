@@ -80,6 +80,22 @@ export function isResponse(v: unknown): v is NextResponse {
   return v instanceof NextResponse;
 }
 
+// lib/collab/folders.ts rethrows raw PostgREST/Postgres errors verbatim at
+// ~20 call sites, so `message` below can be real driver text — table,
+// column, constraint and RLS policy names. Fine to log; never fine to hand
+// to whichever caller happened to trigger it. `code`-classified errors are
+// always driver text by construction; a code-less message is only sanitized
+// when it *looks* like driver text (names a constraint/relation/policy) —
+// otherwise it's an app-authored validation message ("username too short")
+// that's meant to be read.
+const DRIVER_TEXT_RE = /row-level security policy|\bconstraint\b|\brelation\b|duplicate key|\bcolumn\b/i;
+const SAFE_MESSAGE: Record<number, string> = {
+  403: "not authorized",
+  404: "not found",
+  400: "invalid request",
+  500: "something went wrong",
+};
+
 /**
  * Map a thrown error to a status. The RPCs raise SQLSTATE 42501 for "not
  * allowed" and P0002 for "no such row" — lib/collab/folders.ts's rpc()
@@ -87,7 +103,7 @@ export function isResponse(v: unknown): v is NextResponse {
  * a fallback for errors that arrive without one (e.g. a plain select).
  */
 export function errorResponse(err: any): NextResponse {
-  const message = String(err?.message ?? err ?? "unexpected error");
+  const rawMessage = String(err?.message ?? err ?? "unexpected error");
   const code = err?.code as string | undefined;
   const status =
     code === "42501"
@@ -96,12 +112,20 @@ export function errorResponse(err: any): NextResponse {
         ? 404
         : code === "23505" || code === "22023"
           ? 400
-          : /not authorized|invite only|cannot |does not grant|permission denied/i.test(message)
+          : /not authorized|invite only|cannot |does not grant|permission denied/i.test(rawMessage)
             ? 403
-            : /no such|not found|no pending/i.test(message)
+            : /no such|not found|no pending/i.test(rawMessage)
               ? 404
-              : /already|invalid|too short|is required|only be changed/i.test(message)
+              : /already|invalid|too short|is required|only be changed/i.test(rawMessage)
                 ? 400
                 : 500;
+
+  // A coded error is always driver text; an uncoded one only if it reads
+  // like driver text, or it fell all the way through to the 500 default
+  // (nothing recognized it, so it isn't a known app-authored shape either).
+  const sanitize = !!code || status === 500 || DRIVER_TEXT_RE.test(rawMessage);
+  if (sanitize) console.error("[collab] request failed:", rawMessage);
+  const message = sanitize ? SAFE_MESSAGE[status] : rawMessage;
+
   return NextResponse.json({ error: message }, { status });
 }

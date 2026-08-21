@@ -55,7 +55,10 @@ export async function search(params: {
     p_kind: params.kind ?? null,
     p_limit: limit,
   });
-  if (error) throw new Error(error.message);
+  if (error) {
+    console.error("[search] notes_search_chunks failed:", error.message);
+    throw new Error("search failed");
+  }
 
   const results: SearchResult[] = (data ?? []).map((r: any) => ({
     folder: r.folder,
@@ -88,6 +91,9 @@ export async function related(
     p_kind: kind,
     p_limit: 5,
   });
-  if (error) throw new Error(error.message);
+  if (error) {
+    console.error("[search] notes_related_docs failed:", error.message);
+    throw new Error("related lookup failed");
+  }
   return { results: (data ?? []) as RelatedResult[] };
 }

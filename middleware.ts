@@ -3,8 +3,14 @@ import { createServerClient } from "@supabase/ssr";
 
 // Single choke point for one rule: notes are for signed-in people. Every page
 // and API route matched below needs a Supabase session; without one a page
-// redirects to sign-in and an API answers 401. `/api/auth/*` is exempt, since
-// that is how a session is obtained.
+// redirects to sign-in and an API answers 401. `/api/auth/collab` is the one
+// exception — sign-up/sign-in/reset, which is how a session is obtained in
+// the first place. `/api/auth` and `/api/auth/stream` are a different thing
+// entirely (the local Claude Code CLI's own login, lib/auth/cli.ts) and are
+// gated like everything else: nothing about starting, cancelling or reading
+// that flow needs to be reachable by someone with no Notecom account at all,
+// and every real caller (components/modals/SignInModal.tsx) already only
+// renders inside the signed-in app shell.
 //
 // An install with no Supabase configured used to skip the gate, because the
 // vault was on disk and there were no accounts to demand. Supabase is the store
@@ -209,7 +215,7 @@ export async function middleware(req: NextRequest) {
     return withCsp(NextResponse.next({ request: { headers } }));
   };
 
-  if (path.startsWith("/api/auth")) {
+  if (path === "/api/auth/collab") {
     const retryAfter = rateLimit(`auth:${ip}`, AUTH_LIMIT, AUTH_WINDOW_MS);
     if (retryAfter !== null) return withCsp(tooManyRequests(retryAfter));
     return next();

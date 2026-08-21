@@ -31,8 +31,15 @@ export type Kind = "lesson" | "quiz";
  *  columns predate this app's schema migrations and carry no defaults. */
 const nowISO = () => new Date().toISOString();
 
+// `cause` is the raw Supabase/Postgres error — table, column, constraint and
+// RLS policy names in plain text. Logging it and throwing only `message`
+// keeps that detail out of every route handler's response body; every caller
+// of `fail()` already treats the thrown message as the thing shown to the
+// client (see e.g. app/api/tree/route.ts), so this changes nothing about how
+// callers use it, only what a caller who isn't supposed to see it learns.
 function fail(message: string, cause?: { message: string } | null): never {
-  throw new Error(cause?.message ? `${message}: ${cause.message}` : message);
+  if (cause?.message) console.error(`[vault] ${message}:`, cause.message);
+  throw new Error(message);
 }
 
 // --- folder resolution --------------------------------------------------------
@@ -60,6 +67,28 @@ async function requireFolderId(slug: string): Promise<string> {
   const [id] = await folderIdsBySlug(slug);
   if (!id) fail("folder not found");
   return id;
+}
+
+/**
+ * Resolves a folder slug to an id the caller may write to, or null. For a
+ * write path that happens entirely outside Supabase (lib/generate/runner.ts
+ * spawns a local CLI process against a filesystem path, not a Supabase call),
+ * so RLS never gets a chance to refuse it — this is a fail-fast check in
+ * front of that, using the same `notes_can_write_folder` function RLS itself
+ * calls, not a second copy of the rule. `folderIdsBySlug` already orders the
+ * caller's own folder first, matching how every other write here resolves a
+ * shared slug.
+ */
+export async function resolveWritableFolderId(slug: string): Promise<string | null> {
+  const supabase = await createClient();
+  const [id] = await folderIdsBySlug(slug);
+  if (!id) return null;
+  const { data, error } = await supabase.rpc("notes_can_write_folder", { p_folder: id });
+  if (error) {
+    console.error("[vault] write-permission check failed:", error.message);
+    return null;
+  }
+  return data ? id : null;
 }
 
 // --- tree ---------------------------------------------------------------------
@@ -126,7 +155,14 @@ export async function listFolderDocs(
 // same name is returned rather than duplicated. New folders start private and
 // undiscoverable — sharing is an explicit act performed later from the web UI,
 // never a default.
-export async function createFolder(name: string): Promise<{ ok: boolean }> {
+//
+// `displayName` defaults to `slug` for the one caller (lib/vault/import.ts)
+// where they're genuinely the same string — a vault folder's on-disk name
+// already is Claude Code's own kebab-case slug, nothing else to preserve.
+// The in-app "create folder" route is the other caller, and passes both: a
+// slug column exists precisely so casing/spacing typed by a person doesn't
+// have to be thrown away to get one.
+export async function createFolder(slug: string, displayName: string = slug): Promise<{ ok: boolean }> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) fail("sign in required");
@@ -135,7 +171,7 @@ export async function createFolder(name: string): Promise<{ ok: boolean }> {
     .from("notes_folders")
     .select("id")
     .eq("deleted", false)
-    .eq("slug", name)
+    .eq("slug", slug)
     .eq("owner_id", user.id)
     .limit(1);
   if (lookupErr) fail("folder lookup failed", lookupErr);
@@ -144,8 +180,8 @@ export async function createFolder(name: string): Promise<{ ok: boolean }> {
   const now = nowISO();
   const { error } = await supabase.from("notes_folders").insert({
     id: crypto.randomUUID(),
-    slug: name,
-    name,
+    slug,
+    name: displayName,
     owner_id: user.id,
     visibility: "private",
     discoverable: false,

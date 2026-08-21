@@ -1,13 +1,19 @@
 import { NextRequest } from "next/server";
 import { getJob, stopJob } from "@/lib/generate/runner";
+import { VERIFIED_USER_HEADER } from "@/middleware";
 
 // SSE tail of a generation job: log lines, token-count updates, then end.
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const userId = req.headers.get(VERIFIED_USER_HEADER);
+  if (!userId) return Response.json({ error: "sign in required" }, { status: 401 });
   const { id } = await params;
-  const job = getJob(id);
+  // Someone else's job reads as "not found", same as a job that never
+  // existed — an id is not a permission, and this app never confirms one it
+  // won't also let the caller act on.
+  const job = getJob(id, userId);
   if (!job) {
     return Response.json({ error: "job not found" }, { status: 404 });
   }
@@ -55,11 +61,13 @@ export async function GET(
 
 // Force-stop a running job — the modal's Ctrl+C.
 export async function DELETE(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const userId = req.headers.get(VERIFIED_USER_HEADER);
+  if (!userId) return Response.json({ error: "sign in required" }, { status: 401 });
   const { id } = await params;
-  const stopped = stopJob(id);
+  const stopped = stopJob(id, userId);
   if (!stopped) {
     return Response.json({ error: "job not running" }, { status: 409 });
   }
