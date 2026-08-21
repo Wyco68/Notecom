@@ -12,56 +12,55 @@
 <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,600;1,6..72,500;1,6..72,600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 
 <style>
+  /* Dark-first, deliberately: this page describes an app whose whole
+     identity is "dark, code-editor look" (docs/ui-guidelines.md), so its
+     own near-black is the default here too, not a media-query afterthought.
+     Tokens below are the app's actual surfaces — sidebar/page #0a0e14, main
+     pane #0d1117, modal/card #161b22 — not an invented palette. */
   :root{
-    --ink:#f7f3e8;
-    --surface:#ffffff;
-    --surface-2:#efe8d4;
-    --line:#ddd2b2;
-    --text:#231f18;
-    --text-muted:#6c6353;
-    --accent:#a9701f;
-    --accent-soft:#f0dcb4;
-    --accent-2:#2563eb;
-    --accent-2-soft:#dbeafe;
-    --code-bg:#211d16;
-    --code-text:#f2ead6;
-    --code-muted:#a89d84;
-    --shadow: 0 1px 0 rgba(35,31,24,0.06);
+    --ink:#0a0e14;
+    --surface:#0d1117;
+    --surface-2:#161b22;
+    --line:#242b36;
+    --text:#e5e7eb;
+    --text-muted:#8891a1;
+    --accent:#fcd34d;
+    --accent-soft:#3a2f0f;
+    --accent-2:#60a5fa;
+    --accent-2-soft:#16243f;
+    --shadow: 0 1px 0 rgba(0,0,0,0.5);
   }
 
-  @media (prefers-color-scheme: dark){
-    :root:not([data-theme="light"]){
-      --ink:#14151b;
-      --surface:#1b1c24;
-      --surface-2:#22232d;
-      --line:#33343f;
-      --text:#eae6da;
-      --text-muted:#93909e;
-      --accent:#e3b45c;
-      --accent-soft:#3a3220;
-      --accent-2:#60a5fa;
-      --accent-2-soft:#1c2a4a;
-      --code-bg:#0f1014;
-      --code-text:#e9e4d4;
-      --code-muted:#767389;
-      --shadow: 0 1px 0 rgba(0,0,0,0.4);
+  /* Explicit light preference only — the app itself offers a light mode, so
+     someone who wants that here can have it, but it's the override, not
+     the default. */
+  @media (prefers-color-scheme: light){
+    :root:not([data-theme="dark"]){
+      --ink:#f7f8fa;
+      --surface:#ffffff;
+      --surface-2:#eef1f5;
+      --line:#dde1e7;
+      --text:#14161b;
+      --text-muted:#5b6270;
+      --accent:#b45309;
+      --accent-soft:#fdecc8;
+      --accent-2:#2563eb;
+      --accent-2-soft:#dbeafe;
+      --shadow: 0 1px 0 rgba(20,22,27,0.06);
     }
   }
-  :root[data-theme="dark"]{
-    --ink:#14151b;
-    --surface:#1b1c24;
-    --surface-2:#22232d;
-    --line:#33343f;
-    --text:#eae6da;
-    --text-muted:#93909e;
-    --accent:#e3b45c;
-    --accent-soft:#3a3220;
-    --accent-2:#60a5fa;
-    --accent-2-soft:#1c2a4a;
-    --code-bg:#0f1014;
-    --code-text:#e9e4d4;
-    --code-muted:#767389;
-    --shadow: 0 1px 0 rgba(0,0,0,0.4);
+  :root[data-theme="light"]{
+    --ink:#f7f8fa;
+    --surface:#ffffff;
+    --surface-2:#eef1f5;
+    --line:#dde1e7;
+    --text:#14161b;
+    --text-muted:#5b6270;
+    --accent:#b45309;
+    --accent-soft:#fdecc8;
+    --accent-2:#2563eb;
+    --accent-2-soft:#dbeafe;
+    --shadow: 0 1px 0 rgba(20,22,27,0.06);
   }
 
   *{box-sizing:border-box;}
@@ -113,7 +112,14 @@
   header.hero{padding:96px 0 64px 0;}
   header.hero .wrap{display:grid; gap:48px;}
 
+  /* Fixed, not theme-tokened: a terminal window looks like a terminal
+     window regardless of what theme the surrounding page is in — the same
+     reason a code editor's own integrated terminal doesn't switch to a
+     cream background in light mode. */
   .terminal{
+    --code-bg:#05070a;
+    --code-text:#e5e7eb;
+    --code-muted:#6b7280;
     background:var(--code-bg);
     color:var(--code-text);
     border-radius:10px;
@@ -129,7 +135,7 @@
     background:rgba(255,255,255,0.03);
     border-bottom:1px solid rgba(255,255,255,0.06);
   }
-  .terminal .bar span{width:10px;height:10px;border-radius:50%;background:var(--code-muted); opacity:0.5;}
+  .terminal .bar .dot{width:10px;height:10px;border-radius:50%;background:var(--code-muted); opacity:0.5;}
   .terminal .bar .title{
     margin-left:8px; color:var(--code-muted); font-size:0.78rem;
   }
@@ -250,17 +256,17 @@
       </p>
     </div>
 
-    <div class="terminal" role="img" aria-label="A terminal showing the command /lect Wireless Network turning a PDF into a saved note">
+    <div class="terminal" role="img" aria-label="A terminal showing the command /lect Cybersecurity Fundamentals turning a PDF into a saved note">
       <div class="bar">
-        <span></span><span></span><span></span>
+        <span class="dot"></span><span class="dot"></span><span class="dot"></span>
         <span class="title">claude — /lect</span>
       </div>
       <div class="body">
         <p class="line"><span class="prompt">›</span> claude</p>
-        <p class="line"><span class="prompt">›</span> /lect Wireless Network</p>
-        <p class="line out">  reading Lecture-5-Wireless.pdf …</p>
+        <p class="line"><span class="prompt">›</span> /lect Cybersecurity Fundamentals</p>
+        <p class="line out">  reading Lecture-4-Firewalls.pdf …</p>
         <p class="line out">  writing plain-language notes, keeping the technical terms correct …</p>
-        <p class="line">  saved → <span class="file">vault/wireless-network/03-tdma-vs-fdma.html</span></p>
+        <p class="line">  saved → <span class="file">vault/cybersecurity-fundamentals/04-firewall-configuration.html</span></p>
         <p class="line out">  done.<span class="cursor"></span></p>
       </div>
     </div>
