@@ -1,0 +1,522 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>How Notecom Works</title>
+<meta name="description" content="A plain-language walkthrough of how Notecom turns lecture files into shared, searchable notes.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%93%93%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,600;1,6..72,500;1,6..72,600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+<style>
+  :root{
+    --ink:#f7f3e8;
+    --surface:#ffffff;
+    --surface-2:#efe8d4;
+    --line:#ddd2b2;
+    --text:#231f18;
+    --text-muted:#6c6353;
+    --accent:#a9701f;
+    --accent-soft:#f0dcb4;
+    --accent-2:#2c7f70;
+    --accent-2-soft:#d9ece7;
+    --code-bg:#211d16;
+    --code-text:#f2ead6;
+    --code-muted:#a89d84;
+    --shadow: 0 1px 0 rgba(35,31,24,0.06);
+  }
+
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --ink:#14151b;
+      --surface:#1b1c24;
+      --surface-2:#22232d;
+      --line:#33343f;
+      --text:#eae6da;
+      --text-muted:#93909e;
+      --accent:#e3b45c;
+      --accent-soft:#3a3220;
+      --accent-2:#5fb8a8;
+      --accent-2-soft:#1c3330;
+      --code-bg:#0f1014;
+      --code-text:#e9e4d4;
+      --code-muted:#767389;
+      --shadow: 0 1px 0 rgba(0,0,0,0.4);
+    }
+  }
+  :root[data-theme="dark"]{
+    --ink:#14151b;
+    --surface:#1b1c24;
+    --surface-2:#22232d;
+    --line:#33343f;
+    --text:#eae6da;
+    --text-muted:#93909e;
+    --accent:#e3b45c;
+    --accent-soft:#3a3220;
+    --accent-2:#5fb8a8;
+    --accent-2-soft:#1c3330;
+    --code-bg:#0f1014;
+    --code-text:#e9e4d4;
+    --code-muted:#767389;
+    --shadow: 0 1px 0 rgba(0,0,0,0.4);
+  }
+
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--ink);
+    color:var(--text);
+    font-family:"IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+    line-height:1.6;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  .wrap{max-width:900px;margin:0 auto;padding:0 24px;}
+  .col{max-width:680px;margin:0 auto;padding:0 24px;}
+
+  h1,h2,h3{
+    font-family:"Newsreader", Georgia, serif;
+    font-weight:600;
+    text-wrap:balance;
+    margin:0 0 0.5em 0;
+    letter-spacing:-0.005em;
+  }
+  h1{font-size:clamp(2.1rem,5vw,3.2rem); font-weight:600; font-style:italic; line-height:1.1;}
+  h2{font-size:clamp(1.5rem,3.4vw,1.9rem); line-height:1.2;}
+  h3{font-size:1.05rem; font-weight:600; font-family:"IBM Plex Sans",sans-serif;}
+
+  p{margin:0 0 1em 0;}
+  .lede{font-size:1.15rem; color:var(--text-muted); max-width:56ch;}
+
+  a{color:var(--accent-2);}
+
+  .eyebrow{
+    font-family:"IBM Plex Mono", ui-monospace, monospace;
+    font-size:0.78rem;
+    letter-spacing:0.08em;
+    text-transform:uppercase;
+    color:var(--accent-2);
+    margin:0 0 1em 0;
+    display:flex; align-items:center; gap:10px;
+  }
+  .eyebrow::before{
+    content:"";
+    width:22px; height:1px; background:var(--accent-2);
+  }
+
+  code, .mono{font-family:"IBM Plex Mono", ui-monospace, monospace;}
+
+  /* ---------- hero ---------- */
+  header.hero{padding:96px 0 64px 0;}
+  header.hero .wrap{display:grid; gap:48px;}
+
+  .terminal{
+    background:var(--code-bg);
+    color:var(--code-text);
+    border-radius:10px;
+    border:1px solid var(--line);
+    overflow:hidden;
+    box-shadow:0 20px 60px -30px rgba(0,0,0,0.5);
+    font-family:"IBM Plex Mono", ui-monospace, monospace;
+    font-size:0.92rem;
+  }
+  .terminal .bar{
+    display:flex; align-items:center; gap:8px;
+    padding:10px 14px;
+    background:rgba(255,255,255,0.03);
+    border-bottom:1px solid rgba(255,255,255,0.06);
+  }
+  .terminal .bar span{width:10px;height:10px;border-radius:50%;background:var(--code-muted); opacity:0.5;}
+  .terminal .bar .title{
+    margin-left:8px; color:var(--code-muted); font-size:0.78rem;
+  }
+  .terminal .body{padding:20px 22px 24px 22px; overflow-x:auto;}
+  .terminal .line{white-space:pre; margin:0 0 6px 0;}
+  .terminal .prompt{color:var(--accent-2);}
+  .terminal .out{color:var(--code-muted);}
+  .terminal .file{color:var(--accent);}
+  .terminal .cursor{
+    display:inline-block; width:7px; height:1.05em; vertical-align:text-bottom;
+    background:var(--code-text); margin-left:2px;
+    animation:blink 1.1s steps(1) infinite;
+  }
+  @media (prefers-reduced-motion: reduce){ .terminal .cursor{animation:none;} }
+  @keyframes blink{ 50%{opacity:0;} }
+
+  /* ---------- sections ---------- */
+  section{padding:64px 0;}
+  section.band{
+    background:var(--surface);
+    border-top:1px solid var(--line);
+    border-bottom:1px solid var(--line);
+  }
+
+  .step-list{list-style:none; margin:28px 0 0 0; padding:0; display:grid; gap:18px;}
+  .step-list li{
+    display:grid; grid-template-columns:28px 1fr; gap:14px;
+    align-items:baseline;
+  }
+  .step-list .n{
+    font-family:"IBM Plex Mono",monospace;
+    font-size:0.82rem; color:var(--accent);
+    border:1px solid var(--line);
+    background:var(--surface-2);
+    border-radius:5px;
+    width:26px; height:26px;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .step-list b{color:var(--text);}
+  .step-list .sub{color:var(--text-muted); font-size:0.96rem;}
+
+  /* ---------- figures ---------- */
+  figure{margin:32px 0 0 0;}
+  .diagram-frame{
+    background:var(--surface);
+    border:1px solid var(--line);
+    border-radius:12px;
+    padding:20px 8px;
+    overflow-x:auto;
+    box-shadow:var(--shadow);
+  }
+  .diagram-frame svg{display:block; margin:0 auto; max-width:100%; height:auto; min-width:560px;}
+  figcaption{
+    margin-top:12px; color:var(--text-muted); font-size:0.92rem; text-align:center;
+  }
+  svg text{font-family:"IBM Plex Sans", sans-serif;}
+  svg .lbl{font-family:"IBM Plex Mono", monospace;}
+
+  /* ---------- cards ---------- */
+  .cards{display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-top:28px;}
+  @media (max-width:640px){ .cards{grid-template-columns:1fr;} }
+  .card{
+    background:var(--surface);
+    border:1px solid var(--line);
+    border-radius:12px;
+    padding:22px 22px 20px 22px;
+  }
+  .card.can{border-color:var(--accent-2);}
+  .card .tag{
+    font-family:"IBM Plex Mono",monospace; font-size:0.72rem;
+    text-transform:uppercase; letter-spacing:0.06em;
+    padding:3px 8px; border-radius:5px;
+    display:inline-block; margin-bottom:12px;
+  }
+  .card.can .tag{background:var(--accent-2-soft); color:var(--accent-2);}
+  .card.cannot .tag{background:var(--surface-2); color:var(--text-muted);}
+  .card ul{margin:12px 0 0 0; padding-left:18px; color:var(--text-muted); font-size:0.95rem;}
+  .card ul li{margin-bottom:4px;}
+  .card ul li b{color:var(--text); font-weight:600;}
+
+  /* ---------- pillars ---------- */
+  .pillars{display:grid; grid-template-columns:repeat(3,1fr); gap:24px; margin-top:32px;}
+  @media (max-width:720px){ .pillars{grid-template-columns:1fr;} }
+  .pillar h3{margin-bottom:8px;}
+  .pillar p{color:var(--text-muted); font-size:0.95rem; margin:0;}
+  .pillar .k{
+    font-family:"IBM Plex Mono",monospace; font-size:0.72rem; color:var(--accent);
+    text-transform:uppercase; letter-spacing:0.07em; margin-bottom:10px; display:block;
+  }
+
+  /* ---------- footer ---------- */
+  footer{padding:56px 0 90px 0;}
+  .stack-row{
+    display:flex; flex-wrap:wrap; gap:8px; margin-top:18px;
+  }
+  .chip{
+    font-family:"IBM Plex Mono",monospace; font-size:0.78rem;
+    color:var(--text-muted);
+    border:1px solid var(--line);
+    border-radius:999px;
+    padding:5px 12px;
+  }
+  footer .fine{color:var(--text-muted); font-size:0.88rem; margin-top:28px; max-width:60ch;}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <div class="col" style="padding:0; max-width:640px;">
+      <p class="eyebrow">How Notecom works</p>
+      <h1>From lecture slides to notes you can search, in one command.</h1>
+      <p class="lede">
+        Notecom turns a PDF or a slide deck into plain-language study notes,
+        filed under the right subject, and kept in one shared library your
+        classmates can read too. This page walks through how that actually
+        happens, step by step.
+      </p>
+    </div>
+
+    <div class="terminal" role="img" aria-label="A terminal showing the command /lect Wireless Network turning a PDF into a saved note">
+      <div class="bar">
+        <span></span><span></span><span></span>
+        <span class="title">claude — /lect</span>
+      </div>
+      <div class="body">
+        <p class="line"><span class="prompt">›</span> claude</p>
+        <p class="line"><span class="prompt">›</span> /lect Wireless Network</p>
+        <p class="line out">  reading Lecture-5-Wireless.pdf …</p>
+        <p class="line out">  writing plain-language notes, keeping the technical terms correct …</p>
+        <p class="line">  saved → <span class="file">vault/wireless-network/03-tdma-vs-fdma.html</span></p>
+        <p class="line out">  done.<span class="cursor"></span></p>
+      </div>
+    </div>
+  </div>
+</header>
+
+<section class="band">
+  <div class="col">
+    <p class="eyebrow">The one rule</p>
+    <h2>Every copy of Notecom reads the same notes. Only one kind can write new ones.</h2>
+    <p class="lede" style="margin-top:10px;">
+      Writing a note runs <b style="color:var(--text)">your own Claude Code CLI</b>,
+      on <b style="color:var(--text)">your own Claude subscription</b>. That only
+      works on the machine the CLI is actually signed in on — so a shared,
+      teacher-run server can show every note perfectly, but it can't write new ones
+      for you.
+    </p>
+
+    <div class="cards">
+      <div class="card can">
+        <span class="tag">Desktop app, or your own machine</span>
+        <h3>Reads and writes</h3>
+        <ul>
+          <li><b>Read, search, share</b> — every note, same as anywhere else</li>
+          <li><b>Generate new notes</b> — runs the CLI installed right there</li>
+        </ul>
+      </div>
+      <div class="card cannot">
+        <span class="tag">Hosted web app</span>
+        <h3>Reads only</h3>
+        <ul>
+          <li><b>Read, search, share</b> — the full library, nothing missing</li>
+          <li><b>Generate new notes</b> — not possible; no CLI lives on that server</li>
+        </ul>
+      </div>
+    </div>
+
+    <figure>
+      <div class="diagram-frame">
+        <svg viewBox="0 0 860 320" role="img" aria-label="Diagram: a desktop install has a browser, the Notecom app, and a local Claude Code CLI, and can both read and write notes into Supabase. A hosted server has the browser and the app but no CLI, so it can only read notes from Supabase, never write them.">
+          <defs>
+            <marker id="d3arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
+            </marker>
+          </defs>
+          <g font-size="13" fill="currentColor">
+
+            <!-- Desktop box -->
+            <rect x="30" y="24" width="330" height="180" rx="10" fill="none" stroke="currentColor" opacity="0.5"/>
+            <text x="46" y="50" class="lbl" font-size="12" letter-spacing="0.06em" opacity="0.7">DESKTOP APP</text>
+
+            <rect x="52" y="66" width="130" height="40" rx="6" fill="var(--surface-2)" stroke="currentColor" opacity="0.6"/>
+            <text x="117" y="90" text-anchor="middle">Browser</text>
+
+            <rect x="200" y="66" width="130" height="40" rx="6" fill="var(--surface-2)" stroke="currentColor" opacity="0.6"/>
+            <text x="265" y="90" text-anchor="middle">Notecom app</text>
+
+            <rect x="52" y="132" width="278" height="46" rx="6" fill="var(--accent-soft)" stroke="var(--accent)"/>
+            <text x="191" y="151" text-anchor="middle" fill="var(--accent)" font-weight="600">Claude Code CLI</text>
+            <text x="191" y="168" text-anchor="middle" fill="var(--accent)" font-size="11.5">signed in, ready to write</text>
+
+            <!-- Hosted box -->
+            <rect x="500" y="24" width="330" height="180" rx="10" fill="none" stroke="currentColor" opacity="0.5"/>
+            <text x="516" y="50" class="lbl" font-size="12" letter-spacing="0.06em" opacity="0.7">HOSTED WEB APP</text>
+
+            <rect x="522" y="66" width="130" height="40" rx="6" fill="var(--surface-2)" stroke="currentColor" opacity="0.6"/>
+            <text x="587" y="90" text-anchor="middle">Browser</text>
+
+            <rect x="670" y="66" width="130" height="40" rx="6" fill="var(--surface-2)" stroke="currentColor" opacity="0.6"/>
+            <text x="735" y="90" text-anchor="middle">Notecom app</text>
+
+            <rect x="522" y="132" width="278" height="46" rx="6" fill="none" stroke="currentColor" stroke-dasharray="4 4" opacity="0.45"/>
+            <text x="661" y="151" text-anchor="middle" opacity="0.6">No Claude Code CLI here</text>
+            <text x="661" y="168" text-anchor="middle" opacity="0.5" font-size="11.5">nothing to sign in to</text>
+
+            <!-- Supabase cylinder -->
+            <g transform="translate(430,270)">
+              <ellipse cx="0" cy="-16" rx="70" ry="12" fill="var(--surface-2)" stroke="currentColor" opacity="0.7"/>
+              <path d="M -70 -16 L -70 16 A 70 12 0 0 0 70 16 L 70 -16" fill="var(--surface-2)" stroke="currentColor" opacity="0.7"/>
+              <ellipse cx="0" cy="16" rx="70" ry="12" fill="none" stroke="currentColor" opacity="0.7"/>
+              <text x="0" y="4" text-anchor="middle" font-weight="600">Supabase</text>
+            </g>
+
+            <!-- reads: both sides -->
+            <line x1="191" y1="178" x2="380" y2="256" stroke="currentColor" opacity="0.55" marker-end="url(#d3arrow)"/>
+            <line x1="661" y1="178" x2="480" y2="256" stroke="currentColor" opacity="0.55" marker-end="url(#d3arrow)"/>
+            <text x="255" y="222" class="lbl" font-size="11.5" opacity="0.7">reads notes</text>
+            <text x="600" y="222" class="lbl" font-size="11.5" opacity="0.7" text-anchor="end">reads notes</text>
+
+            <!-- writes: desktop only -->
+            <line x1="140" y1="178" x2="390" y2="262" stroke="var(--accent)" stroke-width="2" marker-end="url(#d3arrow)"/>
+            <text x="70" y="204" class="lbl" font-size="11.5" fill="var(--accent)">writes new notes</text>
+          </g>
+        </svg>
+      </div>
+      <figcaption>Both kinds of Notecom talk to the same Supabase library. Only the one with a signed-in Claude Code CLI can add to it.</figcaption>
+    </figure>
+  </div>
+</section>
+
+<section>
+  <div class="col">
+    <p class="eyebrow">Step by step — writing a note</p>
+    <h2>How a lecture file becomes a note</h2>
+    <p class="lede" style="margin-top:10px;">
+      Nothing gets invented. Claude reads the file you gave it and writes only
+      what's in there, in clearer words.
+    </p>
+
+    <ol class="step-list">
+      <li><span class="n">1</span><div><b>You hand over a file.</b> <span class="sub">A lecture PDF, slide deck, or photo of a whiteboard — dragged into the terminal, or dropped on the Generate button in the app.</span></div></li>
+      <li><span class="n">2</span><div><b>Claude reads it and writes the note.</b> <span class="sub">Plain, high-school-level sentences, with the technical terms kept exactly right — grounded only in what's on the page, nothing added from memory.</span></div></li>
+      <li><span class="n">3</span><div><b>The note is saved to <code>vault/</code>, on your machine.</b> <span class="sub">One file per note, filed under the subject folder, with its place in the list recorded alongside it.</span></div></li>
+      <li><span class="n">4</span><div><b>The app picks it up and stores it for good.</b> <span class="sub">Next time the note list loads, Notecom copies the new file into Supabase — the shared library everyone actually reads from.</span></div></li>
+    </ol>
+
+    <figure>
+      <div class="diagram-frame">
+        <svg viewBox="0 0 880 210" role="img" aria-label="Diagram: a lecture file is read by the Claude Code CLI, which writes an html file into the local vault folder, which is then imported into Supabase, the shared library.">
+          <defs>
+            <marker id="d1arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
+            </marker>
+          </defs>
+          <g font-size="13" fill="currentColor">
+            <rect x="10" y="65" width="170" height="80" rx="8" fill="var(--surface-2)" stroke="currentColor" opacity="0.6"/>
+            <text x="95" y="100" text-anchor="middle">Lecture file</text>
+            <text x="95" y="118" text-anchor="middle" font-size="11.5" opacity="0.7">PDF, slides, photo</text>
+
+            <rect x="240" y="55" width="180" height="100" rx="8" fill="var(--accent-soft)" stroke="var(--accent)"/>
+            <text x="330" y="98" text-anchor="middle" fill="var(--accent)" font-weight="600">Claude Code CLI</text>
+            <text x="330" y="118" text-anchor="middle" fill="var(--accent)" font-size="11.5" class="lbl">/lect</text>
+            <text x="330" y="136" text-anchor="middle" fill="var(--accent)" font-size="11">writes the note</text>
+
+            <rect x="490" y="65" width="180" height="80" rx="8" fill="var(--surface-2)" stroke="currentColor" opacity="0.6"/>
+            <text x="580" y="98" text-anchor="middle" class="lbl">vault/</text>
+            <text x="580" y="118" text-anchor="middle" font-size="11.5" opacity="0.7">on your machine</text>
+
+            <rect x="700" y="55" width="170" height="100" rx="8" fill="var(--accent-2-soft)" stroke="var(--accent-2)"/>
+            <text x="785" y="98" text-anchor="middle" fill="var(--accent-2)" font-weight="600">Supabase</text>
+            <text x="785" y="118" text-anchor="middle" fill="var(--accent-2)" font-size="11.5">the shared library</text>
+
+            <line x1="180" y1="105" x2="235" y2="105" stroke="currentColor" opacity="0.6" marker-end="url(#d1arrow)"/>
+            <text x="207" y="90" text-anchor="middle" class="lbl" font-size="11" opacity="0.75">reads</text>
+
+            <line x1="420" y1="105" x2="485" y2="105" stroke="currentColor" opacity="0.6" marker-end="url(#d1arrow)"/>
+            <text x="452" y="90" text-anchor="middle" class="lbl" font-size="11" opacity="0.75">writes .html</text>
+
+            <line x1="670" y1="105" x2="695" y2="105" stroke="currentColor" opacity="0.6" marker-end="url(#d1arrow)"/>
+            <text x="682" y="185" text-anchor="middle" class="lbl" font-size="11" opacity="0.75" transform="translate(0,0)"></text>
+            <text x="683" y="90" text-anchor="middle" class="lbl" font-size="10.5" opacity="0.75"> </text>
+            <text x="683" y="170" text-anchor="middle" class="lbl" font-size="11" opacity="0.75">imported on</text>
+            <text x="683" y="184" text-anchor="middle" class="lbl" font-size="11" opacity="0.75">next load</text>
+          </g>
+        </svg>
+      </div>
+      <figcaption>One direction only: the CLI writes files, and the app copies them into Supabase. The app never writes back to <code class="mono">vault/</code>.</figcaption>
+    </figure>
+  </div>
+</section>
+
+<section class="band">
+  <div class="col">
+    <p class="eyebrow">Step by step — reading a note</p>
+    <h2>What happens when you open the app</h2>
+    <p class="lede" style="margin-top:10px;">
+      There's no separate sync step to wait for. Every device asks Supabase
+      directly, every time — so a note written on your laptop shows up on your
+      phone the next time you open it there.
+    </p>
+
+    <figure>
+      <div class="diagram-frame">
+        <svg viewBox="0 0 820 260" role="img" aria-label="Diagram: the browser asks the Notecom app for a note, the app runs a permission-checked query against Supabase, and the note comes back and is rendered on screen.">
+          <defs>
+            <marker id="d2arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
+            </marker>
+          </defs>
+          <g font-size="13" fill="currentColor">
+            <rect x="15" y="70" width="180" height="70" rx="8" fill="var(--surface-2)" stroke="currentColor" opacity="0.6"/>
+            <text x="105" y="110" text-anchor="middle">Your browser</text>
+
+            <rect x="320" y="60" width="200" height="90" rx="8" fill="var(--surface-2)" stroke="currentColor" opacity="0.6"/>
+            <text x="420" y="98" text-anchor="middle">Notecom app</text>
+            <text x="420" y="118" text-anchor="middle" font-size="11.5" opacity="0.7">the reader</text>
+
+            <rect x="640" y="70" width="165" height="70" rx="8" fill="var(--accent-2-soft)" stroke="var(--accent-2)"/>
+            <text x="722" y="110" text-anchor="middle" fill="var(--accent-2)" font-weight="600">Supabase</text>
+
+            <!-- request row -->
+            <line x1="195" y1="95" x2="315" y2="95" stroke="currentColor" opacity="0.65" marker-end="url(#d2arrow)"/>
+            <text x="255" y="80" text-anchor="middle" class="lbl" font-size="11" opacity="0.8">opens a note</text>
+
+            <line x1="520" y1="95" x2="635" y2="95" stroke="currentColor" opacity="0.65" marker-end="url(#d2arrow)"/>
+            <text x="577" y="80" text-anchor="middle" class="lbl" font-size="11" opacity="0.8" >checks access, reads</text>
+
+            <!-- response curve -->
+            <path d="M 722 145 C 620 210, 300 210, 105 145" fill="none" stroke="var(--accent)" stroke-width="1.6" opacity="0.85" marker-end="url(#d2arrow)"/>
+            <text x="410" y="218" text-anchor="middle" class="lbl" font-size="11.5" fill="var(--accent)">sends back the note's html — nothing you can't read</text>
+          </g>
+        </svg>
+      </div>
+      <figcaption>Access is checked in the database itself, on every read — not by the app, and not by trusting the browser.</figcaption>
+    </figure>
+
+    <p style="margin-top:28px; color:var(--text-muted);">
+      Search works the same way: typing in the sidebar box asks Supabase to
+      rank the note sections that match, and only the ones you're allowed to
+      read come back.
+    </p>
+  </div>
+</section>
+
+<section>
+  <div class="col">
+    <p class="eyebrow">Underneath</p>
+    <h2>Three things worth knowing</h2>
+
+    <div class="pillars">
+      <div class="pillar">
+        <span class="k">Folders, not files</span>
+        <h3>Sharing is per subject</h3>
+        <p>You share a folder, not a single note. Everything inside it — every note, every quiz — opens for whoever you add, with the role you gave them: viewer or editor.</p>
+      </div>
+      <div class="pillar">
+        <span class="k">Deletes don't vanish</span>
+        <h3>Removed, not erased</h3>
+        <p>Deleting a note marks it removed instead of dropping the row. That way the app can always tell "gone" apart from "never existed" — which matters once several people share a folder.</p>
+      </div>
+      <div class="pillar">
+        <span class="k">No hidden costs</span>
+        <h3>Your subscription, nothing extra</h3>
+        <p>Writing a note spends nothing beyond the Claude subscription you already have. Notecom holds no API key of its own and never bills anyone on your behalf.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="col">
+    <p class="eyebrow">Built with</p>
+    <div class="stack-row">
+      <span class="chip">Next.js</span>
+      <span class="chip">Supabase Postgres</span>
+      <span class="chip">Row Level Security</span>
+      <span class="chip">Claude Code CLI</span>
+      <span class="chip">Tauri desktop shell</span>
+      <span class="chip">Postgres full-text search</span>
+    </div>
+    <p class="fine">
+      Every read and write goes straight to Supabase, from any device, the
+      moment it happens — there's no local database and no background sync to
+      fall behind.
+    </p>
+  </div>
+</footer>
+
+</body>
+</html>
