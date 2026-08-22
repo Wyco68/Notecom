@@ -9,7 +9,14 @@ import SpinnerIcon from "../icons/SpinnerIcon";
 // row is the only sign a lesson is still being written, and the way back to its
 // log. Collapsed to nothing when there is no run to report, like the two
 // inboxes above it.
-export default function GenerateJobList({ onOpen }: { onOpen: (jobId: string) => void }) {
+export default function GenerateJobList({
+  onOpen,
+  folderNames,
+}: {
+  onOpen: (jobId: string) => void;
+  /** slug -> display name, so a renamed folder shows its current name here too. */
+  folderNames?: Record<string, string>;
+}) {
   const { jobs, now, abort, dismiss } = useGenerateJobs();
   if (!jobs.length) return null;
 
@@ -24,6 +31,7 @@ export default function GenerateJobList({ onOpen }: { onOpen: (jobId: string) =>
         const clock = `${String(Math.floor(elapsed / 60)).padStart(2, "0")}:${String(
           elapsed % 60
         ).padStart(2, "0")}`;
+        const folderLabel = folderNames?.[job.folder] ?? job.folder.replace(/-/g, " ");
         return (
           <div
             key={job.id}
@@ -32,10 +40,7 @@ export default function GenerateJobList({ onOpen }: { onOpen: (jobId: string) =>
           >
             <button
               onClick={() => onOpen(job.id)}
-              title={`${job.kind === "quiz" ? "Quiz" : "Lesson"} in ${job.folder.replace(
-                /-/g,
-                " "
-              )} — open the log`}
+              title={`${job.kind === "quiz" ? "Quiz" : "Lesson"} in ${folderLabel} — open the log`}
               className="ui-row flex min-w-0 flex-1 items-center gap-1.5 px-2 py-1 text-left text-sm"
             >
               {running ? (
@@ -56,7 +61,7 @@ export default function GenerateJobList({ onOpen }: { onOpen: (jobId: string) =>
               {/* One line always: this row has a fixed height budget, so a long
                   folder name clips and the title attribute carries the rest. */}
               <span className="min-w-0 flex-1 truncate text-gray-700 dark:text-gray-300">
-                {job.folder.replace(/-/g, " ")}
+                {folderLabel}
               </span>
               {running && (
                 <span className="shrink-0 font-mono text-xs tabular-nums text-gray-500">
@@ -68,7 +73,7 @@ export default function GenerateJobList({ onOpen }: { onOpen: (jobId: string) =>
               <button
                 onClick={() => abort(job.id)}
                 title="Abort this run"
-                aria-label={`Abort generating in ${job.folder.replace(/-/g, " ")}`}
+                aria-label={`Abort generating in ${folderLabel}`}
                 className="ui-icon-btn ui-icon-btn-danger ui-reveal mr-1 h-5 w-5 text-xs"
               >
                 ✕
@@ -77,7 +82,7 @@ export default function GenerateJobList({ onOpen }: { onOpen: (jobId: string) =>
               <button
                 onClick={() => dismiss(job.id)}
                 title="Dismiss"
-                aria-label={`Dismiss the finished run in ${job.folder.replace(/-/g, " ")}`}
+                aria-label={`Dismiss the finished run in ${folderLabel}`}
                 className="ui-icon-btn ui-reveal mr-1 h-5 w-5 text-xs"
               >
                 ✕

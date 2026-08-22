@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Folder, FolderDocs, LessonRef, VaultTree } from "@/lib/vault/types";
 import { pruneRecent, pushRecent, type RecentEntry } from "@/lib/vault/recent";
 import {
@@ -37,6 +37,14 @@ import UploadIcon from "../icons/UploadIcon";
 
 export default function AppShell() {
   const [folders, setFolders] = useState<Folder[] | null>(null);
+  // slug -> display name, for the surfaces that only hold a folder slug
+  // (Recent, Favorites, Search, the live generation list) and would
+  // otherwise fall back to de-slugifying it — stale the moment a folder is
+  // renamed to something that doesn't match its slug.
+  const folderNames = useMemo(
+    () => Object.fromEntries((folders ?? []).map((f) => [f.name, f.displayName])),
+    [folders]
+  );
   // Documents, per folder, fetched the first time a folder is opened. An
   // absent key means "not fetched yet", which is what the tree draws a
   // placeholder for — it is not the same as a folder with no lessons.
@@ -485,7 +493,7 @@ export default function AppShell() {
         {/* Generation runs in the background, so this row is what a closed
             dialog leaves behind: proof the run is alive, and the way back into
             its log. Renders nothing when nothing is running. */}
-        <GenerateJobList onOpen={(jobId) => setShowGenerate(jobId)} />
+        <GenerateJobList onOpen={(jobId) => setShowGenerate(jobId)} folderNames={folderNames} />
 
         {!query.trim() && (
           <FavoriteFiles
@@ -493,6 +501,7 @@ export default function AppShell() {
             selected={selected}
             onSelect={onSelect}
             onToggle={onToggleFavorite}
+            folderNames={folderNames}
           />
         )}
 
@@ -573,7 +582,7 @@ export default function AppShell() {
 
             <div className="ui-scroll flex-1 px-2 pb-2">
               {query.trim() ? (
-                <SearchResults query={submittedQuery} onSelect={onSelect} />
+                <SearchResults query={submittedQuery} onSelect={onSelect} folderNames={folderNames} />
               ) : (
                 <FileTree
                   folders={folders}
@@ -604,7 +613,12 @@ export default function AppShell() {
                   is empty the box collapses instead of holding open eight rows
                   of blank space. */}
               <div className={`px-2 ${recent.length ? "ui-scroll h-56" : ""}`}>
-                <RecentFiles entries={recent} selected={selected} onSelect={onSelect} />
+                <RecentFiles
+                  entries={recent}
+                  selected={selected}
+                  onSelect={onSelect}
+                  folderNames={folderNames}
+                />
               </div>
             </div>
           )}

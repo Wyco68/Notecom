@@ -51,10 +51,13 @@ function highlight(text: string, query: string) {
 export default function SearchResults({
   query,
   onSelect,
+  folderNames,
 }: {
   /** The *submitted* search term — the sidebar only updates this on Enter. */
   query: string;
   onSelect: (ref: LessonRef) => void;
+  /** slug -> display name, so a renamed folder shows its current name here too. */
+  folderNames?: Record<string, string>;
 }) {
   const [state, setState] = useState<State>(query ? { status: "loading" } : { status: "idle" });
 
@@ -130,7 +133,7 @@ export default function SearchResults({
             {highlight(r.heading, query)}
           </span>
           <span className="block truncate text-xs text-gray-500">
-            {r.title} · {r.folder.replace(/-/g, " ")}
+            {r.title} · {folderNames?.[r.folder] ?? r.folder.replace(/-/g, " ")}
           </span>
           <span className="mt-0.5 line-clamp-2 block text-xs leading-snug text-gray-600 dark:text-gray-400">
             {highlight(r.summary, query)}

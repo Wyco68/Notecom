@@ -15,10 +15,13 @@ export default function RecentFiles({
   entries,
   selected,
   onSelect,
+  folderNames,
 }: {
   entries: RecentEntry[];
   selected: LessonRef | null;
   onSelect: (ref: LessonRef) => void;
+  /** slug -> display name, so a renamed folder shows its current name here too. */
+  folderNames?: Record<string, string>;
 }) {
   if (!entries.length) {
     return (
@@ -39,7 +42,7 @@ export default function RecentFiles({
           <button
             key={`${entry.kind}:${entry.folder}:${entry.id}`}
             onClick={() => onSelect({ folder: entry.folder, id: entry.id, kind: entry.kind })}
-            title={`${entry.title} — ${entry.folder.replace(/-/g, " ")}`}
+            title={`${entry.title} — ${folderNames?.[entry.folder] ?? entry.folder.replace(/-/g, " ")}`}
             style={{ animationDelay: `${Math.min(i, 8) * 25}ms` }}
             className={`ui-rise ui-row flex w-full min-w-0 items-center gap-1.5 overflow-hidden px-2 py-1 text-left text-sm ${
               isActive

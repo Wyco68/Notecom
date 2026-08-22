@@ -12,11 +12,14 @@ export default function FavoriteFiles({
   selected,
   onSelect,
   onToggle,
+  folderNames,
 }: {
   entries: FavoriteEntry[];
   selected: LessonRef | null;
   onSelect: (ref: LessonRef) => void;
   onToggle: (ref: LessonRef, title: string) => void;
+  /** slug -> display name, so a renamed folder shows its current name here too. */
+  folderNames?: Record<string, string>;
 }) {
   if (!entries.length) return null;
 
@@ -39,7 +42,7 @@ export default function FavoriteFiles({
           >
             <button
               onClick={() => onSelect(ref)}
-              title={`${entry.title} — ${entry.folder.replace(/-/g, " ")}`}
+              title={`${entry.title} — ${folderNames?.[entry.folder] ?? entry.folder.replace(/-/g, " ")}`}
               className={`ui-row flex min-w-0 flex-1 items-center gap-1.5 truncate px-2 py-1 text-left text-sm ${
                 isActive
                   ? "bg-blue-600/10 text-blue-700 dark:bg-blue-600/20 dark:text-blue-300"
