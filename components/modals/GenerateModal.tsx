@@ -96,7 +96,7 @@ export default function GenerateModal({
       >
         {folders.map((f) => (
           <option key={f.name} value={f.name}>
-            {f.name.replace(/-/g, " ")}
+            {f.displayName}
           </option>
         ))}
       </select>

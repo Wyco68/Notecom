@@ -7,11 +7,12 @@ Loaded by `/feat` only. Source of truth is the route files themselves
 
 | Route | Method | Body | Response |
 |---|---|---|---|
-| `/api/tree` | GET | — | `{ folders: [{ name }] }` — folder names only, one indexed query. The sidebar's first paint |
+| `/api/tree` | GET | — | `{ folders: [{ name, displayName }] }` — folder names only, one indexed query. The sidebar's first paint |
 | `/api/tree` | POST | — | `{ imported, skipped, errors, reindexed }` — the housekeeping pass: ingest `vault/`, re-chunk stale documents. Best-effort, never fails the request |
 | `/api/folders` | POST | `{ name }` | `{ ok, folder }` — the app slugifies `name`; the database invents no names |
 | `/api/folders/[name]` | GET | — | `{ lessons: [{id,slug,title,seq}], quizzes: [...] }` — one folder's documents, fetched when the reader opens it |
 | `/api/folders/[name]` | DELETE | — | `{ ok }` |
+| `/api/folders/[name]` | POST | `{ newName }` | `{ ok }` (rename) — display name only, `[name]` (the slug) stays the identity |
 | `/api/lesson/[folder]/[id]` | GET | — | `{ html, title }` |
 | `/api/lesson/[folder]/[id]` | DELETE | — | `{ ok }` |
 | `/api/lesson/[folder]/[id]` | POST | `{ newTitle }` | `{ ok }` (rename) |
@@ -128,10 +129,11 @@ Route handlers call these functions, which query Supabase as the signed-in user.
 
 | Function | Notes |
 |---|---|
-| `listFolders()` | `{ folders: [{ name }] }`; every readable folder, including empty ones. Slugs are deduplicated — a shared folder colliding with the reader's own is one row, as it is everywhere else |
+| `listFolders()` | `{ folders: [{ name, displayName }] }`; `name` is the slug (identity), `displayName` is the renameable label. Every readable folder, including empty ones. Slugs are deduplicated — a shared folder colliding with the reader's own is one row, as it is everywhere else, and the reader's own copy's name wins the display label |
 | `listFolderDocs(slug)` | `{ lessons, quizzes }` for one folder, spanning every folder the slug resolves to (the rule `loadDoc` opens them by); empty lists when nothing is readable |
-| `createFolder(slug)` | idempotent; new folders start private and undiscoverable — sharing is an explicit later act |
+| `createFolder(slug, displayName?)` | idempotent; new folders start private and undiscoverable — sharing is an explicit later act |
 | `deleteFolder(slug)` | soft delete, cascading to the folder's documents |
+| `renameFolder(slug, newName)` | display name only — the slug is identity and never changes, same rule `renameDoc` uses for a document's title |
 | `loadDoc(folder, id, kind)` | `{ html, title }`; "not found" also means "not readable", deliberately — a probe must not confirm a private folder's contents |
 | `saveDoc(input)` | upsert keyed by (folder, kind, docKey); returns `false` when nothing changed, and rewrites the document's search chunks when something did |
 | `deleteDoc(folder, id, kind)` | tombstone; drops the chunks outright |

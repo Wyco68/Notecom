@@ -105,19 +105,31 @@ export async function resolveWritableFolderId(slug: string): Promise<string | nu
 // Both queries are RLS-filtered, so no folder needs excluding by hand.
 
 /** Folder names only: the sidebar's first paint. */
-export async function listFolders(): Promise<{ folders: { name: string }[] }> {
+export async function listFolders(): Promise<{ folders: { name: string; displayName: string }[] }> {
   const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
   const { data, error } = await supabase
     .from("notes_folders")
-    .select("slug")
+    .select("slug,name,owner_id")
     .eq("deleted", false)
     .order("slug");
   if (error) fail("tree failed", error);
+
   // A slug names one folder per owner, so a shared folder can collide with the
   // reader's own. They read as one folder everywhere else (`folderIdsBySlug`),
-  // so they are one row here too.
-  const names = [...new Set((data ?? []).map((r) => r.slug))];
-  return { folders: names.map((name) => ({ name })) };
+  // so they are one row here too — first occurrence wins the display name,
+  // except the reader's own copy always wins over someone else's, matching
+  // how a write to a shared slug is resolved.
+  const bySlug = new Map<string, { name: string; ownerId: string }>();
+  for (const r of data ?? []) {
+    const cur = bySlug.get(r.slug);
+    if (!cur || (r.owner_id === user?.id && cur.ownerId !== user?.id)) {
+      bySlug.set(r.slug, { name: r.name, ownerId: r.owner_id });
+    }
+  }
+  return {
+    folders: [...bySlug.entries()].map(([slug, v]) => ({ name: slug, displayName: v.name })),
+  };
 }
 
 /** One folder's documents. Spans every folder the slug resolves to, matching
@@ -229,6 +241,29 @@ export async function deleteFolder(name: string): Promise<{ ok: boolean }> {
     .update({ deleted: true, version: (folder?.version ?? 1) + 1, updated_at: now })
     .eq("id", id);
   if (error) fail("delete folder failed", error);
+  return { ok: true };
+}
+
+// Display name only — the slug (identity, URLs, the vault directory it maps
+// to) never changes, same rule renameDoc uses for a document's title.
+export async function renameFolder(slug: string, newName: string): Promise<{ ok: boolean }> {
+  if (!newName?.trim()) fail("name required");
+  const supabase = await createClient();
+  const id = await requireFolderId(slug);
+  const { data: folder } = await supabase.from("notes_folders").select("version").eq("id", id).single();
+  // Renaming is owner-only (notes_folders_update's `with check` requires
+  // notes_can_manage_folder + owner_id = auth.uid()), unlike a document write,
+  // which any editor may do. A member without manage rights has this update
+  // filtered to zero rows by RLS with no Postgres error — `.select().single()`
+  // is what turns that silent no-op into a real failure instead of a false
+  // "ok: true" toast for a rename that never happened.
+  const { error } = await supabase
+    .from("notes_folders")
+    .update({ name: newName.trim(), version: (folder?.version ?? 1) + 1, updated_at: nowISO() })
+    .eq("id", id)
+    .select("id")
+    .single();
+  if (error) fail("rename folder failed — you may not have permission to rename this folder", error);
   return { ok: true };
 }
 

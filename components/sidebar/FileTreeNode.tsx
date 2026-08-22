@@ -4,7 +4,9 @@ import { useEffect, useState } from "react";
 import type { Folder, FolderDocs, LessonRef } from "@/lib/vault/types";
 import { SkeletonRows } from "../layout/Skeleton";
 import ConfirmModal from "../modals/ConfirmModal";
+import RenameModal from "../modals/RenameModal";
 import TrashIcon from "../icons/TrashIcon";
+import EditIcon from "../icons/EditIcon";
 import StarIcon from "../icons/StarIcon";
 import QuizIcon from "../icons/QuizIcon";
 import ShareIcon from "../icons/ShareIcon";
@@ -27,6 +29,11 @@ function SeqBadge({ seq }: { seq: number }) {
 }
 
 type PendingDelete =
+  | { kind: "folder" }
+  | { kind: "lesson"; id: string; title: string }
+  | { kind: "quiz"; id: string; title: string };
+
+type PendingRename =
   | { kind: "folder" }
   | { kind: "lesson"; id: string; title: string }
   | { kind: "quiz"; id: string; title: string };
@@ -60,6 +67,7 @@ export default function FileTreeNode({
   // — click a folder to reveal its files.
   const [open, setOpen] = useState(false);
   const [pending, setPending] = useState<PendingDelete | null>(null);
+  const [renaming, setRenaming] = useState<PendingRename | null>(null);
   const [busy, setBusy] = useState(false);
   const toast = useToast();
 
@@ -91,7 +99,7 @@ export default function FileTreeNode({
           method: "DELETE",
         });
         if (!res.ok) throw new Error("failed");
-        toast.success(`Deleted folder "${folder.name.replace(/-/g, " ")}".`);
+        toast.success(`Deleted folder "${folder.displayName}".`);
       } else {
         const base = pending.kind === "quiz" ? "/api/quiz" : "/api/lesson";
         const res = await fetch(
@@ -105,13 +113,42 @@ export default function FileTreeNode({
     } catch {
       toast.error(
         pending.kind === "folder"
-          ? `Could not delete folder "${folder.name.replace(/-/g, " ")}".`
+          ? `Could not delete folder "${folder.displayName}".`
           : `Could not delete ${pending.kind} "${pending.title}".`
       );
     } finally {
       setBusy(false);
       setPending(null);
     }
+  }
+
+  async function confirmRename(newValue: string) {
+    if (!renaming) return;
+    if (renaming.kind === "folder") {
+      const res = await fetch(`/api/folders/${encodeURIComponent(folder.name)}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ newName: newValue }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "failed");
+      toast.success(`Renamed folder to "${newValue}".`);
+    } else {
+      const base = renaming.kind === "quiz" ? "/api/quiz" : "/api/lesson";
+      const res = await fetch(
+        `${base}/${encodeURIComponent(folder.name)}/${encodeURIComponent(renaming.id)}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ newTitle: newValue }),
+        }
+      );
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "failed");
+      toast.success(`Renamed ${renaming.kind} to "${newValue}".`);
+    }
+    onChanged();
+    setRenaming(null);
   }
 
   return (
@@ -135,7 +172,7 @@ export default function FileTreeNode({
           </span>
           {/* Wraps rather than truncates: a folder name is how you find the
               folder, and the sidebar never scrolls sideways. */}
-          <span className="break-words font-medium">{folder.name.replace(/-/g, " ")}</span>
+          <span className="break-words font-medium">{folder.displayName}</span>
         </button>
         {/* Opens the sharing console in the content column when the shell
             offers that, and navigates only as a fallback — a button that
@@ -162,6 +199,16 @@ export default function FileTreeNode({
               <ShareIcon className="h-3.5 w-3.5" />
             </a>
           ))}
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            setRenaming({ kind: "folder" });
+          }}
+          title="Rename folder"
+          className="ui-icon-btn ui-reveal mr-1 h-5 w-5"
+        >
+          <EditIcon className="h-3.5 w-3.5" />
+        </button>
         <button
           onClick={(e) => {
             e.stopPropagation();
@@ -241,6 +288,16 @@ export default function FileTreeNode({
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
+                    setRenaming({ kind: "lesson", id: lesson.id, title: lesson.title });
+                  }}
+                  title="Rename lesson"
+                  className="ui-icon-btn ui-reveal mr-1 h-5 w-5"
+                >
+                  <EditIcon className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
                     setPending({ kind: "lesson", id: lesson.id, title: lesson.title });
                   }}
                   title="Delete lesson"
@@ -308,6 +365,16 @@ export default function FileTreeNode({
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
+                    setRenaming({ kind: "quiz", id: quiz.id, title: quiz.title });
+                  }}
+                  title="Rename quiz"
+                  className="ui-icon-btn ui-reveal mr-1 h-5 w-5"
+                >
+                  <EditIcon className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
                     setPending({ kind: "quiz", id: quiz.id, title: quiz.title });
                   }}
                   title="Delete quiz"
@@ -332,12 +399,28 @@ export default function FileTreeNode({
           }
           message={
             pending.kind === "folder"
-              ? `Delete folder "${folder.name.replace(/-/g, " ")}" and all its lessons? This cannot be undone.`
+              ? `Delete folder "${folder.displayName}" and all its lessons? This cannot be undone.`
               : `Delete ${pending.kind} "${pending.title}"? This cannot be undone.`
           }
           busy={busy}
           onConfirm={confirmDelete}
           onCancel={() => setPending(null)}
+        />
+      )}
+
+      {renaming && (
+        <RenameModal
+          title={
+            renaming.kind === "folder"
+              ? "Rename folder"
+              : renaming.kind === "quiz"
+              ? "Rename quiz"
+              : "Rename lesson"
+          }
+          label={renaming.kind === "folder" ? "Folder name" : "Title"}
+          initialValue={renaming.kind === "folder" ? folder.displayName : renaming.title}
+          onRename={confirmRename}
+          onCancel={() => setRenaming(null)}
         />
       )}
     </div>

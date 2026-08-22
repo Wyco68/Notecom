@@ -9,12 +9,13 @@ export interface Lesson {
 // separate index.json array and a separate document kind.
 export type Quiz = Lesson;
 
-// A folder in the tree is a name and nothing else. Its documents are fetched
-// separately, when the reader opens it — a vault with many folders would
-// otherwise pay for every lesson row in the account on first paint, to show a
-// list of collapsed folders. See FolderDocs.
+// A folder in the tree is its identity (slug) and its label (name) — nothing
+// else. Its documents are fetched separately, when the reader opens it — a
+// vault with many folders would otherwise pay for every lesson row in the
+// account on first paint, to show a list of collapsed folders. See FolderDocs.
 export interface Folder {
-  name: string;
+  name: string; // slug — identity, used in URLs and as the doc-fetch key
+  displayName: string; // human label shown in the UI; renameable independently of `name`
 }
 
 /** One folder's contents, from `GET /api/folders/[name]`. */
