@@ -385,7 +385,7 @@ export async function saveDoc(input: SaveInput): Promise<boolean> {
     return false;
   }
 
-  const id = existing?.id ?? crypto.randomUUID();
+  let id = existing?.id ?? crypto.randomUUID();
   const version = (existing?.version ?? 0) + 1;
   if (existing) {
     const { error } = await supabase
@@ -402,21 +402,36 @@ export async function saveDoc(input: SaveInput): Promise<boolean> {
       .eq("id", id);
     if (error) fail("save failed", error);
   } else {
-    const { error } = await supabase.from("notes_documents").insert({
-      id,
-      folder_id: folderId,
-      kind: input.kind,
-      doc_key: input.docKey,
-      slug: input.slug,
-      title: input.title,
-      seq: input.seq,
-      html: input.html,
-      created_at: now,
-      updated_at: now,
-      version,
-      deleted: false,
-    });
+    // Upsert, not insert: the lookup above and this write are two round trips,
+    // so a concurrent import can create the row in between and both callers
+    // arrive here believing the document is new. Conflicting on the document's
+    // identity turns that second write into an update of the first row instead
+    // of a duplicate (0022_notes_documents_unique_doc_key.sql). The returned id
+    // is the surviving row's, which is not the generated one when that
+    // happened — and it's what the chunks below must be keyed to.
+    const { data, error } = await supabase
+      .from("notes_documents")
+      .upsert(
+        {
+          id,
+          folder_id: folderId,
+          kind: input.kind,
+          doc_key: input.docKey,
+          slug: input.slug,
+          title: input.title,
+          seq: input.seq,
+          html: input.html,
+          created_at: now,
+          updated_at: now,
+          version,
+          deleted: false,
+        },
+        { onConflict: "folder_id,kind,doc_key" }
+      )
+      .select("id")
+      .single();
     if (error) fail("save failed", error);
+    id = data.id;
   }
 
   await writeChunks(id, folderId, input.html, version);
