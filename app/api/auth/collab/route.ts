@@ -83,7 +83,26 @@ export async function POST(req: NextRequest) {
         return bad("email and a password of at least 8 characters are required");
       }
       const { data, error } = await ephemeralClient().auth.signUp({ email, password });
-      if (error) return bad("could not create the account", 400);
+      if (error) {
+        // Two unrelated failures used to arrive as the same flat "could not
+        // create the account", which named nothing the caller could act on.
+        // Supabase's own message is what identifies the fixable ones — a
+        // password under the project's policy, a malformed address, signups
+        // disabled, the hourly email cap — and none of them reveal whether an
+        // account exists; that answer is the identities check below, which is
+        // deliberate and separate. Not being able to reach the auth service at
+        // all is different: it arrives as AuthRetryableFetchError carrying the
+        // message "{}", so a message is only worth forwarding when it says
+        // something. The raw error goes to the server log either way.
+        console.error("[auth] signup failed:", error.status, JSON.stringify(error));
+        const detail = error.message?.trim();
+        return bad(
+          detail && !detail.startsWith("{")
+            ? detail
+            : "the account service is unreachable right now — try again in a minute",
+          error.status ?? 400
+        );
+      }
       // Supabase's own anti-enumeration behaviour: signing an email up again
       // returns 200/no error either way, but ships zero identities when the
       // account already exists and is confirmed — that's the documented signal
