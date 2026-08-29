@@ -337,7 +337,15 @@ export async function renameDoc(
   const doc = await findDoc(folder, id, kind);
   const { error } = await supabase
     .from("notes_documents")
-    .update({ title: newTitle, version: doc.version + 1, updated_at: nowISO() })
+    .update({
+      title: newTitle,
+      // The generated title stays in vault/index.json — the app writes no
+      // files — so without this the next import would restore it (see
+      // 0023_notes_documents_title_pinned.sql).
+      title_pinned: true,
+      version: doc.version + 1,
+      updated_at: nowISO(),
+    })
     .eq("id", doc.id);
   if (error) fail(`rename ${kind} failed`, error);
   return { ok: true };
@@ -364,7 +372,7 @@ export async function saveDoc(input: SaveInput): Promise<boolean> {
 
   const { data: rows, error: lookupErr } = await supabase
     .from("notes_documents")
-    .select("id,version,html,title,slug,seq,deleted")
+    .select("id,version,html,title,slug,seq,deleted,title_pinned")
     .eq("folder_id", folderId)
     .eq("kind", input.kind)
     .eq("doc_key", input.docKey)
@@ -372,11 +380,15 @@ export async function saveDoc(input: SaveInput): Promise<boolean> {
   if (lookupErr) fail("save failed", lookupErr);
   const existing = rows?.[0];
 
+  // A title the user renamed in the app wins over the one in the file, and
+  // only the title: html, slug and seq still come from vault/ on every import.
+  const keepTitle = existing?.title_pinned === true;
+
   if (
     existing &&
     !existing.deleted &&
     existing.html === input.html &&
-    existing.title === input.title &&
+    (keepTitle || existing.title === input.title) &&
     existing.slug === input.slug &&
     existing.seq === input.seq
   ) {
@@ -392,7 +404,7 @@ export async function saveDoc(input: SaveInput): Promise<boolean> {
       .from("notes_documents")
       .update({
         slug: input.slug,
-        title: input.title,
+        ...(keepTitle ? {} : { title: input.title }),
         seq: input.seq,
         html: input.html,
         updated_at: now,
