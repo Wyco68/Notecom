@@ -128,6 +128,10 @@ export default function AppShell() {
   // Folders with a request in flight, so an open, a re-render and a refresh
   // don't each fire their own.
   const loading = useRef<Set<string>>(new Set());
+  // Each folder's last-seen change stamp, so a tree re-read can tell which open
+  // folders hold documents that moved since. A ref for the same reason as
+  // `docsRef`: the comparison must not re-run the effects that own it.
+  const stamps = useRef<Map<string, string | null>>(new Map());
 
   const fetchDocs = useCallback(async (name: string) => {
     if (loading.current.has(name)) return;
@@ -202,7 +206,23 @@ export default function AppShell() {
     };
     setRecent(pruneRecent(stillExists));
     setFavorites(pruneFavorites(stillExists));
-  }, []);
+
+    // Folder names alone can't show a lesson renamed, edited or deleted
+    // elsewhere — that lives inside a folder this pass never re-reads, so an
+    // open folder kept drawing stale titles until someone pressed refresh.
+    // Each folder's stamp moves when any of its documents does, so re-fetching
+    // only the open folders whose stamp changed costs nothing on the ordinary
+    // alt-tab where nothing moved. A folder opened after this ran isn't in
+    // `stamps` yet; it fetched its documents when it opened.
+    const changed = list.filter(
+      (f) => docsRef.current[f.name] && stamps.current.get(f.name) !== f.stamp
+    );
+    for (const f of list) stamps.current.set(f.name, f.stamp);
+    for (const name of stamps.current.keys()) {
+      if (!names.has(name)) stamps.current.delete(name);
+    }
+    await Promise.all(changed.map((f) => fetchDocs(f.name)));
+  }, [fetchDocs]);
 
   // The expensive pass: folder names, every already-open folder's documents
   // re-fetched, and the tag map. Reserved for moments a stale doc list is

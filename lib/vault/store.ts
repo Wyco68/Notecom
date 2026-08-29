@@ -105,7 +105,9 @@ export async function resolveWritableFolderId(slug: string): Promise<string | nu
 // Both queries are RLS-filtered, so no folder needs excluding by hand.
 
 /** Folder names only: the sidebar's first paint. */
-export async function listFolders(): Promise<{ folders: { name: string; displayName: string }[] }> {
+export async function listFolders(): Promise<{
+  folders: { name: string; displayName: string; stamp: string | null }[];
+}> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   const { data, error } = await supabase
@@ -114,6 +116,17 @@ export async function listFolders(): Promise<{ folders: { name: string; displayN
     .eq("deleted", false)
     .order("slug");
   if (error) fail("tree failed", error);
+
+  // Aggregated in SQL, one round trip, and a failure here is not worth losing
+  // the tree over: a null stamp reads as "assume it changed", which costs the
+  // client a re-fetch it would have done anyway before this existed.
+  const { data: stampRows } = await supabase.rpc("notes_folder_stamps");
+  const stamps = new Map<string, string | null>(
+    (stampRows ?? []).map((r: { folder_slug: string; stamp: string | null }) => [
+      r.folder_slug,
+      r.stamp,
+    ])
+  );
 
   // A slug names one folder per owner, so a shared folder can collide with the
   // reader's own. They read as one folder everywhere else (`folderIdsBySlug`),
@@ -128,7 +141,11 @@ export async function listFolders(): Promise<{ folders: { name: string; displayN
     }
   }
   return {
-    folders: [...bySlug.entries()].map(([slug, v]) => ({ name: slug, displayName: v.name })),
+    folders: [...bySlug.entries()].map(([slug, v]) => ({
+      name: slug,
+      displayName: v.name,
+      stamp: stamps.get(slug) ?? null,
+    })),
   };
 }
 

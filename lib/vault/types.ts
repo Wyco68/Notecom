@@ -16,6 +16,10 @@ export type Quiz = Lesson;
 export interface Folder {
   name: string; // slug — identity, used in URLs and as the doc-fetch key
   displayName: string; // human label shown in the UI; renameable independently of `name`
+  // Latest document change in this folder (rename, save or delete), or null
+  // while it holds none. The tree's focus check compares it against the value
+  // it last saw to decide which open folders are worth re-fetching.
+  stamp: string | null;
 }
 
 /** One folder's contents, from `GET /api/folders/[name]`. */
