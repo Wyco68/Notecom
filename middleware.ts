@@ -189,7 +189,13 @@ const GENERAL_WINDOW_MS = 60_000;
 // matches zero or more segments, so the bare shell route (no folder open) is
 // gated too; a plain `startsWith("/vault/")` requires a trailing slash and
 // silently misses it.
-const PROTECTED_EXACT = new Set(["/discover", "/people", "/account", "/vault"]);
+const PROTECTED_EXACT = new Set([
+  "/discover",
+  "/people",
+  "/account",
+  "/notifications",
+  "/vault",
+]);
 function isProtected(path: string): boolean {
   return path.startsWith("/api/") || path.startsWith("/vault/") || PROTECTED_EXACT.has(path);
 }
