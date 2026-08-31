@@ -280,8 +280,8 @@ export default function AccountPanel({
       <Section title="Following" index={3}>
         <p className="mb-4 max-w-prose text-xs leading-relaxed text-gray-500 dark:text-gray-400">
           Following someone lets them offer you tags and invite you to folders — but
-          only once they accept your follow. Answer requests you receive from the
-          sidebar.
+          only once they accept your follow. Answer requests you receive in
+          Notifications.
         </p>
         <div className="mb-4 flex gap-2">
           <input
@@ -394,8 +394,10 @@ export default function AccountPanel({
 
       <Section title="Notifications" index={6}>
         <p className="ui-empty">
-          Follow requests, folder invitations and tag offers appear at the top of
-          the sidebar as soon as they arrive — there is no separate inbox to check.
+          Follow requests, folder invitations and tag offers collect in
+          Notifications, reachable from the sidebar whether or not anything is
+          waiting. Accepting a tag or an invitation is what grants the access it
+          describes, so nothing there takes effect until you answer it.
         </p>
       </Section>
     </div>

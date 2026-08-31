@@ -94,8 +94,12 @@ what it acts on.**
 the whole icon policy. Destinations get text; actions (new folder, generate,
 refresh, theme, collapse) stay icon-only with a `title` *and* an `aria-label`.
 
-Folders takes whatever height is left and scrolls; **Recent sits under it at a
-fixed `h-56`** — exactly the eight rows
+Folders takes whatever height is left and scrolls; **Recent sits under it at
+`h-56`, capped at `max-h-[28vh]` and hidden entirely below 600px of viewport
+height**. Recent is history, not navigation: when the column cannot hold both,
+the tree wins. Without that give, the fixed 224px squeezed the tree — the only
+`flex-1` child — to zero on a landscape phone, the sections overlapped, and no
+folder was reachable at all. The plain figure is exactly the eight rows
 `lib/vault/recent.ts` caps its history at (8 × 1.75rem, a row being `text-sm`'s
 1.25rem line plus `py-1`). No padding inside that box, or it eats a row; the
 list collapses to its content while empty rather than holding eight blank rows

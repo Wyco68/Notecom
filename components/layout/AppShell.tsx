@@ -443,8 +443,8 @@ export default function AppShell() {
           the reader jumping sideways for no reason. Long names wrap instead. */}
       <aside
         id="sidebar"
-        className={`fixed inset-y-0 left-0 z-sidebar flex w-80 max-w-[85vw] shrink-0 flex-col border-r border-black/10 bg-gray-50 transition-transform duration-200 lg:static lg:z-auto lg:max-w-none lg:translate-x-0 dark:border-white/10 dark:bg-[#0a0e14] ${
-          sidebarOpen ? "translate-x-0" : "-translate-x-full lg:hidden"
+        className={`fixed inset-y-0 left-0 z-sidebar flex w-80 max-w-[85vw] shrink-0 flex-col border-r border-black/10 bg-gray-50 transition-[transform,visibility] duration-200 lg:static lg:z-auto lg:max-w-none lg:visible lg:translate-x-0 dark:border-white/10 dark:bg-[#0a0e14] ${
+          sidebarOpen ? "visible translate-x-0" : "invisible -translate-x-full lg:hidden"
         }`}
       >
         <div className="flex items-center justify-between border-b border-black/10 px-3 py-3 dark:border-white/10">
@@ -461,7 +461,7 @@ export default function AppShell() {
               title="Hide sidebar"
               aria-label="Hide sidebar"
               aria-controls="sidebar"
-              aria-expanded
+              aria-expanded={sidebarOpen}
               className="ui-icon-btn h-7 w-7"
             >
               <SidebarIcon className="h-4 w-4" />
@@ -611,7 +611,12 @@ export default function AppShell() {
           </div>
 
           {!query.trim() && (
-            <div className="flex shrink-0 flex-col border-t border-black/10 pb-2 dark:border-white/10">
+            // Hidden outright below 600px of viewport height (landscape phone).
+            // Recent is history, not navigation: when the column cannot hold
+            // both, the folder tree wins. It previously kept its fixed 224px
+            // and squeezed the tree — the only flex-1 child — to zero, so the
+            // sections overlapped and no folder was reachable at all.
+            <div className="flex min-h-0 shrink flex-col border-t border-black/10 pb-2 [@media(max-height:600px)]:hidden dark:border-white/10">
               <span className="px-3 pb-1 pt-3 ui-section-title">
                 Recent
               </span>
@@ -622,7 +627,9 @@ export default function AppShell() {
                   build stays reachable rather than clipped; and while the list
                   is empty the box collapses instead of holding open eight rows
                   of blank space. */}
-              <div className={`px-2 ${recent.length ? "ui-scroll h-56" : ""}`}>
+              {/* `max-h-[28vh]` is the give: 224px is right on a laptop and
+                  more than half the column on a short one. */}
+              <div className={`px-2 ${recent.length ? "ui-scroll h-56 max-h-[28vh]" : ""}`}>
                 <RecentFiles
                   entries={recent}
                   selected={selected}
