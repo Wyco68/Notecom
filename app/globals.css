@@ -7,6 +7,31 @@ body {
   height: 100%;
 }
 
+/* ── Type ──────────────────────────────────────────────────────────────────
+   Geist ships a real Medium and SemiBold, so hierarchy comes from weight
+   rather than from size alone. The two rules below are the ones worth having
+   app-wide: headings lose the tracking that display sizes don't need, and
+   prose stops leaving a single word alone on its last line. */
+@layer base {
+  h1,
+  h2,
+  h3 {
+    letter-spacing: -0.018em;
+    text-wrap: balance;
+  }
+
+  p {
+    text-wrap: pretty;
+  }
+
+  /* Counts, dates, byte sizes and sequence numbers line up column-wise
+     instead of jittering as digits change. */
+  time,
+  [data-numeric] {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
 /* ── Shared control conventions ────────────────────────────────────────────
    One look for every text input, select, textarea and button in the app.
    These exist because the same control was being spelled eight slightly
@@ -127,6 +152,55 @@ body {
      the last item would wait for its turn to become readable. */
   .ui-rise {
     animation: ui-rise 240ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  /* A raised surface inside a panel: an inbox item, a folder card, a settings
+     section. The same three declarations were being respelled per component,
+     which is how four slightly different cards ended up on four pages. */
+  .ui-card {
+    @apply rounded-lg border border-black/10 bg-black/[0.02];
+    @apply dark:border-white/10 dark:bg-white/[0.03];
+  }
+
+  /* The interactive version: it lifts a hair and its border warms, on colour
+     and transform only, so a hovered card never resizes the grid around it. */
+  .ui-card-hover {
+    @apply transition-[border-color,background-color,box-shadow,transform] duration-150 ease-out;
+    @apply hover:-translate-y-px hover:border-black/20 hover:shadow-panel;
+    @apply dark:hover:border-white/20 dark:hover:shadow-panel-dark;
+  }
+
+  /* A small count or status label. Square-ish, not a pill — a pill badge on
+     every noun is the look this app is trying not to have. */
+  .ui-badge {
+    @apply inline-flex items-center justify-center rounded border px-1.5 py-0.5;
+    @apply text-[11px] font-medium leading-none;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* The sidebar's section headings: FAVORITES, FOLDERS, RECENT, QUIZZES, the
+     tag groups, the generation list. Spelled with `dark:text-gray-500` because
+     that is what those six call sites already rendered — the point is to stop
+     the seventh slightly-different copy, not to restyle the six. */
+  .ui-section-title {
+    @apply text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-500;
+  }
+
+  /* The single muted line that stands in for an empty list. Deliberately a
+     line and not an illustration — empty is the normal early state here, and
+     a drawing every time would make it feel like a failure. */
+  .ui-empty {
+    @apply text-sm text-gray-500 dark:text-gray-400;
+  }
+
+  /* Off-screen until focused. The first thing in the tab order on every page
+     (app/layout.tsx), so a keyboard reader can jump the sidebar tree. */
+  .ui-skip-link {
+    @apply sr-only;
+    @apply focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-modal;
+    @apply focus:rounded-md focus:border focus:border-blue-600/40 focus:bg-white focus:px-3 focus:py-2;
+    @apply focus:text-sm focus:font-medium focus:text-blue-700 focus:shadow-panel;
+    @apply dark:focus:border-blue-500/40 dark:focus:bg-[#161b22] dark:focus:text-blue-300;
   }
 }
 
