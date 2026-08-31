@@ -44,7 +44,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       {children}
       {/* Toasts slide in 4px and fade, matching the reader's enter timing.
           Presentational only — the list and its timeout are unchanged. */}
-      <div className="pointer-events-none fixed bottom-4 right-4 z-[100] flex flex-col items-end gap-2">
+      <div className="pointer-events-none fixed bottom-4 right-4 z-toast flex flex-col items-end gap-2">
         <AnimatePresence initial={false}>
           {toasts.map((t) => (
             <motion.div

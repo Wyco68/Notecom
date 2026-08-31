@@ -20,9 +20,10 @@ import SignInModal from "../modals/SignInModal";
 import GenerateJobList from "../generate/GenerateJobList";
 import { useGenerateJobs } from "../generate/GenerateJobsProvider";
 import { useToast } from "../toast/ToastProvider";
-import InvitationsInbox from "../collab/InvitationsInbox";
-import TagGrantsInbox from "../collab/TagGrantsInbox";
-import FollowRequestsInbox from "../collab/FollowRequestsInbox";
+import NotificationsProvider from "../collab/NotificationsProvider";
+import NotificationsPanel from "../collab/NotificationsPanel";
+import SidebarNav from "./SidebarNav";
+import ContentTopBar from "./ContentTopBar";
 import AccountControl from "../collab/AccountControl";
 import AccountPanel from "../account/AccountPanel";
 import DiscoverPanel from "../collab/DiscoverPanel";
@@ -31,9 +32,16 @@ import FolderManagePanel from "../collab/FolderManagePanel";
 import ThemeToggle from "../theme/ThemeToggle";
 import RefreshIcon from "../icons/RefreshIcon";
 import SearchIcon from "../icons/SearchIcon";
-import UserIcon from "../icons/UserIcon";
-import MenuIcon from "../icons/MenuIcon";
+import SidebarIcon from "../icons/SidebarIcon";
 import UploadIcon from "../icons/UploadIcon";
+
+/** What the content column is showing instead of the open document. */
+type Overlay =
+  | { kind: "profile" }
+  | { kind: "discover" }
+  | { kind: "people" }
+  | { kind: "notifications" }
+  | { kind: "manage"; slug: string };
 
 export default function AppShell() {
   const [folders, setFolders] = useState<Folder[] | null>(null);
@@ -59,13 +67,7 @@ export default function AppShell() {
   // away, so opening either doesn't tear down the workspace and closing it puts
   // the reader back on the document they left. One value, not a boolean each:
   // two panes cannot be open at once, and this is what says so.
-  const [overlay, setOverlay] = useState<
-    | { kind: "profile" }
-    | { kind: "discover" }
-    | { kind: "people" }
-    | { kind: "manage"; slug: string }
-    | null
-  >(null);
+  const [overlay, setOverlay] = useState<Overlay | null>(null);
   // undefined until the first status check answers — avoids flashing a
   // "signed out" warning during the initial load.
   const [signedIn, setSignedIn] = useState<boolean | undefined>(undefined);
@@ -329,13 +331,7 @@ export default function AppShell() {
   // Both overlays are opened from the sidebar, which on a narrow screen is
   // covering the column they render into.
   const openOverlay = useCallback(
-    (
-      next:
-        | { kind: "profile" }
-        | { kind: "discover" }
-        | { kind: "people" }
-        | { kind: "manage"; slug: string }
-    ) => {
+    (next: Overlay) => {
       setOverlay(next);
       if (!window.matchMedia("(min-width: 1024px)").matches) setSidebarOpen(false);
     },
@@ -428,11 +424,16 @@ export default function AppShell() {
   }, [refreshFolderNames]);
 
   return (
+    // The provider wraps the whole shell rather than sitting in the layout: it
+    // owns the one copy of the pending list that both the sidebar's bell and
+    // the panel read, and answering an item can add a folder to the tree —
+    // which is `refreshTree`, and only exists in here.
+    <NotificationsProvider onChanged={refreshTree}>
     <div className="flex h-dvh overflow-hidden">
       {sidebarOpen && (
         <div
           onClick={() => setSidebarOpen(false)}
-          className="fixed inset-0 z-30 bg-black/50 lg:hidden"
+          className="fixed inset-0 z-backdrop bg-black/50 lg:hidden"
           aria-hidden
         />
       )}
@@ -441,7 +442,8 @@ export default function AppShell() {
           with its contents: a sidebar that resizes as rows open or hover is
           the reader jumping sideways for no reason. Long names wrap instead. */}
       <aside
-        className={`fixed inset-y-0 left-0 z-40 flex w-80 max-w-[85vw] shrink-0 flex-col border-r border-black/10 bg-gray-50 transition-transform duration-200 lg:static lg:z-auto lg:max-w-none lg:translate-x-0 dark:border-white/10 dark:bg-[#0a0e14] ${
+        id="sidebar"
+        className={`fixed inset-y-0 left-0 z-sidebar flex w-80 max-w-[85vw] shrink-0 flex-col border-r border-black/10 bg-gray-50 transition-transform duration-200 lg:static lg:z-auto lg:max-w-none lg:translate-x-0 dark:border-white/10 dark:bg-[#0a0e14] ${
           sidebarOpen ? "translate-x-0" : "-translate-x-full lg:hidden"
         }`}
       >
@@ -449,23 +451,21 @@ export default function AppShell() {
           <span className="text-sm font-semibold tracking-tight text-gray-900 dark:text-gray-200">
             Notecom
           </span>
+          {/* Brand and the control that closes this panel. Nothing else: the
+              destinations moved to the nav group below, and the app-level
+              chrome (theme, refresh) to the foot. A window header is not a
+              place to file four unrelated things because there was room. */}
           <div className="flex items-center gap-0.5">
             <button
               onClick={() => setSidebarOpen(false)}
               title="Hide sidebar"
-              className="ui-icon-btn h-7 w-7 text-xs"
-            >
-              ✕
-            </button>
-            <button
-              onClick={handleRefresh}
-              disabled={refreshing}
-              title="Refresh or push to database"
+              aria-label="Hide sidebar"
+              aria-controls="sidebar"
+              aria-expanded
               className="ui-icon-btn h-7 w-7"
             >
-              <RefreshIcon className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
+              <SidebarIcon className="h-4 w-4" />
             </button>
-            <ThemeToggle />
           </div>
         </div>
 
@@ -490,6 +490,7 @@ export default function AppShell() {
                   setSubmittedQuery("");
                 }}
                 title="Clear search"
+                aria-label="Clear search"
                 className="ui-icon-btn h-5 w-5 text-xs"
               >
                 ✕
@@ -498,17 +499,19 @@ export default function AppShell() {
           </div>
         </div>
 
-        {/* Renders nothing unless the user actually has invitations, and
-            nothing at all when collaboration isn't configured. */}
-        <InvitationsInbox onChanged={refreshTree} />
-
-        {/* People who asked to follow the user — accepting is what lets them
-            be offered a tag or invited to a folder. */}
-        <FollowRequestsInbox onChanged={refreshTree} />
-
-        {/* Tags offered by people the user follows. Accepting one is what
-            grants access to the folders carrying it. */}
-        <TagGrantsInbox onChanged={refreshTree} />
+        {/* Where the reader goes, as opposed to what they do. Labelled, and
+            present whether or not anything is pending — a destination that
+            only appears once it has contents is one nobody can find. */}
+        <SidebarNav
+          active={
+            overlay?.kind === "notifications" ||
+            overlay?.kind === "discover" ||
+            overlay?.kind === "people"
+              ? overlay.kind
+              : null
+          }
+          onOpen={(kind) => openOverlay({ kind })}
+        />
 
         {/* Generation runs in the background, so this row is what a closed
             dialog leaves behind: proof the run is alive, and the way back into
@@ -535,7 +538,7 @@ export default function AppShell() {
         <div className="flex min-h-0 flex-1 flex-col">
           <div className="flex min-h-0 flex-1 flex-col">
             <div className="flex items-center justify-between px-3 pb-1 pt-4">
-              <span className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-500">
+              <span className="ui-section-title">
                 {query.trim() ? "Results" : "Folders"}
               </span>
               {!query.trim() && (
@@ -565,33 +568,20 @@ export default function AppShell() {
                     <button
                       onClick={() => setShowGenerate(true)}
                       title="Generate a lesson or quiz from a file (runs local Claude Code)"
+                      aria-label="Generate a lesson or quiz from a file"
                       className="ui-icon-btn h-6 w-6"
                     >
                       <UploadIcon className="h-3.5 w-3.5" />
                     </button>
                   )}
-                  {/* Opens in the content column like the account editor and
-                      the sharing console — leaving the workspace to browse
-                      other people's folders would tear down the tree, the open
-                      document and the running generation log, all to come back
-                      to them a moment later. */}
-                  <button
-                    onClick={() => openOverlay({ kind: "discover" })}
-                    title="Discover folders shared by other people"
-                    className="ui-icon-btn h-6 w-6"
-                  >
-                    <SearchIcon className="h-3.5 w-3.5" />
-                  </button>
-                  <button
-                    onClick={() => openOverlay({ kind: "people" })}
-                    title="Search people you follow"
-                    className="ui-icon-btn h-6 w-6"
-                  >
-                    <UserIcon className="h-3.5 w-3.5" />
-                  </button>
+                  {/* Only what acts on folders lives here. Discover and
+                      People moved to the nav group: they are destinations, and
+                      filing them under a "Folders" heading claimed a
+                      relationship to the tree that neither of them has. */}
                   <button
                     onClick={() => setShowNewFolder(true)}
                     title="New Folder"
+                    aria-label="New folder"
                     className="ui-icon-btn h-6 w-6 text-base leading-none"
                   >
                     +
@@ -622,7 +612,7 @@ export default function AppShell() {
 
           {!query.trim() && (
             <div className="flex shrink-0 flex-col border-t border-black/10 pb-2 dark:border-white/10">
-              <span className="px-3 pb-1 pt-3 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-500">
+              <span className="px-3 pb-1 pt-3 ui-section-title">
                 Recent
               </span>
               {/* h-56 (14rem) is exactly the eight rows recent.ts caps the list
@@ -644,19 +634,53 @@ export default function AppShell() {
           )}
         </div>
 
-        {/* Sidebar foot: collaboration account. Renders nothing when the app
-            isn't configured for collaboration. */}
-        <AccountControl
-          onOpenProfile={() => openOverlay({ kind: "profile" })}
-          active={overlay?.kind === "profile"}
-        />
+        {/* Sidebar foot: who is signed in, then the app-level chrome. Theme
+            and refresh live here rather than in the header because they belong
+            to the app, not to the folder list they used to sit above — and
+            because this row renders even on a build with no collaboration,
+            where AccountControl itself renders nothing. */}
+        <div className="flex items-center gap-1.5 border-t border-black/10 px-2 py-2 dark:border-white/10">
+          <AccountControl
+            onOpenProfile={() => openOverlay({ kind: "profile" })}
+            active={overlay?.kind === "profile"}
+          />
+          <div className="ml-auto flex shrink-0 items-center gap-0.5">
+            <button
+              onClick={handleRefresh}
+              disabled={refreshing}
+              title="Refresh or push to database"
+              aria-label="Refresh or push to database"
+              className="ui-icon-btn h-7 w-7"
+            >
+              <RefreshIcon className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
+            </button>
+            <ThemeToggle />
+          </div>
+        </div>
       </aside>
 
+      {/* `tabIndex={-1}` so the skip link actually moves focus here rather
+          than only moving the sequential-focus start point. `scroll-pt-12`
+          clears the sticky bar for every anchor jump in the column — the
+          search-hit scroll used to land under it, since removing the old
+          `pt-12` also removed its accidental clearance. */}
       <main
-        className={`ui-scroll relative flex-1 bg-white dark:bg-[#0d1117] ${
-          sidebarOpen ? "pt-12 lg:pt-0" : "pt-12"
-        }`}
+        id="main"
+        tabIndex={-1}
+        className="ui-scroll relative flex-1 scroll-pt-12 bg-white outline-none dark:bg-[#0d1117]"
       >
+        {/* The column's own header. It replaced a button that floated over the
+            document and the permanent `pt-12` every page carried to dodge it.
+            Named only when a document is open: the panels below render their
+            own PanelHeader h1, and repeating it here would show every panel's
+            title twice. */}
+        <ContentTopBar
+          sidebarOpen={sidebarOpen}
+          onToggleSidebar={() => setSidebarOpen((v) => !v)}
+          folder={selected && !overlay ? (folderNames[selected.folder] ?? selected.folder) : null}
+          title={selected && !overlay ? currentTitle : null}
+        />
+
         {/* The account editor and the sharing console live here rather than at
             /account and /vault/[folder]/manage: the reader keeps their place,
             and closing either returns to the same document. Keyed by slug so
@@ -676,6 +700,11 @@ export default function AppShell() {
           />
         ) : overlay?.kind === "people" ? (
           <PeoplePanel onClose={() => setOverlay(null)} />
+        ) : overlay?.kind === "notifications" ? (
+          <NotificationsPanel
+            onClose={() => setOverlay(null)}
+            onOpenDiscover={() => openOverlay({ kind: "discover" })}
+          />
         ) : overlay?.kind === "manage" ? (
           <FolderManagePanel
             key={overlay.slug}
@@ -692,17 +721,6 @@ export default function AppShell() {
           <LessonViewer lesson={selected} />
         )}
       </main>
-
-      {/* The only way back to a hidden sidebar, at every width. */}
-      {!sidebarOpen && (
-        <button
-          onClick={() => setSidebarOpen(true)}
-          title="Show sidebar"
-          className="ui-icon-btn fixed left-3 top-3 z-30 h-8 w-8 rounded-full border border-black/10 bg-white shadow-sm hover:text-blue-600 dark:border-white/10 dark:bg-[#161b22] dark:hover:text-blue-400"
-        >
-          <MenuIcon className="h-4 w-4" />
-        </button>
-      )}
 
       {showNewFolder && (
         <NewFolderModal
@@ -735,5 +753,6 @@ export default function AppShell() {
         />
       )}
     </div>
+    </NotificationsProvider>
   );
 }

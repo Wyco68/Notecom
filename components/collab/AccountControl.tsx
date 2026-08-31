@@ -16,6 +16,11 @@ import UserIcon from "../icons/UserIcon";
 //
 // Renders nothing when collaboration isn't configured on this build, so a
 // purely-local install shows no orphaned account UI.
+//
+// It renders its own *contents* only — the bordered foot row around it belongs
+// to AppShell, which also puts the app-level chrome (theme, refresh) in that
+// row. That split is what keeps the theme toggle reachable on a build with no
+// collaboration at all, where this component returns null.
 const ENABLED = !!process.env.NEXT_PUBLIC_SUPABASE_URL;
 
 export default function AccountControl({
@@ -65,7 +70,18 @@ export default function AccountControl({
     return () => sub.subscription.unsubscribe();
   }, []);
 
-  if (!ENABLED || !ready) return null;
+  // Nothing at all on a build without collaboration; a placeholder at the
+  // identity's own size while the profile loads. Returning null there let the
+  // chrome cluster sit left, then jump right when the name arrived.
+  if (!ENABLED) return null;
+  if (!ready) {
+    return (
+      <div className="flex min-w-0 flex-1 animate-pulse items-center gap-2 px-1.5 py-1" aria-hidden>
+        <span className="h-7 w-7 shrink-0 rounded-full bg-black/[0.08] dark:bg-white/[0.09]" />
+        <span className="h-2.5 w-20 rounded bg-black/[0.08] dark:bg-white/[0.09]" />
+      </div>
+    );
+  }
 
   async function signOut() {
     await createClient().auth.signOut();
@@ -76,19 +92,17 @@ export default function AccountControl({
 
   if (!username) {
     return (
-      <div className="border-t border-black/10 px-3 py-2.5 text-xs dark:border-white/10">
-        <a
-          href="/auth/sign-in"
-          className="ui-focus rounded text-blue-600 transition-colors duration-150 ease-out hover:text-blue-500 dark:text-blue-400"
-        >
-          Sign in to share folders
-        </a>
-      </div>
+      <a
+        href="/auth/sign-in"
+        className="ui-focus min-w-0 flex-1 truncate rounded px-1.5 text-xs text-blue-600 transition-colors duration-150 ease-out hover:text-blue-500 dark:text-blue-400"
+      >
+        Sign in to share folders
+      </a>
     );
   }
 
   return (
-    <div className="flex items-center gap-1.5 border-t border-black/10 px-2 py-2 dark:border-white/10">
+    <>
       {/* The identity is the button. It opens the profile editor in place when
           the shell offers that, and navigates only as a fallback. */}
       <ProfileButton
@@ -107,7 +121,7 @@ export default function AccountControl({
         <SignOutIcon className="h-3.5 w-3.5 transition-transform duration-150 ease-out group-hover:translate-x-0.5" />
         Sign out
       </button>
-    </div>
+    </>
   );
 }
 

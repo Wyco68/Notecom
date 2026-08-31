@@ -54,7 +54,7 @@ export default function TagGroup({
         className="ui-row flex w-full items-center gap-1.5 px-2 py-1 text-left"
       >
         <span className="text-[10px] text-gray-400">{open ? "▾" : "▸"}</span>
-        <span className="truncate text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-500">
+        <span className="truncate ui-section-title">
           {tag}
         </span>
         <span className="ml-auto shrink-0 tabular-nums text-[10px] text-gray-400">{count}</span>

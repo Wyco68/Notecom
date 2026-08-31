@@ -310,7 +310,7 @@ export default function FileTreeNode({
           })}
 
           {quizzes.length > 0 && (
-            <p className="px-2 pt-2 pb-1 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-500">
+            <p className="px-2 pt-2 pb-1 ui-section-title">
               Quizzes
             </p>
           )}

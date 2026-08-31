@@ -22,7 +22,7 @@ export default function GenerateJobList({
 
   return (
     <div className="border-b border-black/10 px-2 py-2 dark:border-white/10">
-      <p className="px-2 pb-1 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-500">
+      <p className="px-2 pb-1 ui-section-title">
         Generating
       </p>
       {jobs.map((job, i) => {
