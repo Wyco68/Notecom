@@ -15,7 +15,7 @@ export default function ManageFolderPage({
 }) {
   const { folder } = use(params);
   return (
-    <main>
+    <main id="main" tabIndex={-1}>
       <FolderManagePanel slug={folder} />
     </main>
   );

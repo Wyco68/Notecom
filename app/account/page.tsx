@@ -1,4 +1,7 @@
+import type { Metadata } from "next";
 import AccountPanel from "@/components/account/AccountPanel";
+
+export const metadata: Metadata = { title: "Account" };
 
 // The standalone account route. The workspace normally shows this same editor
 // in its content column (AppShell) rather than navigating away, so this page
@@ -6,5 +9,9 @@ import AccountPanel from "@/components/account/AccountPanel";
 // `?next=/account` the auth flow returns to.
 
 export default function AccountPage() {
-  return <AccountPanel />;
+  return (
+    <main id="main" tabIndex={-1}>
+      <AccountPanel />
+    </main>
+  );
 }
