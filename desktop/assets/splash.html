@@ -47,6 +47,16 @@
   @keyframes spin {
     to { transform: rotate(360deg); }
   }
+  /* The app honours this globally (app/globals.css); the splash loads before
+     any of that exists, so it has to say so itself. The ring stays as a static
+     "working" mark rather than disappearing — the stage label below it is what
+     actually reports progress. */
+  @media (prefers-reduced-motion: reduce) {
+    .spinner {
+      animation: none;
+      border-top-color: rgba(255, 255, 255, 0.35);
+    }
+  }
 </style>
 </head>
 <body>
