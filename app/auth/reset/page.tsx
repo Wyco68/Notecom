@@ -2,6 +2,7 @@
 
 import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import AuthShell, { AuthFootLink } from "@/components/auth/AuthShell";
 import { collabAuth, safeNext } from "@/lib/auth/collab";
 
 // Set or reset a password. Also the path an older, magic-link-only account uses
@@ -54,73 +55,92 @@ function ResetForm() {
   }
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-sm flex-col justify-center px-6">
-      <h1 className="mb-1.5 text-xl font-semibold tracking-tight text-gray-900 dark:text-gray-100">
-        {openedFromLink ? "Choose a new password" : "Set a password"}
-      </h1>
-      <p className="mb-8 text-sm text-gray-500 dark:text-gray-400">
-        {openedFromLink
+    <AuthShell
+      title={openedFromLink ? "Choose a new password" : "Set a password"}
+      subtitle={
+        openedFromLink
           ? "This finishes the reset — you'll be signed in with it."
-          : "We'll email you a link to confirm it's you."}
-      </p>
-
+          : sent
+            ? "Check your inbox."
+            : "We'll email you a link to confirm it's you."
+      }
+      footer={
+        <AuthFootLink href={`/auth/sign-in?next=${encodeURIComponent(next)}`}>
+          Back to sign in
+        </AuthFootLink>
+      }
+    >
       {openedFromLink ? (
-        <>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            submitPassword();
+          }}
+        >
           <input
             autoFocus
             type="password"
+            required
+            minLength={8}
             autoComplete="new-password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && submitPassword()}
             placeholder="New password (8+ characters)"
+            aria-label="New password"
             className="ui-field mb-3"
           />
-          {error && <p className="mb-3 text-xs text-red-600 dark:text-red-400">{error}</p>}
+          {error && (
+            <p role="alert" className="mb-3 text-xs text-red-600 dark:text-red-400">
+              {error}
+            </p>
+          )}
           <button
-            onClick={submitPassword}
+            type="submit"
             disabled={busy || password.length < 8}
             className="ui-btn ui-btn-primary w-full"
           >
             {busy ? "Saving..." : "Set password and continue"}
           </button>
-        </>
+        </form>
       ) : sent ? (
-        <p className="rounded-md border border-black/10 bg-black/[0.02] px-3 py-2.5 text-sm leading-relaxed text-gray-600 dark:border-white/10 dark:bg-white/[0.03] dark:text-gray-400">
+        <p className="ui-card px-3 py-2.5 text-sm leading-relaxed text-gray-600 dark:text-gray-400">
           If {email} has an account, a reset link is on its way. Open it in this
           browser and you&apos;ll come straight back here to choose a new
           password. The link expires in an hour.
         </p>
       ) : (
-        <>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            sendLink();
+          }}
+        >
           <input
             autoFocus
             type="email"
+            required
             autoComplete="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && sendLink()}
             placeholder="you@example.com"
+            aria-label="Email"
             className="ui-field mb-3"
           />
-          {error && <p className="mb-3 text-xs text-red-600 dark:text-red-400">{error}</p>}
+          {error && (
+            <p role="alert" className="mb-3 text-xs text-red-600 dark:text-red-400">
+              {error}
+            </p>
+          )}
           <button
-            onClick={sendLink}
+            type="submit"
             disabled={busy || !email.trim()}
             className="ui-btn ui-btn-primary w-full"
           >
             {busy ? "Sending..." : "Email me a reset link"}
           </button>
-        </>
+        </form>
       )}
-
-      <a
-        href={`/auth/sign-in?next=${encodeURIComponent(next)}`}
-        className="ui-focus mt-8 rounded text-center text-sm text-gray-500 transition-colors duration-150 ease-out hover:text-gray-700 dark:hover:text-gray-300"
-      >
-        Back to sign in
-      </a>
-    </main>
+    </AuthShell>
   );
 }
 

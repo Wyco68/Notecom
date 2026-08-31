@@ -2,6 +2,7 @@
 
 import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import AuthShell, { AuthFootLink } from "@/components/auth/AuthShell";
 import { collabAuth, safeNext } from "@/lib/auth/collab";
 
 // Account sign-in for collaboration. Distinct from the Claude Code CLI
@@ -14,6 +15,11 @@ import { collabAuth, safeNext } from "@/lib/auth/collab";
 // app/api/auth/collab/route.ts). The code is typed, so no email link is
 // followed and no redirect to the project's Site URL happens. The one
 // link-based flow is password recovery, on /auth/reset.
+//
+// Each step is a real <form>: Enter already submitted via a keydown handler,
+// but only a form gets browsers and password managers to treat these as
+// credentials — autofill, "save this password", and the Go key on a phone
+// keyboard all key off the form, not off the input.
 
 function SignInForm() {
   const params = useSearchParams();
@@ -55,100 +61,120 @@ function SignInForm() {
   }
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-sm flex-col justify-center px-6">
-      <h1 className="mb-1.5 text-xl font-semibold tracking-tight text-gray-900 dark:text-gray-100">
-        Sign in
-      </h1>
-      <p className="mb-8 text-sm text-gray-500 dark:text-gray-400">
-        To share folders and join other people&apos;s.
-      </p>
-
-      {step === "password" ? (
+    <AuthShell
+      title="Sign in"
+      subtitle={
+        step === "password"
+          ? "To share folders and join other people's."
+          : `Enter the 8-digit code we emailed to ${email}.`
+      }
+      footer={
         <>
+          {step === "password" && (
+            <div className="flex justify-between">
+              <a
+                href={`/auth/sign-up?next=${encodeURIComponent(next)}`}
+                className="ui-focus rounded text-blue-600 transition-colors duration-150 ease-out hover:text-blue-500 dark:text-blue-400"
+              >
+                Create account
+              </a>
+              <a
+                href={`/auth/reset?next=${encodeURIComponent(next)}`}
+                className="ui-focus rounded text-blue-600 transition-colors duration-150 ease-out hover:text-blue-500 dark:text-blue-400"
+              >
+                Forgot password?
+              </a>
+            </div>
+          )}
+          <AuthFootLink href="/vault">Back to vault</AuthFootLink>
+        </>
+      }
+    >
+      {step === "password" ? (
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            submitPassword();
+          }}
+        >
           <input
             autoFocus
             type="email"
+            required
             autoComplete="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="you@example.com"
+            aria-label="Email"
             className="ui-field mb-3"
           />
           <input
             type="password"
+            required
             autoComplete="current-password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && submitPassword()}
             placeholder="Password"
+            aria-label="Password"
             className="ui-field mb-3"
           />
-          {error && <p className="mb-3 text-xs text-red-600 dark:text-red-400">{error}</p>}
+          {error && (
+            <p role="alert" className="mb-3 text-xs text-red-600 dark:text-red-400">
+              {error}
+            </p>
+          )}
           <button
-            onClick={submitPassword}
+            type="submit"
             disabled={busy || !email.trim() || !password}
             className="ui-btn ui-btn-primary w-full"
           >
             {busy ? "Checking..." : "Continue"}
           </button>
-          <div className="mt-5 flex justify-between text-sm">
-            <a
-              href={`/auth/sign-up?next=${encodeURIComponent(next)}`}
-              className="ui-focus rounded text-blue-600 transition-colors duration-150 ease-out hover:text-blue-500 dark:text-blue-400"
-            >
-              Create account
-            </a>
-            <a
-              href={`/auth/reset?next=${encodeURIComponent(next)}`}
-              className="ui-focus rounded text-blue-600 transition-colors duration-150 ease-out hover:text-blue-500 dark:text-blue-400"
-            >
-              Forgot password?
-            </a>
-          </div>
-        </>
+        </form>
       ) : (
-        <>
-          <p className="mb-3 text-sm text-gray-500 dark:text-gray-400">
-            Enter the 8-digit code we emailed to {email}.
-          </p>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            submitCode();
+          }}
+        >
           <input
             autoFocus
             inputMode="numeric"
+            required
             autoComplete="one-time-code"
             value={code}
             onChange={(e) => setCode(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && submitCode()}
             placeholder="12345678"
+            aria-label="Emailed code"
             className="ui-field mb-3 text-center font-mono text-lg tracking-[0.3em]"
           />
-          {error && <p className="mb-3 text-xs text-red-600 dark:text-red-400">{error}</p>}
+          {error && (
+            <p role="alert" className="mb-3 text-xs text-red-600 dark:text-red-400">
+              {error}
+            </p>
+          )}
           <button
-            onClick={submitCode}
+            type="submit"
             disabled={busy || !code.trim()}
             className="ui-btn ui-btn-primary w-full"
           >
             {busy ? "Verifying..." : "Verify and sign in"}
           </button>
           <button
+            type="button"
             onClick={() => {
               setStep("password");
               setCode("");
               setError(null);
             }}
-            className="ui-focus mt-4 rounded text-center text-sm text-blue-600 transition-colors duration-150 ease-out hover:text-blue-500 dark:text-blue-400"
+            className="ui-focus mt-4 w-full rounded text-center text-sm text-blue-600 transition-colors duration-150 ease-out hover:text-blue-500 dark:text-blue-400"
           >
             Back
           </button>
-        </>
+        </form>
       )}
-
-      <a
-        href="/vault"
-        className="ui-focus mt-8 rounded text-center text-sm text-gray-500 transition-colors duration-150 ease-out hover:text-gray-700 dark:hover:text-gray-300"
-      >
-        Back to vault
-      </a>
-    </main>
+    </AuthShell>
   );
 }
 

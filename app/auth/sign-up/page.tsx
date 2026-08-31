@@ -2,6 +2,7 @@
 
 import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import AuthShell, { AuthFootLink } from "@/components/auth/AuthShell";
 import { CollabAuthError, collabAuth, safeNext } from "@/lib/auth/collab";
 
 // Create a collaboration account: email + password, then confirm ownership of
@@ -64,82 +65,102 @@ function SignUpForm() {
   }
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-sm flex-col justify-center px-6">
-      <h1 className="mb-1.5 text-xl font-semibold tracking-tight text-gray-900 dark:text-gray-100">
-        Create account
-      </h1>
-      <p className="mb-8 text-sm text-gray-500 dark:text-gray-400">
-        To share folders and join other people&apos;s.
-      </p>
-
-      {step === "form" ? (
+    <AuthShell
+      title="Create account"
+      subtitle={
+        step === "form"
+          ? "To share folders and join other people's."
+          : `Enter the 8-digit code we emailed to ${email} to confirm your account.`
+      }
+      footer={
         <>
+          {step === "form" && (
+            <a
+              href={`/auth/sign-in?next=${encodeURIComponent(next)}`}
+              className="ui-focus rounded text-blue-600 transition-colors duration-150 ease-out hover:text-blue-500 dark:text-blue-400"
+            >
+              Already have an account? Sign in
+            </a>
+          )}
+          <AuthFootLink href="/vault">Back to vault</AuthFootLink>
+        </>
+      }
+    >
+      {step === "form" ? (
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            submitForm();
+          }}
+        >
           <input
             autoFocus
             type="email"
+            required
             autoComplete="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="you@example.com"
+            aria-label="Email"
             className="ui-field mb-3"
           />
           <input
             type="password"
+            required
+            minLength={8}
             autoComplete="new-password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && submitForm()}
             placeholder="Password (8+ characters)"
+            aria-label="Password"
             className="ui-field mb-3"
           />
-          {error && <p className="mb-3 text-xs text-red-600 dark:text-red-400">{error}</p>}
+          {error && (
+            <p role="alert" className="mb-3 text-xs text-red-600 dark:text-red-400">
+              {error}
+            </p>
+          )}
           <button
-            onClick={submitForm}
+            type="submit"
             disabled={busy || !email.trim() || password.length < 8}
             className="ui-btn ui-btn-primary w-full"
           >
             {busy ? "Creating..." : "Create account"}
           </button>
-          <a
-            href={`/auth/sign-in?next=${encodeURIComponent(next)}`}
-            className="ui-focus mt-5 rounded text-center text-sm text-blue-600 transition-colors duration-150 ease-out hover:text-blue-500 dark:text-blue-400"
-          >
-            Already have an account? Sign in
-          </a>
-        </>
+        </form>
       ) : (
-        <>
-          <p className="mb-3 text-sm text-gray-500 dark:text-gray-400">
-            Enter the 8-digit code we emailed to {email} to confirm your account.
-          </p>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            submitCode();
+          }}
+        >
           <input
             autoFocus
             inputMode="numeric"
+            required
             autoComplete="one-time-code"
             value={code}
             onChange={(e) => setCode(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && submitCode()}
             placeholder="12345678"
+            aria-label="Emailed code"
             className="ui-field mb-3 text-center font-mono text-lg tracking-[0.3em]"
           />
-          {error && <p className="mb-3 text-xs text-red-600 dark:text-red-400">{error}</p>}
+          {error && (
+            <p role="alert" className="mb-3 text-xs text-red-600 dark:text-red-400">
+              {error}
+            </p>
+          )}
           <button
-            onClick={submitCode}
+            type="submit"
             disabled={busy || !code.trim()}
             className="ui-btn ui-btn-primary w-full"
           >
             {busy ? "Verifying..." : "Confirm and continue"}
           </button>
-        </>
+        </form>
       )}
-
-      <a
-        href="/vault"
-        className="ui-focus mt-8 rounded text-center text-sm text-gray-500 transition-colors duration-150 ease-out hover:text-gray-700 dark:hover:text-gray-300"
-      >
-        Back to vault
-      </a>
-    </main>
+    </AuthShell>
   );
 }
 
