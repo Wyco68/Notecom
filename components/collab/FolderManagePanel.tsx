@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import ConfirmModal from "@/components/modals/ConfirmModal";
 import MemberRow from "@/components/collab/MemberRow";
 import TagChip from "@/components/collab/TagChip";
+import PanelHeader from "@/components/layout/PanelHeader";
 import { SkeletonPanel } from "@/components/layout/Skeleton";
 import { useToast } from "@/components/toast/ToastProvider";
 import type {
@@ -203,7 +204,7 @@ export default function FolderManagePanel({
   if (needsAuth) {
     return (
       <div className="mx-auto max-w-2xl px-6 py-16 text-center">
-        <p className="mb-3 text-sm text-gray-500 dark:text-gray-400">
+        <p className="mb-3 ui-empty">
           Sign in to manage folder sharing.
         </p>
         <a
@@ -227,17 +228,12 @@ export default function FolderManagePanel({
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6 sm:py-12">
-      <div className="mb-8 flex items-baseline justify-between gap-4">
-        <div className="min-w-0">
-          <h1 className="truncate text-xl font-semibold tracking-tight text-gray-900 dark:text-gray-100">
-            {detail.name}
-          </h1>
-          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-            owned by {detail.ownerUsername} · {detail.documentCount} notes
-          </p>
-        </div>
-        <BackControl onClose={onClose} className="shrink-0" />
-      </div>
+      <PanelHeader
+        title={detail.name}
+        subtitle={`owned by ${detail.ownerUsername} · ${detail.documentCount} notes`}
+        onClose={onClose}
+        className="mb-8"
+      />
 
       {!canManage && (
         <p className="ui-rise mb-6 rounded-md border border-black/10 bg-black/[0.02] px-3 py-2.5 text-xs leading-relaxed text-gray-500 dark:border-white/10 dark:bg-white/[0.03] dark:text-gray-400">
@@ -766,7 +762,7 @@ function Section({
 }
 
 function Empty({ children }: { children: React.ReactNode }) {
-  return <p className="text-sm text-gray-500 dark:text-gray-400">{children}</p>;
+  return <p className="ui-empty">{children}</p>;
 }
 
 function Toggle({

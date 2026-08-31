@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import TagChip from "@/components/collab/TagChip";
 import UserIcon from "@/components/icons/UserIcon";
 import ConfirmModal from "@/components/modals/ConfirmModal";
+import PanelHeader from "@/components/layout/PanelHeader";
 import { SkeletonPanel } from "@/components/layout/Skeleton";
 import { useToast } from "@/components/toast/ToastProvider";
 import { AVATAR_ACCEPT, AVATAR_MAX_BYTES } from "@/lib/collab/avatar";
@@ -186,26 +187,12 @@ export default function AccountPanel({
 
   return (
     <div className="mx-auto max-w-2xl p-4 sm:p-8">
-      <div className="mb-8 flex items-baseline justify-between gap-3">
-        <h1 className="text-xl font-semibold tracking-tight text-gray-900 dark:text-gray-100">
-          Account
-        </h1>
-        {onClose ? (
-          <button
-            onClick={onClose}
-            className="ui-btn ui-btn-sm ui-btn-ghost shrink-0 font-normal text-blue-600 dark:text-blue-400"
-          >
-            Back to notes
-          </button>
-        ) : (
-          <a
-            href="/vault"
-            className="ui-focus shrink-0 rounded text-sm text-blue-600 transition-colors duration-150 ease-out hover:text-blue-500 dark:text-blue-400"
-          >
-            Back to folders
-          </a>
-        )}
-      </div>
+      <PanelHeader
+        title="Account"
+        subtitle="Your profile, the tags you hold, and who you follow."
+        onClose={onClose}
+        className="mb-8"
+      />
 
       <Section title="Profile" index={0}>
         <AvatarField
@@ -280,7 +267,7 @@ export default function AccountPanel({
         </p>
         <div className="flex flex-wrap gap-1.5">
           {tags.length === 0 && (
-            <span className="text-sm text-gray-500 dark:text-gray-400">
+            <span className="ui-empty">
               No tags yet. Follow someone and they can offer you one.
             </span>
           )}
@@ -336,7 +323,7 @@ export default function AccountPanel({
           className="ui-field ui-field-sm mb-2"
         />
         {grantCandidates.length === 0 ? (
-          <p className="text-sm text-gray-500 dark:text-gray-400">
+          <p className="ui-empty">
             {grantSearch
               ? "No follower matches."
               : "Nobody follows you yet, so there is no one to tag."}
@@ -400,13 +387,13 @@ export default function AccountPanel({
       </Section>
 
       <Section title="Connected accounts" index={5}>
-        <p className="text-sm text-gray-500 dark:text-gray-400">
+        <p className="ui-empty">
           Not available yet — this account signs in with email and password only.
         </p>
       </Section>
 
       <Section title="Notifications" index={6}>
-        <p className="text-sm text-gray-500 dark:text-gray-400">
+        <p className="ui-empty">
           Follow requests, folder invitations and tag offers appear at the top of
           the sidebar as soon as they arrive — there is no separate inbox to check.
         </p>

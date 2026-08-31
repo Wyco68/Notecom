@@ -3,6 +3,7 @@
 import { useCallback, useState } from "react";
 import FolderCard from "@/components/collab/FolderCard";
 import SearchIcon from "@/components/icons/SearchIcon";
+import PanelHeader from "@/components/layout/PanelHeader";
 import { SkeletonCard } from "@/components/layout/Skeleton";
 import type { FolderSummary } from "@/lib/collab/types";
 
@@ -66,26 +67,11 @@ export default function DiscoverPanel({
 
   return (
     <div className="mx-auto max-w-5xl p-4 sm:p-8">
-      <div className="mb-6 flex items-baseline justify-between gap-4">
-        <h1 className="text-xl font-semibold tracking-tight text-gray-900 dark:text-gray-100">
-          Discover folders
-        </h1>
-        {onClose ? (
-          <button
-            onClick={onClose}
-            className="ui-btn ui-btn-sm ui-btn-ghost shrink-0 font-normal text-blue-600 dark:text-blue-400"
-          >
-            Back to notes
-          </button>
-        ) : (
-          <a
-            href="/vault"
-            className="ui-focus shrink-0 rounded text-sm text-blue-600 transition-colors duration-150 ease-out hover:text-blue-500 dark:text-blue-400"
-          >
-            Back to vault
-          </a>
-        )}
-      </div>
+      <PanelHeader
+        title="Discover folders"
+        subtitle="Search by name, description or owner — public folders and your own."
+        onClose={onClose}
+      />
 
       <div className="relative mb-6">
         <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
@@ -105,7 +91,7 @@ export default function DiscoverPanel({
 
       {needsAuth ? (
         <div className="py-16 text-center">
-          <p className="mb-3 text-sm text-gray-500 dark:text-gray-400">
+          <p className="mb-3 ui-empty">
             Sign in to discover and join folders.
           </p>
           <a href="/auth/sign-in?next=/discover" className="ui-btn ui-btn-primary px-4">
@@ -121,11 +107,11 @@ export default function DiscoverPanel({
           ))}
         </div>
       ) : !submitted ? (
-        <p className="py-16 text-center text-sm text-gray-500 dark:text-gray-400">
+        <p className="py-16 text-center ui-empty">
           Search for a folder by name, description or owner.
         </p>
       ) : folders.length === 0 ? (
-        <p className="py-16 text-center text-sm text-gray-500 dark:text-gray-400">
+        <p className="py-16 text-center ui-empty">
           No folders match &quot;{submitted}&quot;.
         </p>
       ) : (

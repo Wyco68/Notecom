@@ -41,7 +41,7 @@ export default function FolderCard({
   }
 
   return (
-    <div className="flex flex-col rounded-lg border border-black/10 bg-white p-4 transition-colors duration-150 ease-out hover:border-black/20 dark:border-white/10 dark:bg-[#161b22] dark:hover:border-white/20">
+    <div className="ui-card ui-card-hover flex flex-col bg-white p-4 dark:bg-[#161b22]">
       <div className="mb-1 flex items-start gap-2">
         <h3 className="min-w-0 flex-1 truncate text-sm font-semibold tracking-tight text-gray-900 dark:text-gray-100">
           {folder.name}
@@ -51,7 +51,8 @@ export default function FolderCard({
 
       <p className="mb-3 flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
         <Avatar username={folder.ownerUsername} avatarUrl={folder.ownerAvatar} size={5} />
-        by {folder.ownerUsername} · {folder.documentCount} notes · {folder.memberCount} members
+        by {folder.ownerUsername} · <span data-numeric>{folder.documentCount}</span> notes ·{" "}
+        <span data-numeric>{folder.memberCount}</span> members
         {folder.visibility === "private" && " · private"}
       </p>
 

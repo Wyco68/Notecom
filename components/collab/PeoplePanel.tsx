@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Avatar from "@/components/collab/Avatar";
 import SearchIcon from "@/components/icons/SearchIcon";
+import PanelHeader from "@/components/layout/PanelHeader";
 import { SkeletonRows } from "@/components/layout/Skeleton";
 import { useToast } from "@/components/toast/ToastProvider";
 import type { FollowEdge } from "@/lib/collab/types";
@@ -54,30 +55,15 @@ export default function PeoplePanel({ onClose }: { onClose?: () => void }) {
 
   return (
     <div className="mx-auto max-w-3xl p-4 sm:p-8">
-      <div className="mb-6 flex items-baseline justify-between gap-4">
-        <h1 className="text-xl font-semibold tracking-tight text-gray-900 dark:text-gray-100">
-          People
-        </h1>
-        {onClose ? (
-          <button
-            onClick={onClose}
-            className="ui-btn ui-btn-sm ui-btn-ghost shrink-0 font-normal text-blue-600 dark:text-blue-400"
-          >
-            Back to notes
-          </button>
-        ) : (
-          <a
-            href="/vault"
-            className="ui-focus shrink-0 rounded text-sm text-blue-600 transition-colors duration-150 ease-out hover:text-blue-500 dark:text-blue-400"
-          >
-            Back to vault
-          </a>
-        )}
-      </div>
+      <PanelHeader
+        title="People"
+        subtitle="Everyone you follow, and everyone following you."
+        onClose={onClose}
+      />
 
       {needsAuth ? (
         <div className="py-16 text-center">
-          <p className="mb-3 text-sm text-gray-500 dark:text-gray-400">
+          <p className="mb-3 ui-empty">
             Your session expired — sign in again to search your network.
           </p>
           <a href="/auth/sign-in?next=/people" className="ui-btn ui-btn-primary px-4">
@@ -275,13 +261,13 @@ function PeopleSearch({
           Search failed — {error}
         </p>
       ) : !submitted ? (
-        <p className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+        <p className="py-8 text-center ui-empty">
           {direction === "following"
             ? "Search who you follow by username."
             : "Search who follows you by username."}
         </p>
       ) : people.length === 0 ? (
-        <p className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+        <p className="py-8 text-center ui-empty">
           Nobody matches &quot;{submitted}&quot;.
         </p>
       ) : (
