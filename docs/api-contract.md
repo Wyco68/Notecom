@@ -88,6 +88,17 @@ the boundary. Model: [collaboration.md](collaboration.md).
 | `/api/collab/invitations` | GET | — | `{ invitations: [...] }` — the caller's inbox |
 | `/api/collab/invitations` | POST | `{ invitationId, accept }` | `{ ok }` |
 
+**The three inboxes are one screen.** (`/notifications` is in middleware's
+`PROTECTED_EXACT`, so a signed-out visitor is redirected to sign-in like
+`/account`, `/discover` and `/people` — all four plus `/vault` and every
+`/api/*` path are what `PROTECTED_EXACT` and `isProtected` cover.) `/api/collab/invitations`,
+`/api/collab/me/follow-requests` and `/api/collab/me/grants` are read together
+by `NotificationsProvider` (one fetch each, in parallel, re-run on window
+focus) and rendered as a single merged list at `/notifications` — see
+[ui-guidelines.md](ui-guidelines.md). Nothing else fetches them, and there is
+no notifications endpoint of its own: adding one would be a fourth read of
+three lists that are already this cheap.
+
 `middleware.ts` holds two gates. **Sign-in is required for everything** it
 matches — `/api/*`, `/vault/*`, `/discover`, `/people`, `/account` — with
 `/api/auth/*` exempt because that is how a session is obtained; a signed-out

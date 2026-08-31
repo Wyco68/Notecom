@@ -8,6 +8,9 @@ Lesson notes generated from uploaded slides/PDFs/images, rewritten in plain
 high-school-level language, technical terms kept correct (Information
 Systems & Network Engineering program). Architecture: `docs/architecture.md`.
 Repo rules for humans: [README.md](README.md).
+Who it's for and the design principles that follow from that:
+[docs/PRODUCT.md](docs/PRODUCT.md) — strategy only, no visual rules; those
+live in `docs/ui-guidelines.md`.
 
 ## The three commands
 Optional, not required: a request works without one. Each command loads a

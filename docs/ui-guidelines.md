@@ -7,6 +7,28 @@ Dark, code-editor look. Tailwind utility classes only, no separate CSS
 files beyond [app/globals.css](../app/globals.css) (custom scrollbar +
 base body color).
 
+**Type is Geist and Geist Mono**, loaded by `next/font` in
+[app/layout.tsx](../app/layout.tsx) and self-hosted at build time — no
+request ever leaves the page for a font file, which is what keeps them inside
+the CSP's `font-src 'self'` without widening it to Google's origins. The two
+variables it sets (`--font-sans`, `--font-mono`) are wired to Tailwind's
+`font-sans` / `font-mono` in `tailwind.config.ts`, so use those utilities
+rather than naming the family anywhere.
+
+Three base rules come with it, in `globals.css`'s `@layer base`: `h1`–`h3`
+lose the tracking display sizes don't need and get `text-wrap: balance`, `p`
+gets `text-wrap: pretty` so prose stops orphaning its last word, and anything
+marked `data-numeric` (plus every `<time>`) gets tabular figures so counts
+don't jitter as digits change.
+
+**Named z-index layers**, not bare numbers: `z-backdrop` (30), `z-sidebar`
+(40), `z-modal` (50), `z-toast` (60), defined in `tailwind.config.ts`. The
+order is the only thing that matters and it should be readable.
+
+**Shadows are tinted**, never neutral black: `shadow-panel` and
+`shadow-panel-dark` carry the surface's own hue, so a raised panel in dark
+mode reads as depth rather than soot.
+
 | Surface | Color |
 |---|---|
 | Sidebar background | `#0a0e14` |
@@ -26,9 +48,9 @@ base body color).
 ## Layout and breakpoints
 The shell ([components/layout/AppShell.tsx](../components/layout/AppShell.tsx))
 is a two-column workspace. The sidebar hides and returns at **every** width via
-the hamburger in the top-left: below `lg` (1024px) it is an off-canvas drawer
-(`fixed` + `-translate-x-full`, dismissed by the backdrop, its ✕, or by opening
-a document), and from `lg` up the same element is `lg:static` and simply leaves
+the toggle in [components/layout/ContentTopBar.tsx](../components/layout/ContentTopBar.tsx): below `lg` (1024px) it is an off-canvas drawer
+(`fixed` + `-translate-x-full`, dismissed by the backdrop, its collapse
+control, or by opening a document), and from `lg` up the same element is `lg:static` and simply leaves
 the layout when closed. One sidebar, two behaviours, not two components. It
 opens by default only on wide screens, decided after mount since the server
 render doesn't know the viewport.
@@ -45,11 +67,35 @@ and anything that can be wider than the column (tables) scrolls inside its own
 
 ### Sidebar sections
 
-Top to bottom: header, search, the notification stack (invitations, follow
-requests, tag offers — each renders nothing when empty), Favorites,
-**Folders**, **Recent**, account. Folders takes whatever height is left and
-scrolls;
-**Recent sits under it at a fixed `h-56`** — exactly the eight rows
+Top to bottom: header, search, the **nav group**, Favorites, **Folders**,
+**Recent**, the account foot.
+
+Placement carries meaning here, so it follows one rule: **a control sits with
+what it acts on.**
+
+- **Header** — the brand and the control that closes the panel. Nothing else.
+  It previously held the notification bell, a `✕` text glyph, refresh and the
+  theme toggle: four unrelated concerns filed together because there was room.
+- **Nav group** ([components/layout/SidebarNav.tsx](../components/layout/SidebarNav.tsx))
+  — the three *destinations*: Notifications (with its count), Discover,
+  People. Icon **and label**, with an active state. Discover and People used to
+  be icon-only buttons on the Folders row, which claimed a relationship to the
+  folder tree that neither has.
+- **Folders row** — only what acts on folders: generate and new-folder, plus
+  the read-only / CLI sign-in badge.
+- **Account foot** — identity first, then the app-level chrome (refresh,
+  theme) right-aligned. `AccountControl` renders its *contents* only; `AppShell`
+  owns the bordered row, so the chrome survives on a build with no
+  collaboration, where that component renders nothing. Sign out keeps its text
+  label rather than joining the icon cluster: it is the one control there you
+  cannot undo without signing back in.
+
+**Label what you navigate to; leave a glyph on what acts in place.** That is
+the whole icon policy. Destinations get text; actions (new folder, generate,
+refresh, theme, collapse) stay icon-only with a `title` *and* an `aria-label`.
+
+Folders takes whatever height is left and scrolls; **Recent sits under it at a
+fixed `h-56`** — exactly the eight rows
 `lib/vault/recent.ts` caps its history at (8 × 1.75rem, a row being `text-sm`'s
 1.25rem line plus `py-1`). No padding inside that box, or it eats a row; the
 list collapses to its content while empty rather than holding eight blank rows
@@ -61,16 +107,44 @@ wrapping, because a fixed height budget cannot absorb a name that wraps — the
 the reader leaves it (a different selection, or `pagehide`), so the file on
 screen is never also listed above as history.
 
+### The content column's top bar
+
+[components/layout/ContentTopBar.tsx](../components/layout/ContentTopBar.tsx)
+is a 48px sticky strip at the top of `<main>`. It holds two things:
+
+- **The sidebar toggle, only while the sidebar is hidden.** Open, the sidebar
+  carries its own collapse control in its header; rendering both put two
+  buttons for one job on either side of the divider, which reads as an accident.
+- **The open document's `folder › title`.** Blank while a panel has taken the
+  column — the panels render their own `PanelHeader` h1, and naming them here
+  too would put every panel's title on screen twice.
+
+It replaced a round button that floated *over* the document at top-left plus
+the permanent `pt-12` every page carried to dodge it — a control sitting on top
+of the thing it was meant to leave alone, and a reserved gap that existed
+whether or not the control did. Neither exists now; don't reintroduce either.
+
 ### Panels in the content column
 
-The account editor, folder discovery, the people search panel and a folder's
-sharing console render **inside the workspace's content column**, not as a
-navigation — `AccountPanel`, `DiscoverPanel`, `PeoplePanel` and
-`FolderManagePanel` each take an optional `onClose`, and `AppShell` holds one
-`overlay` value (never a boolean per pane) so two cannot be open at once. Their
-routes (`/account`, `/discover`, `/people`, `/vault/[folder]/manage`) still
-exist and render the same component without `onClose`, for a deep link or an
-auth `?next=`. A control that opens a panel in place is a `<button>`; the same
+The account editor, folder discovery, the people search panel, notifications
+and a folder's sharing console render **inside the workspace's content
+column**, not as a navigation — `AccountPanel`, `DiscoverPanel`,
+`PeoplePanel`, `NotificationsPanel` and `FolderManagePanel` each take an
+optional `onClose`, and `AppShell` holds one `overlay` value (never a boolean
+per pane) so two cannot be open at once; the union of what it can hold is the
+`Overlay` type at the top of `AppShell.tsx`, spelled once. Their routes
+(`/account`, `/discover`, `/people`, `/notifications`,
+`/vault/[folder]/manage`) still exist and render the same component without
+`onClose`, for a deep link or an auth `?next=`. **A new panel route must also
+be added to `PROTECTED_EXACT` in [middleware.ts](../middleware.ts)** — that
+set, not the panel, is what makes the page redirect a signed-out visitor to
+sign-in.
+
+Every one of them opens with
+[components/layout/PanelHeader.tsx](../components/layout/PanelHeader.tsx) —
+title, optional subtitle, an optional count `badge` and panel-specific
+`actions`, then the way out. It is what enforces the button-versus-link rule
+below; don't hand-roll a panel heading. A control that opens a panel in place is a `<button>`; the same
 control on a page that must navigate is an `<a>` — a link that doesn't navigate
 and a button that does are both lies about what will happen.
 
@@ -98,6 +172,11 @@ under `@layer components`. Compose these instead of re-deriving a control:
 | `ui-focus` | a visible focus ring on anything not covered above |
 | `ui-scroll` | a pane that scrolls: smooth `scroll-behavior` + contained overscroll |
 | `ui-rise` | enter animation (fade + 4px lift) for a row or card arriving in a list |
+| `ui-card` (+ `ui-card-hover`) | a raised surface inside a panel — inbox item, folder card, settings section; the hover variant lifts 1px and warms its border |
+| `ui-badge` | a small count or status label. Square-ish, **not** a pill — a pill on every noun is the look this app is avoiding |
+| `ui-section-title` | a section heading inside a panel or the sidebar |
+| `ui-empty` | the single muted line that stands in for an empty list |
+| `ui-skip-link` | off-screen until focused; first in the tab order on every page |
 
 Two rules that come with them:
 
@@ -107,6 +186,11 @@ Two rules that come with them:
   wrapper carries `ui-field` and the ring via `focus-within` so the whole box
   lights up instead of the bare input.
 - **A field wrapper takes the ring**, not the input inside it.
+- **Every page marks its main region `id="main"`.** The skip link in
+  [app/layout.tsx](../app/layout.tsx) is the first thing in the tab order on
+  every page and jumps to it, so a keyboard reader doesn't walk the whole
+  sidebar tree to reach the document. A page with no `#main` silently breaks
+  that link.
 
 ## Motion
 Transitions are 120–180ms `ease-out` for hover and focus, 200–280ms for
@@ -149,6 +233,28 @@ appearing.
 - **Icons**: hand-rolled inline SVG components under
   [components/icons/](../components/icons/) (e.g. `TrashIcon`), no icon
   library dependency.
+- **Notifications**: everything waiting on the reader's answer — folder
+  invitations, incoming follow requests, offered tags — is one merged,
+  newest-first list in
+  [components/collab/NotificationsPanel.tsx](../components/collab/NotificationsPanel.tsx),
+  opened by the always-present Notifications row in the sidebar's nav group
+  (`SidebarNav`). Both read one copy of the list from
+  `NotificationsProvider`, which wraps the whole shell: a second fetch for the
+  badge would disagree with the panel the moment an item was answered. They
+  are *actionable* items, never a feed — there is no read/unread flag, an item
+  leaves the list by being answered and nothing else, and no table backs it
+  (the three endpoints in [api-contract.md](api-contract.md) already existed).
+  **Don't add a notification block that renders nothing when empty**: three of
+  those used to stack in the sidebar, which made the surface unreachable
+  exactly when someone went looking for it, and pushed the folder tree down
+  the sidebar whenever it wasn't.
+- **Auth pages**: sign-in, sign-up and reset share
+  [components/auth/AuthShell.tsx](../components/auth/AuthShell.tsx) — app
+  mark, one card, one footer slot. Each step is a real `<form>` with a
+  `type="submit"` button, not a keydown handler: autofill, "save this
+  password" and a phone keyboard's Go key all key off the form. Use
+  `min-h-dvh`, never `min-h-screen` — iOS Safari's `100vh` is the height with
+  the toolbars hidden, so a centred column jumps as they slide away.
 - **Loading states**: [components/layout/Skeleton.tsx](../components/layout/Skeleton.tsx)
   — `SkeletonPanel` for a settings-style page, `SkeletonCard`, `SkeletonRows`
   for a sidebar list, `SkeletonLine`/`SkeletonCircle` to compose one by hand.
