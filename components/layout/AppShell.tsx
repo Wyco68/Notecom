@@ -27,6 +27,7 @@ import ContentTopBar from "./ContentTopBar";
 import AccountControl from "../collab/AccountControl";
 import AccountPanel from "../account/AccountPanel";
 import DiscoverPanel from "../collab/DiscoverPanel";
+import StarterBanner from "../collab/StarterBanner";
 import PeoplePanel from "../collab/PeoplePanel";
 import FolderManagePanel from "../collab/FolderManagePanel";
 import ThemeToggle from "../theme/ThemeToggle";
@@ -687,6 +688,13 @@ export default function AppShell() {
           folder={selected && !overlay ? (folderNames[selected.folder] ?? selected.folder) : null}
           title={selected && !overlay ? currentTitle : null}
         />
+
+        {/* A new account has nothing to read: no folders of its own, and none
+            shared with it until somebody hands it a tag. The banner is the way
+            out of that, and it sits above whatever the column is showing —
+            including a panel — because it is about the vault, not about the
+            document. It renders nothing once the reader has either. */}
+        <StarterBanner onClaimed={refreshTree} />
 
         {/* The account editor and the sharing console live here rather than at
             /account and /vault/[folder]/manage: the reader keeps their place,
