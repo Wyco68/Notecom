@@ -157,6 +157,36 @@ write `false`. Two consequences that matter:
 - Implied access is read-only, and an explicit `notes_folder_members` row always
   wins, since it is the only thing `notes_can_write_folder()` consults.
 
+### The one published tag
+
+`notes_tags.self_serve` (0025) is the single exception to "never
+self-assigned", and it is a property of the **tag**, not of the claimer: a tag
+marked self-serve is one its author has published to everyone, and
+`notes_claim_tag(slug)` hands it to any signed-in caller with no follow edge and
+no grant. The RPC reads the column off the tag and takes nothing on trust from
+the caller, so a tag cannot be made claimable by asking for it; an unpublished
+tag reads as absent rather than refused, so this is not a way to probe the
+vocabulary either.
+
+It exists because a brand-new account can read nothing at all — no folders of
+its own until it generates some, none shared until somebody follows it back and
+vouches for it — which makes the app's first screen empty for reasons that look
+like a fault. One published tag is what `StarterBanner` offers instead, over
+`/api/collab/me/starter`.
+
+Two consequences, both intended:
+
+- **No `notes_tag_grants` row is written**, so `notes_revoke_tag()` cannot
+  reach it: there is no granter to stop vouching. Dropping it stays the
+  holder's own right (Account → My tags), which is the only revocation that
+  means anything for a tag published to all.
+- Access arrives exactly as it does for any other tag — implied, read-only
+  membership, gone everywhere the moment the tag is dropped. Self-serve changes
+  who may *take* the tag, never what holding one does.
+
+Every other tag keeps the follow-then-grant path, and must: that is what makes
+a tag worth something as a credential.
+
 **Tags are deliberately not searchable.** A tag is a credential now, so
 `notes_search_folders` cannot filter or match on one — being able to ask "which
 folders does ISNE3RD open" would publish exactly the list worth acquiring it
@@ -185,7 +215,7 @@ Existing tables are extended in preference to new ones.
 | `notes_documents` | *(existing, unchanged)* permissions are inherited from the folder — adding a permission column here is a design error |
 | `notes_folder_roles` | makes roles data instead of code, so the set is extensible |
 | `notes_folder_members` | the membership edge; composite PK `(folder_id, user_id)` |
-| `notes_tags` | normalized free-form tag vocabulary, user-created — deliberately not the hardcoded `categories` table |
+| `notes_tags` | normalized free-form tag vocabulary, user-created — deliberately not the hardcoded `categories` table. `self_serve` marks the rare tag its author has published for anyone to claim (see "The one published tag") |
 | `notes_folder_tags` | folder↔tag edge. Carries `grants_join`, a retired per-tag toggle nothing reads as `false` any more — every association grants joining (see "Follows, and tags as credentials") |
 | `notes_user_tags` | user↔tag edge — the other half of the match; written only by accepting a grant |
 | `notes_tag_grants` | a tag offered to a follower, `pending` → `accepted` \| `declined` \| `revoked` |
@@ -250,6 +280,7 @@ Action RPCs — the only writers of `notes_folder_members`:
 `notes_respond_join_request(request, approve)`,
 `notes_grant_tag(username, label)` *(requires the grantee follows the caller)*,
 `notes_respond_tag_grant(grant, accept)`,
+`notes_claim_tag(slug)` *(only a tag whose `self_serve` is true)*,
 `notes_respond_follow(follower, accept)` *(caller must be the followee on a `pending` row; decline deletes it)*,
 `notes_set_member_role(folder, user, role)`,
 `notes_remove_member(folder, user)`,
