@@ -36,6 +36,23 @@ export interface UserTag {
 }
 
 /**
+ * The published ("self-serve") tag a new account can claim for itself, and
+ * enough around it for the starter banner to decide whether to show at all.
+ * Every other tag needs a follow and a grant; this one is a tag whose author
+ * has published it to everyone (`notes_tags.self_serve`).
+ */
+export interface StarterTag {
+  slug: string;
+  label: string;
+  /** Username of the account that published the tag, for "follow them" copy. */
+  owner: string | null;
+  /** The caller already holds it, so the folders are already in their tree. */
+  held: boolean;
+  /** The caller owns folders of their own, so they are not a new account. */
+  ownsFolders: boolean;
+}
+
+/**
  * A tag someone has offered the caller. Holding the tag is what grants access
  * to folders carrying it, so it only takes effect once accepted — a pending
  * grant confers nothing.

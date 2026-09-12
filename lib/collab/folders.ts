@@ -21,6 +21,7 @@ import type {
   JoinRequest,
   Member,
   GrantedTag,
+  StarterTag,
   TagGrant,
   UserTag,
   Visibility,
@@ -604,6 +605,67 @@ export async function removeMyTag(slug: string): Promise<void> {
   const { error } = await supabase.from("notes_user_tags").delete().eq("tag_id", tag.id);
   if (error) throw new Error(error.message);
 }
+
+/**
+ * The slug of the published tag a brand-new account is offered. Data, not a
+ * product rule: which folders it opens is `notes_folder_tags`, and a different
+ * demo set is a row change, not a code change. Only the name is fixed here,
+ * because two surfaces (the banner and its claim) must agree on it.
+ */
+export const STARTER_TAG_SLUG = "demo";
+
+/**
+ * The published tag and the two facts that decide whether to offer it: does
+ * the caller hold it already, and do they own folders of their own. Null when
+ * the database has no such tag at all (a fresh stack, a fork), which is what
+ * makes the banner vanish rather than error.
+ *
+ * Three small selects rather than an RPC: all three run under ordinary RLS —
+ * `notes_tags` is a shared vocabulary, `notes_user_tags` and `notes_folders`
+ * are already scoped to the caller — so there is nothing here a definer
+ * function would be needed to see.
+ */
+export async function starterTag(): Promise<StarterTag | null> {
+  const supabase = await createClient();
+  const { data: user } = await supabase.auth.getUser();
+  if (!user.user) return null;
+
+  const { data: tag } = await supabase
+    .from("notes_tags")
+    .select("id, slug, label, created_by")
+    .eq("slug", STARTER_TAG_SLUG)
+    .eq("self_serve", true)
+    .maybeSingle();
+  if (!tag) return null;
+
+  const [owner, held, mine] = await Promise.all([
+    tag.created_by
+      ? supabase.from("profiles").select("username").eq("id", tag.created_by).maybeSingle()
+      : Promise.resolve({ data: null }),
+    supabase.from("notes_user_tags").select("tag_id").eq("tag_id", tag.id).maybeSingle(),
+    supabase
+      .from("notes_folders")
+      .select("id", { count: "exact", head: true })
+      .eq("owner_id", user.user.id)
+      .eq("deleted", false),
+  ]);
+
+  return {
+    slug: tag.slug,
+    label: tag.label,
+    owner: (owner.data as any)?.username ?? null,
+    held: !!held.data,
+    ownsFolders: (mine.count ?? 0) > 0,
+  };
+}
+
+/**
+ * Claim a published tag. The RPC refuses any tag not marked `self_serve`, so
+ * this is not a way to self-assign the tags that act as credentials — see
+ * 0025 for why the one exception exists.
+ */
+export const claimTag = (slug: string) =>
+  rpc("notes_claim_tag", { p_slug: slug }) as Promise<string>;
 
 export const transferOwnership = (folderId: string, userId: string) =>
   rpc("notes_transfer_ownership", { p_folder: folderId, p_user: userId }) as Promise<string>;
