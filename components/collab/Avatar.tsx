@@ -35,7 +35,9 @@ export default function Avatar({
 
   return (
     <span
-      className={`relative ${dims[size]} shrink-0 overflow-hidden rounded-full border border-black/10 bg-black/[0.06] dark:border-white/10 dark:bg-white/10`}
+      // inline-block: a bare inline span ignores h-/w-, so outside a flex row
+      // the photo rendered at its natural size instead of this circle.
+      className={`relative inline-block ${dims[size]} shrink-0 overflow-hidden rounded-full border border-black/10 bg-black/[0.06] dark:border-white/10 dark:bg-white/10`}
     >
       {showImage ? (
         // eslint-disable-next-line @next/next/no-img-element -- a signed
