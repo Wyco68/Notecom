@@ -6,6 +6,25 @@ import type { LessonRef } from "@/lib/vault/types";
 import HtmlRenderer from "./HtmlRenderer";
 import { SkeletonLine } from "../layout/Skeleton";
 
+// One request per document at a time. The fetch effect below can run twice for
+// the same document — React's dev Strict Mode mounts it twice, and a quick
+// re-click remounts it — and the `cancelled` flag only discards the first
+// result, it never stopped the first request from going out. Sharing the
+// in-flight promise by URL means a second run joins the request already on the
+// wire; the entry is dropped once it settles, so a later open still re-reads.
+const inflight = new Map<string, Promise<{ html?: string; error?: string }>>();
+
+function loadDocument(url: string) {
+  let p = inflight.get(url);
+  if (!p) {
+    p = fetch(url)
+      .then((r) => r.json())
+      .finally(() => inflight.delete(url));
+    inflight.set(url, p);
+  }
+  return p;
+}
+
 export default function LessonViewer({ lesson }: { lesson: LessonRef | null }) {
   const [html, setHtml] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -26,10 +45,9 @@ export default function LessonViewer({ lesson }: { lesson: LessonRef | null }) {
     let cancelled = false;
     setHtml(null);
     const base = lesson.kind === "quiz" ? "/api/quiz" : "/api/lesson";
-    fetch(
+    loadDocument(
       `${base}/${encodeURIComponent(lesson.folder)}/${encodeURIComponent(lesson.id)}`
     )
-      .then((r) => r.json())
       .then((data) => {
         if (!cancelled) {
           setHtml(data.html ?? `<p>Error: ${data.error ?? "not found"}</p>`);
