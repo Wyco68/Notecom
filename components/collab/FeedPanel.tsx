@@ -106,16 +106,16 @@ export default function FeedPanel({
   }
 
   return (
-    <div className="mx-auto w-full max-w-7xl px-3 py-4 sm:px-6 sm:py-8">
+    <div className="w-full px-4 py-6 sm:px-8 sm:py-8 lg:px-16 lg:py-10 xl:px-24">
       <h1 className="mb-1 text-xl font-semibold tracking-tight text-gray-900 dark:text-gray-100">
         Home
       </h1>
-      <p className="mb-6 text-sm text-gray-500 dark:text-gray-400">
+      <p className="mb-8 text-sm text-gray-500 dark:text-gray-400">
         New notes in your folders, and folders published by people you follow.
       </p>
 
       {items === null ? (
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,24rem),1fr))] items-start gap-3 sm:gap-4">
+        <div className="grid grid-cols-1 gap-5 sm:gap-6 lg:gap-8">
           <SkeletonCard lines={4} />
           <SkeletonCard lines={4} />
           <SkeletonCard lines={4} />
@@ -126,7 +126,7 @@ export default function FeedPanel({
         </p>
       ) : (
         <>
-          <ul className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,24rem),1fr))] items-start gap-3 sm:gap-4">
+          <ul className="grid grid-cols-1 gap-5 sm:gap-6 lg:gap-8">
             {items.map((item, i) => (
               <li
                 key={`${item.kind}:${item.folderSlug}:${item.kind === "doc" ? item.docKey : ""}:${item.at}`}
@@ -156,7 +156,7 @@ export default function FeedPanel({
                   className="ui-rise ui-card ui-card-hover ui-focus min-w-0 cursor-pointer overflow-hidden break-words bg-white p-0 [overflow-wrap:anywhere] dark:bg-[#161b22]"
                 >
                   {/* Header, as a post: small round photo, name, then where and when. */}
-                  <header className="flex items-center gap-2.5 px-3 pt-3 sm:px-4">
+                  <header className="flex items-center gap-3 px-4 pt-4 sm:px-6 sm:pt-5 lg:px-8 lg:pt-6">
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
@@ -191,18 +191,18 @@ export default function FeedPanel({
                   </header>
 
                   {/* Caption: the title, like a post's text line. */}
-                  <p className="px-3 pb-3 pt-2 text-sm font-medium text-gray-900 sm:px-4 sm:text-[15px] dark:text-gray-100">
+                  <p className="px-4 pb-4 pt-3 text-sm font-medium text-gray-900 sm:px-6 sm:pb-5 sm:text-base lg:px-8 lg:pb-6 lg:text-lg dark:text-gray-100">
                     {item.kind === "doc" ? item.title : item.folderName}
                   </p>
 
                   {/* Media: the Overview (or folder description) as the post's full-width body. */}
                   {item.kind === "doc" && item.overview ? (
-                    <section className="relative border-y border-black/5 bg-gray-50 px-4 py-4 sm:px-5 sm:py-6 dark:border-white/10 dark:bg-black">
-                      <h3 className="mb-2 text-base font-semibold text-violet-600 sm:text-lg dark:text-violet-300">
+                    <section className="relative border-t border-black/5 bg-gray-50 px-5 py-5 sm:px-8 sm:py-7 lg:px-10 lg:py-9 dark:border-white/10 dark:bg-black">
+                      <h3 className="mb-3 text-base font-semibold text-violet-600 sm:text-lg lg:text-xl dark:text-violet-300">
                         Overview
                       </h3>
                       <div
-                        className="max-h-48 space-y-2.5 overflow-hidden text-sm leading-relaxed sm:max-h-64 sm:space-y-3 sm:text-[15px] text-gray-700 dark:text-gray-300 [&_code]:rounded [&_code]:bg-black/5 [&_code]:px-1 dark:[&_code]:bg-white/10 [&_strong]:font-semibold [&_strong]:text-gray-900 dark:[&_strong]:text-gray-100"
+                        className="max-h-48 space-y-3 overflow-hidden text-sm leading-relaxed sm:max-h-72 sm:space-y-4 sm:text-[15px] lg:max-h-96 lg:text-base text-gray-700 dark:text-gray-300 [&_code]:rounded [&_code]:bg-black/5 [&_code]:px-1 dark:[&_code]:bg-white/10 [&_strong]:font-semibold [&_strong]:text-gray-900 dark:[&_strong]:text-gray-100"
                         dangerouslySetInnerHTML={{ __html: overviewHtml(item.overview) }}
                       />
                       <div
@@ -211,7 +211,7 @@ export default function FeedPanel({
                       />
                     </section>
                   ) : item.kind === "folder" && item.description ? (
-                    <section className="border-y border-black/5 bg-gray-50 px-4 py-4 text-sm leading-relaxed sm:px-5 sm:py-6 sm:text-[15px] text-gray-700 dark:border-white/10 dark:bg-black dark:text-gray-300">
+                    <section className="border-t border-black/5 bg-gray-50 px-5 py-5 text-sm leading-relaxed sm:px-8 sm:py-7 sm:text-[15px] lg:px-10 lg:py-9 lg:text-base text-gray-700 dark:border-white/10 dark:bg-black dark:text-gray-300">
                       {item.description}
                     </section>
                   ) : null}
