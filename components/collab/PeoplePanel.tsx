@@ -73,8 +73,9 @@ export default function PeoplePanel({ onClose }: { onClose?: () => void }) {
       ) : (
         <>
           <p className="mb-4 max-w-prose text-xs leading-relaxed text-gray-500 dark:text-gray-400">
-            Following someone lets them offer you tags and invite you to folders —
-            once they accept. Requests you receive wait for you in Notifications.
+            Following someone puts the public folders they publish in your Home feed
+            and lets them invite you to folders, once they accept. Requests you
+            receive wait for you in Notifications.
           </p>
 
           <div className="mb-6 flex gap-2">

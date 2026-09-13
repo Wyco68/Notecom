@@ -19,8 +19,7 @@ export default function FolderCard({
   const [busy, setBusy] = useState(false);
   const toast = useToast();
 
-  // Only one path remains: ask the owner. Tags no longer join anything —
-  // holding one grants access directly, and it arrives as an offer to accept.
+  // One way in from here: ask the owner. Topics are labels, not access.
   async function join() {
     setBusy(true);
     try {
@@ -65,7 +64,7 @@ export default function FolderCard({
       {folder.tags.length > 0 && (
         <div className="mb-3 flex flex-wrap gap-1.5">
           {folder.tags.map((t) => (
-            <TagChip key={t} label={t} grantsJoin={folder.joinTags.includes(t)} />
+            <TagChip key={t} label={`#${t}`} />
           ))}
         </div>
       )}

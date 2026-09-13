@@ -2,7 +2,6 @@
 
 import Avatar from "./Avatar";
 import RoleBadge from "./RoleBadge";
-import TagChip from "./TagChip";
 import BellIcon from "@/components/icons/BellIcon";
 import RefreshIcon from "@/components/icons/RefreshIcon";
 import PanelHeader from "@/components/layout/PanelHeader";
@@ -16,7 +15,8 @@ import {
 // Everything waiting on the reader's answer, in one place.
 //
 // This replaces three separate blocks that used to stack in the sidebar
-// (InvitationsInbox, FollowRequestsInbox, TagGrantsInbox). Each rendered
+// (InvitationsInbox, FollowRequestsInbox, and a tag-offer inbox retired
+// with tags as access). Each rendered
 // nothing when empty, which meant the whole surface was unreachable exactly
 // when a reader went looking for it — "did that invite arrive?" had no page to
 // answer it, and a pending item pushed the folder tree down the sidebar to say
@@ -30,16 +30,14 @@ import {
 const KIND_LABEL: Record<NotificationKind, string> = {
   invitation: "Folder invite",
   follow: "Follow request",
-  tag: "Tag offer",
 };
 
 // One tone per kind, matching what the tone already means elsewhere in the
-// app: blue for a folder role, emerald for a tag that opens access, neutral
-// for a follow, which grants nothing on its own.
+// app: blue for a folder role, neutral for a follow, which grants nothing on
+// its own.
 const KIND_TONE: Record<NotificationKind, string> = {
   invitation: "border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-300",
   follow: "border-black/10 bg-black/5 text-gray-600 dark:border-white/10 dark:bg-white/5 dark:text-gray-300",
-  tag: "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
 };
 
 export default function NotificationsPanel({
@@ -62,7 +60,7 @@ export default function NotificationsPanel({
     <div className="mx-auto max-w-3xl p-4 sm:p-8">
       <PanelHeader
         title="Notifications"
-        subtitle="Everything waiting on an answer. Accepting a tag or an invitation is what grants the access it describes."
+        subtitle="Everything waiting on an answer. Accepting an invitation is what adds its folder to your vault."
         badge={
           count > 0 ? (
             <span
@@ -157,9 +155,8 @@ function listKinds(kinds: Set<NotificationKind>): string {
   const names: Record<NotificationKind, string> = {
     invitation: "folder invites",
     follow: "follow requests",
-    tag: "tag offers",
   };
-  const list = (["invitation", "follow", "tag"] as NotificationKind[])
+  const list = (["invitation", "follow"] as NotificationKind[])
     .filter((k) => kinds.has(k))
     .map((k) => names[k]);
   if (list.length <= 1) return list[0] ?? "";
@@ -173,7 +170,7 @@ function EmptyState({ onOpenDiscover }: { onOpenDiscover?: () => void }) {
       <BellIcon className="mb-3 h-6 w-6 text-gray-400 dark:text-gray-600" />
       <p className="ui-empty">Nothing waiting on you.</p>
       <p className="mt-1 max-w-sm text-xs text-gray-400 dark:text-gray-500">
-        Folder invitations, follow requests and tag offers land here.
+        Folder invitations and follow requests land here.
       </p>
       {/* A button inside the shell, where Discover opens in place; a link only
           on the standalone route, where it genuinely has to navigate.
@@ -300,18 +297,7 @@ function describe(item: NotificationItem): {
             <strong className="font-medium">{item.data.username}</strong> asked to follow you.
           </>
         ),
-        detail: "Accepting lets them be offered a tag or invited to your folders.",
-      };
-    case "tag":
-      return {
-        face: <Avatar username={item.data.granterUsername} avatarUrl={item.data.granterAvatarUrl} size={8} />,
-        title: (
-          <>
-            <strong className="font-medium">{item.data.granterUsername}</strong> offered you{" "}
-            <TagChip label={item.data.label || item.data.slug} grantsJoin />
-          </>
-        ),
-        detail: "Accepting shares every folder tagged this way with you.",
+        detail: "Accepting puts your new public folders in their feed and lets you invite them to folders.",
       };
   }
 }

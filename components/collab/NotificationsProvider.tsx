@@ -10,7 +10,7 @@ import {
   useState,
 } from "react";
 import { useToast } from "@/components/toast/ToastProvider";
-import type { FollowRequest, Invitation, TagGrant } from "@/lib/collab/types";
+import type { FollowRequest, Invitation } from "@/lib/collab/types";
 
 // One source for everything waiting on the reader's answer: folder
 // invitations, incoming follow requests and offered tags.
@@ -32,13 +32,12 @@ import type { FollowRequest, Invitation, TagGrant } from "@/lib/collab/types";
 // would be polled on every focus for nothing.
 const ENABLED = !!process.env.NEXT_PUBLIC_SUPABASE_URL;
 
-export type NotificationKind = "invitation" | "follow" | "tag";
+export type NotificationKind = "invitation" | "follow";
 
 /** One pending item, normalised so the panel can render a single list. */
 export type NotificationItem =
   | { kind: "invitation"; id: string; createdAt: string; data: Invitation }
-  | { kind: "follow"; id: string; createdAt: string; data: FollowRequest }
-  | { kind: "tag"; id: string; createdAt: string; data: TagGrant };
+  | { kind: "follow"; id: string; createdAt: string; data: FollowRequest };
 
 interface NotificationsValue {
   items: NotificationItem[];
@@ -89,9 +88,6 @@ interface InvitationsBody {
 interface FollowRequestsBody {
   requests?: FollowRequest[];
 }
-interface GrantsBody {
-  grants?: TagGrant[];
-}
 
 export default function NotificationsProvider({
   children,
@@ -114,7 +110,6 @@ function Live({
 }) {
   const [invitations, setInvitations] = useState<Invitation[]>([]);
   const [follows, setFollows] = useState<FollowRequest[]>([]);
-  const [grants, setGrants] = useState<TagGrant[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [failedKinds, setFailedKinds] = useState<Set<NotificationKind>>(() => new Set());
   const [needsAuth, setNeedsAuth] = useState(false);
@@ -128,10 +123,9 @@ function Live({
 
   const refresh = useCallback(async () => {
     const mine = ++generation.current;
-    const [inv, fol, gra] = await Promise.all([
+    const [inv, fol] = await Promise.all([
       getJson<InvitationsBody>("/api/collab/invitations"),
       getJson<FollowRequestsBody>("/api/collab/me/follow-requests"),
-      getJson<GrantsBody>("/api/collab/me/grants"),
     ]);
     if (mine !== generation.current) return;
 
@@ -140,7 +134,6 @@ function Live({
     // pending", which is the one thing it must never say when it doesn't know.
     if (inv.data) setInvitations(inv.data.invitations ?? []);
     if (fol.data) setFollows(fol.data.requests ?? []);
-    if (gra.data) setGrants(gra.data.grants ?? []);
 
     // Per kind, not just all-or-nothing. One endpoint 429ing (three requests
     // per refresh share one 60/min budget) used to leave the panel asserting a
@@ -150,9 +143,8 @@ function Live({
     const missing = new Set<NotificationKind>();
     if (!inv.data) missing.add("invitation");
     if (!fol.data) missing.add("follow");
-    if (!gra.data) missing.add("tag");
     setFailedKinds(missing);
-    setNeedsAuth([inv, fol, gra].some((r) => r.status === 401));
+    setNeedsAuth([inv, fol].some((r) => r.status === 401));
     setLoaded(true);
   }, []);
 
@@ -204,14 +196,6 @@ function Live({
           data,
         })
       ),
-      ...grants.map(
-        (data): NotificationItem => ({
-          kind: "tag",
-          id: `tag:${data.id}`,
-          createdAt: data.createdAt,
-          data,
-        })
-      ),
     ];
     // Newest first across all three kinds — the reader cares when something
     // arrived, not which endpoint it came from. Compared as instants rather
@@ -221,7 +205,7 @@ function Live({
     return merged.sort(
       (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
     );
-  }, [invitations, follows, grants]);
+  }, [invitations, follows]);
 
   const respond = useCallback(
     async (item: NotificationItem, accept: boolean) => {
@@ -247,10 +231,8 @@ function Live({
         // the moment the server agrees, with no list flicker in between.
         if (item.kind === "invitation") {
           setInvitations((list) => list.filter((i) => i.id !== item.data.id));
-        } else if (item.kind === "follow") {
-          setFollows((list) => list.filter((f) => f.followerId !== item.data.followerId));
         } else {
-          setGrants((list) => list.filter((g) => g.id !== item.data.id));
+          setFollows((list) => list.filter((f) => f.followerId !== item.data.followerId));
         }
         // Only an acceptance can change the tree. Declining a follow request
         // cannot, and re-reading every open folder's documents to find that
@@ -305,12 +287,6 @@ function requestFor(
         "/api/collab/me/follow-requests",
         { followerId: item.data.followerId, accept },
         `Accepted ${item.data.username}`,
-      ];
-    case "tag":
-      return [
-        "/api/collab/me/grants",
-        { grantId: item.data.id, accept },
-        `Accepted "${item.data.label || item.data.slug}"`,
       ];
   }
 }

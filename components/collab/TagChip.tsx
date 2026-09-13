@@ -1,25 +1,21 @@
 "use client";
 
-// A tag that grants join gets the emerald treatment — it is the one visual
-// difference that carries a permission meaning, so it is worth distinguishing.
+// A topic on a folder. Topics are labels, not access (0026), so every chip
+// looks the same; only `active` (a selected filter) changes its tone.
 export default function TagChip({
   label,
-  grantsJoin = false,
   active = false,
   onClick,
   onRemove,
 }: {
   label: string;
-  grantsJoin?: boolean;
   active?: boolean;
   onClick?: () => void;
   onRemove?: () => void;
 }) {
-  const tone = grantsJoin
-    ? "border-emerald-500/40 text-emerald-600 dark:text-emerald-300"
-    : active
-      ? "border-blue-500/50 bg-blue-500/10 text-blue-600 dark:text-blue-300"
-      : "border-black/10 bg-black/5 text-gray-600 dark:border-white/10 dark:bg-white/5 dark:text-gray-300";
+  const tone = active
+    ? "border-blue-500/50 bg-blue-500/10 text-blue-600 dark:text-blue-300"
+    : "border-black/10 bg-black/5 text-gray-600 dark:border-white/10 dark:bg-white/5 dark:text-gray-300";
 
   return (
     <span
@@ -35,7 +31,9 @@ export default function TagChip({
             e.stopPropagation();
             onRemove();
           }}
-          className="ui-reveal ui-focus rounded-full leading-none text-gray-400 hover:text-red-500 dark:hover:text-red-400"
+          // Always visible, not hover-revealed: a touch screen has no hover,
+          // so a hidden × made a topic impossible to remove there.
+          className="ui-focus rounded-full leading-none text-gray-400 hover:text-red-500 dark:hover:text-red-400"
           aria-label={`Remove ${label}`}
         >
           ×

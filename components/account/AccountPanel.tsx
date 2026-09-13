@@ -1,14 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import TagChip from "@/components/collab/TagChip";
 import UserIcon from "@/components/icons/UserIcon";
 import ConfirmModal from "@/components/modals/ConfirmModal";
 import PanelHeader from "@/components/layout/PanelHeader";
 import { SkeletonPanel } from "@/components/layout/Skeleton";
 import { useToast } from "@/components/toast/ToastProvider";
 import { AVATAR_ACCEPT, AVATAR_MAX_BYTES } from "@/lib/collab/avatar";
-import type { FollowEdge, GrantedTag, UserTag } from "@/lib/collab/types";
 
 // Account settings. Profile and tags are editable here; email and password are
 // not — those go through the existing /auth flow, which already enforces the
@@ -42,36 +40,23 @@ export default function AccountPanel({
   onOpenPeople?: () => void;
 }) {
   const [profile, setProfile] = useState<Profile | null>(null);
-  const [tags, setTags] = useState<UserTag[]>([]);
   const [username, setUsername] = useState("");
   // Follow lists fetch their own page; bumping this makes them re-read after a
   // follow or unfollow.
   const [followRevision, setFollowRevision] = useState(0);
-  const [grantCandidates, setGrantCandidates] = useState<FollowEdge[]>([]);
-  const [grantQuery, setGrantQuery] = useState("");
-  const [grantSearch, setGrantSearch] = useState("");
   const [followName, setFollowName] = useState("");
-  const [grantTo, setGrantTo] = useState("");
-  const [grantTag, setGrantTag] = useState("");
-  const [given, setGiven] = useState<GrantedTag[]>([]);
   const [busy, setBusy] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const toast = useToast();
 
   const load = useCallback(async () => {
     try {
-      const [pRes, tRes, gRes] = await Promise.all([
-        fetch("/api/collab/me/profile"),
-        fetch("/api/collab/me/tags"),
-        fetch("/api/collab/me/grants"),
-      ]);
+      const pRes = await fetch("/api/collab/me/profile");
       if (pRes.ok) {
         const { profile } = await pRes.json();
         setProfile(profile);
         setUsername(profile.username ?? "");
       }
-      if (tRes.ok) setTags((await tRes.json()).tags ?? []);
-      if (gRes.ok) setGiven((await gRes.json()).given ?? []);
       setFollowRevision((n) => n + 1);
     } finally {
       setLoaded(true);
@@ -114,37 +99,9 @@ export default function AccountPanel({
     if (ok) setFollowName("");
   }
 
-  const doRevoke = (username: string, slug: string) =>
-    act(
-      `/api/collab/me/grants?username=${encodeURIComponent(username)}&tag=${encodeURIComponent(slug)}`,
-      { method: "DELETE" },
-      `Revoked — folders it opened are closed to ${username}`
-    );
-
-  async function doGrant() {
-    const ok = await act(
-      "/api/collab/me/grants",
-      { method: "POST", body: JSON.stringify({ username: grantTo, tag: grantTag.trim() }) },
-      `Offered "${grantTag.trim()}" to ${grantTo}`
-    );
-    if (ok) setGrantTag("");
-  }
-
   useEffect(() => {
     load();
   }, [load]);
-
-  // The tag picker offers a page of followers, searchable — the same rule the
-  // lists below follow: never fetch an unbounded people list. Fires on mount,
-  // after a follow/unfollow, and on a submitted search — never per keystroke.
-  useEffect(() => {
-    const params = new URLSearchParams({ direction: "followers", limit: String(PAGE) });
-    if (grantSearch) params.set("q", grantSearch);
-    fetch(`/api/collab/me/follows?${params}`)
-      .then((r) => (r.ok ? r.json() : { people: [] }))
-      .then((d) => setGrantCandidates(d.people ?? []))
-      .catch(() => {});
-  }, [grantSearch, followRevision]);
 
   const saveUsername = () =>
     act(
@@ -153,16 +110,9 @@ export default function AccountPanel({
       "Username updated"
     );
 
-  const removeTag = (slug: string) =>
-    act(
-      `/api/collab/me/tags?tag=${encodeURIComponent(slug)}`,
-      { method: "DELETE" },
-      "Tag removed — folders it shared are no longer readable"
-    );
-
   if (!loaded) {
-    // Mirrors the real panel: seven cards, the first carrying the avatar row.
-    return <SkeletonPanel cards={7} avatar />;
+    // Mirrors the real panel: five cards, the first carrying the avatar row.
+    return <SkeletonPanel cards={5} avatar />;
   }
 
   if (!profile) {
@@ -189,7 +139,7 @@ export default function AccountPanel({
     <div className="mx-auto max-w-2xl p-4 sm:p-8">
       <PanelHeader
         title="Account"
-        subtitle="Your profile, the tags you hold, and who you follow."
+        subtitle="Your profile, and who you follow."
         onClose={onClose}
         className="mb-8"
       />
@@ -259,29 +209,11 @@ export default function AccountPanel({
         </a>
       </Section>
 
-      <Section title="My tags" index={2}>
+      <Section title="Following" index={2}>
         <p className="mb-4 max-w-prose text-xs leading-relaxed text-gray-500 dark:text-gray-400">
-          Tags are given to you by people you follow — you cannot add your own. Every
-          folder carrying a tag you hold is readable by you, so removing a tag gives up
-          that access everywhere at once.
-        </p>
-        <div className="flex flex-wrap gap-1.5">
-          {tags.length === 0 && (
-            <span className="ui-empty">
-              No tags yet. Follow someone and they can offer you one.
-            </span>
-          )}
-          {tags.map((tag) => (
-            <TagChip key={tag.slug} label={tag.label} onRemove={() => removeTag(tag.slug)} />
-          ))}
-        </div>
-      </Section>
-
-      <Section title="Following" index={3}>
-        <p className="mb-4 max-w-prose text-xs leading-relaxed text-gray-500 dark:text-gray-400">
-          Following someone lets them offer you tags and invite you to folders — but
-          only once they accept your follow. Answer requests you receive in
-          Notifications.
+          Following someone puts the public folders they publish in your Home feed
+          and lets them invite you to folders, once they accept. Answer requests
+          you receive in Notifications.
         </p>
         <div className="mb-4 flex gap-2">
           <input
@@ -310,94 +242,18 @@ export default function AccountPanel({
         )}
       </Section>
 
-      <Section title="Give a tag" index={4}>
-        <p className="mb-4 max-w-prose text-xs leading-relaxed text-gray-500 dark:text-gray-400">
-          You can offer a tag to anyone who follows you. They decide whether to accept,
-          and accepting shares every folder you tag that way with them.
-        </p>
-        <input
-          value={grantQuery}
-          onChange={(e) => setGrantQuery(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && setGrantSearch(grantQuery.trim())}
-          placeholder="Search your followers — press Enter"
-          className="ui-field ui-field-sm mb-2"
-        />
-        {grantCandidates.length === 0 ? (
-          <p className="ui-empty">
-            {grantSearch
-              ? "No follower matches."
-              : "Nobody follows you yet, so there is no one to tag."}
-          </p>
-        ) : (
-          <div className="flex flex-wrap gap-2">
-            <select
-              value={grantTo}
-              onChange={(e) => setGrantTo(e.target.value)}
-              className="ui-field ui-field-sm min-w-0 flex-1"
-            >
-              <option value="">Choose a follower...</option>
-              {grantCandidates.map((f) => (
-                <option key={f.userId} value={f.username}>
-                  {f.username}
-                </option>
-              ))}
-            </select>
-            <input
-              value={grantTag}
-              onChange={(e) => setGrantTag(e.target.value)}
-              placeholder="e.g. ISNE3RD"
-              className="ui-field ui-field-sm min-w-0 flex-1"
-            />
-            <button
-              onClick={doGrant}
-              disabled={busy || !grantTo || grantTag.trim().length < 2}
-              className="ui-btn ui-btn-sm ui-btn-primary shrink-0"
-            >
-              Offer
-            </button>
-          </div>
-        )}
-
-        {given.length > 0 && (
-          <div className="mt-5">
-            <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
-              Tags you gave ({given.length})
-            </p>
-            <ul className="-mx-1.5">
-              {given.map((g, i) => (
-                <li
-                  key={`${g.username}:${g.slug}`}
-                  style={{ animationDelay: `${Math.min(i, 6) * 25}ms` }}
-                  className="ui-rise ui-row group flex items-center justify-between gap-2 px-1.5 py-1"
-                >
-                  <span className="min-w-0 truncate text-sm text-gray-700 dark:text-gray-200">
-                    {g.username} — {g.label || g.slug}
-                  </span>
-                  <button
-                    onClick={() => doRevoke(g.username, g.slug)}
-                    className="ui-btn ui-btn-xs ui-reveal shrink-0 font-normal text-gray-500 hover:bg-red-500/10 hover:text-red-600 dark:hover:text-red-400"
-                  >
-                    Revoke
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-      </Section>
-
-      <Section title="Connected accounts" index={5}>
+      <Section title="Connected accounts" index={3}>
         <p className="ui-empty">
           Not available yet — this account signs in with email and password only.
         </p>
       </Section>
 
-      <Section title="Notifications" index={6}>
+      <Section title="Notifications" index={4}>
         <p className="ui-empty">
-          Follow requests, folder invitations and tag offers collect in
-          Notifications, reachable from the sidebar whether or not anything is
-          waiting. Accepting a tag or an invitation is what grants the access it
-          describes, so nothing there takes effect until you answer it.
+          Follow requests and folder invitations collect in Notifications,
+          reachable from the sidebar whether or not anything is waiting. Accepting
+          an invitation is what adds its folder, so nothing there takes effect
+          until you answer it.
         </p>
       </Section>
     </div>
