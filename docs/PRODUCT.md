@@ -22,10 +22,12 @@ app:
   in a lecture PDF or slide deck and get a note or quiz back. The hosted web
   app cannot do this and says so rather than offering a button that fails.
 
-A third, lighter context: **sharing**. Folders are the unit of collaboration —
-invite a classmate, approve a join request, offer a tag that opens a set of
-folders. These are short, interruptive tasks that happen between reading
-sessions, not a workflow of their own.
+A third, lighter context: **the social layer**. Each person has a profile;
+Home is a feed of what they can already read — new notes in their folders, and
+public folders published by people they follow. Folders stay the unit of
+sharing: ask to join, accept an invitation, or start in the featured courses a
+new account is onboarded into. Reading a folder always takes membership; the
+social layer adds ways to *find* things, never ways around that.
 
 ## Product Purpose
 

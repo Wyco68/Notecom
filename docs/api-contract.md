@@ -64,18 +64,20 @@ the boundary. Model: [collaboration.md](collaboration.md).
 
 | Route | Method | Body/params | Response |
 |---|---|---|---|
-| `/api/collab/discover` | GET | `?q&limit&offset` | `{ folders: [...] }` — `notes_search_folders`; returns public folders plus the caller's own, never a private one they don't belong to. **No tag filter**: tags are access grants, so looking up what a tag opens is not offered. Search-only: a missing/empty `q` returns `{ folders: [] }` without querying — there is no unfiltered browse-all |
+| `/api/collab/discover` | GET | `?q&limit&offset` | `{ folders: [...] }` — `notes_search_folders`; returns public folders plus the caller's own, never a private one they don't belong to. The term also matches **topics** (a leading `#` is ignored). Search-only: a missing/empty `q` returns `{ folders: [] }` without querying — there is no unfiltered browse-all |
 | `/api/collab/my-folders` | GET | — | `{ folders: [...] }` — the caller's own folders with tags/role, used to group the sidebar |
 | `/api/collab/me/profile` | GET·POST | `{ username }` | `{ profile }` / `{ ok }` — GET adds `avatarUrl` (a signed URL, not the stored path), `usernameChangeableAt` and `usernameCooldownDays`. POST takes the username only: the rename cooldown is a trigger on `profiles`, so an early attempt comes back 400 with the database's message. Email, password and the photo are **not** changed here — those go through `/auth/reset` and `me/avatar` |
 | `/api/collab/me/avatar` | POST·DELETE | multipart `file` | `{ avatarUrl }` / `{ ok }` — uploads to the `profile-avatars` bucket at `{user_id}/avatar.{jpg\|png\|webp}` (JPEG/PNG/WebP, ≤2 MB) and stores that path on the profile. Storage RLS pins the object to the caller's own prefix; the checks in the handler only fail fast with a readable message |
-| `/api/collab/me/tags` | GET·DELETE | `?tag` | GET returns `{ tags, created }` — `tags` is held tags (accepted grants), `created` is tags the caller authored in `notes_tags`' shared vocabulary (`select slug, label from notes_tags where created_by = auth.uid()`), for a "pick from tags you've already created" folder-tag picker. DELETE is `{ ok }`. **No POST**: a tag cannot be self-assigned, only accepted from a grant |
-| `/api/collab/me/starter` | GET·POST | — | GET `{ tag: { slug, label, owner, held, ownsFolders } \| null }` — the one **published** tag (`notes_tags.self_serve`) a new account may claim for itself, plus the two flags that say whether to offer it; `null` when this database has no such tag. POST claims it via `notes_claim_tag()` and sends a follow **request** to its author in the same call, returning `{ label, owner, followed }`. The slug is **not** a parameter — the database decides which tags are claimable, so there is nothing to pass |
-| `/api/collab/me/grants` | GET·POST·DELETE | `{ username, tag }` / `{ grantId, accept }` / `?username&tag` | GET returns `{ grants, given }`; POST offers a tag to a follower or answers an offer; DELETE revokes a tag you gave, closing every folder it opened |
+| `/api/collab/me/tags` | GET | — | `{ created }` — topics the caller authored in `notes_tags`' shared vocabulary. Tags are topics, not access (0026): nothing is held, so there is no DELETE and no POST |
+| `/api/collab/me/onboard` | POST | — | `{ joined }` — `notes_onboard()`: viewer of every featured folder plus an accepted follow of their owners, **once per account**; `0` on every later call. Called by `AppShell` on mount |
+| `/api/collab/feed` | GET | `?before&limit` | `{ items: FeedItem[] }` — `notes_feed`: `doc` items from folders the caller is a member of, `folder` items for public folders from people they follow. Keyset-paged: pass the oldest `at` as `before`. 400 on a non-ISO `before` |
+| `/api/collab/users/[username]` | GET | — | `{ profile }` — avatar (signed), accepted follower/following counts, public folder count, the caller's `followState`; 404 for an unknown username |
+| `/api/collab/users/[username]/folders` | GET | `?limit&offset` | `{ folders }` — `notes_user_folders`: public folders plus private ones the caller is in, featured first, discovery shape |
 | `/api/collab/me/follows` | GET·POST·DELETE | `?direction=following\|followers&q&limit&offset` / `{ username }` / `?userId&direction` | GET returns one paged, searchable direction as `{ direction, people, total }` — **accepted edges only**, never the whole graph and never a pending one. POST sends a follow **request** (no immediate edge — see "Following requires acceptance" below); following someone lets **them** tag or invite you, but only once they accept |
 | `/api/collab/me/follow-requests` | GET·POST | — / `{ followerId, accept }` | `{ requests: [{ followerId, username, avatarUrl, createdAt }] }` / `{ ok }` — GET is the caller's *incoming* pending follow requests; POST answers one via `notes_respond_follow`. Accept turns it into a real (accepted) follow edge, decline deletes the request outright |
 | `/api/collab/folders/[slug]` | GET | — | `{ folder, role, members, memberTotal, tags }` — `members` is the first page of 10; 404 when RLS hides it |
 | `/api/collab/folders/[slug]/settings` | POST | `{ visibility?, description? }` | `{ ok }` — manage-level; written once by the console's "Save changes", not per keystroke. `discoverable`/`joinPolicy` are retired and rejected as unknown fields |
-| `/api/collab/folders/[slug]/tags` | POST | `{ tag }` | `{ ok }` — every folder-tag association grants joining now; there is no per-tag toggle |
+| `/api/collab/folders/[slug]/tags` | POST | `{ tag }` | `{ ok }` — adds a **topic** (typed freely; an existing slug is reused). Grants no access |
 | `/api/collab/folders/[slug]/tags` | DELETE | `?tag` | `{ ok }` |
 | `/api/collab/folders/[slug]/members` | GET | `?q&limit&offset` | `{ members: [{userId,username,avatarUrl,role,joinedAt}], total }` — paged (default 10, max 50) and searchable by username |
 | `/api/collab/folders/[slug]/members` | POST | `{ userId, role }` | `{ ok }` — role change |
@@ -89,19 +91,19 @@ the boundary. Model: [collaboration.md](collaboration.md).
 | `/api/collab/invitations` | GET | — | `{ invitations: [...] }` — the caller's inbox |
 | `/api/collab/invitations` | POST | `{ invitationId, accept }` | `{ ok }` |
 
-**The three inboxes are one screen.** (`/notifications` is in middleware's
+**The two inboxes are one screen.** (A third, tag offers, was retired with tags as access in 0026.) (`/notifications` is in middleware's
 `PROTECTED_EXACT`, so a signed-out visitor is redirected to sign-in like
 `/account`, `/discover` and `/people` — all four plus `/vault` and every
 `/api/*` path are what `PROTECTED_EXACT` and `isProtected` cover.) `/api/collab/invitations`,
-`/api/collab/me/follow-requests` and `/api/collab/me/grants` are read together
+and `/api/collab/me/follow-requests` are read together
 by `NotificationsProvider` (one fetch each, in parallel, re-run on window
 focus) and rendered as a single merged list at `/notifications` — see
 [ui-guidelines.md](ui-guidelines.md). Nothing else fetches them, and there is
-no notifications endpoint of its own: adding one would be a fourth read of
-three lists that are already this cheap.
+no notifications endpoint of its own: adding one would be a third read of
+two lists that are already this cheap.
 
 `middleware.ts` holds two gates. **Sign-in is required for everything** it
-matches — `/api/*`, `/vault/*`, `/discover`, `/people`, `/account` — with
+matches — `/api/*`, `/vault/*`, `/u/*`, `/discover`, `/people`, `/account` — with
 `/api/auth/*` exempt because that is how a session is obtained; a signed-out
 page request redirects to `/auth/sign-in?next=…` and an API request gets 401.
 

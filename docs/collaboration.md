@@ -11,7 +11,8 @@ roles, a visibility setting, and tags. Documents (lessons and quizzes) inherit
 their folder's permissions completely — there is no per-document permission
 column and there must never be one. Users find folders through search, and
 reach them by invitation (owner → user), by request (user → owner, always
-approved by the owner), or by **holding a tag the folder carries**.
+approved by the owner), or — for a new account — by onboarding into the
+**featured** folders. Every way in is an explicit membership row.
 
 Two rules override everything below, and are the reason the rest is shaped as it
 is:
@@ -20,13 +21,14 @@ is:
    that the folder *exists*; it never controls who can read what is inside.
    `notes_documents` is gated by `notes_is_folder_member()`, never by
    `notes_can_read_folder()`. This is why folders can default to public safely.
-2. **Joining never grants writing.** Membership obtained by request or by tag is
+2. **Joining never grants writing.** Membership obtained by request or by onboarding is
    `viewer`. `editor` is reachable only through an explicit invitation or a role
    change by a manager.
 
-Deliberately absent, and not to be added: comments, reactions, likes, reading
-progress or tracking, hardcoded categories, translations. This is a note-sharing
-tool, not a social network.
+The social layer is deliberately light: public **profiles** and a **home feed**
+of what you can already read. Deliberately absent, and not to be added without
+revisiting this doc: comments, reactions, likes, reading progress or tracking,
+hardcoded categories, translations.
 
 ## Identity
 
@@ -103,106 +105,78 @@ One path: the user files a `notes_folder_join_requests` row through
 `notes_request_join()` and the owner approves or rejects it. Requesting a
 folder you cannot see raises "no such folder" rather than confirming it exists,
 and an approved request is what creates the `viewer` membership row — the RPC
-never joins anyone outright. The other way in is holding a `grants_join` tag,
-which bypasses requests entirely (below).
+never joins anyone outright. The only other automatic way in is onboarding
+into featured folders (below).
 
 Invitations are `notes_folder_invitations` rows
 (`pending` → `accepted` | `declined` | `revoked`). Requests are
 `notes_folder_join_requests` rows (`pending` → `approved` | `rejected`).
 
-## Follows, and tags as credentials
+## Follows
 
 Following (`notes_follows`) is **one-sided in direction but requires the other
 side's consent**: it starts `pending` when the follower requests it, and only
 counts once the followee accepts (`notes_respond_follow()`) — declining deletes
-the request outright. `notes_follows_me()`, the predicate both
-`notes_grant_tag()` and `notes_invite_member()` check, only sees `accepted`
-rows, so a pending request grants nothing. Its only power, once accepted, is
-permissive in one direction: following someone lets *them* offer you a tag or
-invite you to a folder — never the reverse, and never before they say yes. This
-is what keeps strangers from tagging or inviting anyone they like, and now also
-what keeps them from being followed by anyone they'd rather not be.
+the request outright. An accepted follow does two things, both permissive in one
+direction: the follower's Home feed shows the followee's newly published
+**public** folders (metadata only), and the followee may invite the follower to
+a folder (`notes_invite_member()` checks `notes_follows_me()`). A pending
+request does neither.
 
-Existing rows created before this model shipped were backfilled to `accepted`
-— the access they already granted was not retroactively revoked. `GET
-/api/collab/me/follows` (both directions) only ever returns `accepted` edges;
-incoming pending requests are a separate list, `GET
-/api/collab/me/follow-requests`, surfaced in the sidebar next to invitations
-and tag offers so they don't get buried in a searchable list.
+`GET /api/collab/me/follows` only returns `accepted` edges; incoming pending
+requests are `GET /api/collab/me/follow-requests`, surfaced in Notifications.
 
-A tag is therefore **a claim someone else makes about you**, never self-assigned:
+The one pre-accepted follow is onboarding's, below.
 
-```
-A follows B  →  B grants tag T to A  →  A accepts  →  A holds T
-                                                    →  every folder tagged T
-                                                       (grants_join) is readable by A
-```
+## Topics (tags are not access)
 
-Every folder-tag association grants joining: holding a tag grants read access
-to every folder carrying it, with **no join step and no membership row** —
-`notes_is_folder_member()` treats a held tag as implied membership. There used
-to be a per-tag `grants_join` toggle letting an owner attach a tag purely as a
-description, without opening the folder; that distinction is retired as a
-product concept, the same way `discoverable`/`join_policy` were (0012). The
-`notes_folder_tags.grants_join` column survives — dropping it is not worth a
-migration — and `notes_is_folder_member()` still checks it as harmless
-redundancy, but every row reads `true` and the app no longer offers a way to
-write `false`. Two consequences that matter:
+Tags were credentials from 0009 to 0025 — follow, receive a grant, accept, and
+every folder carrying the tag opened. **0026 retired that entirely.**
+`notes_is_folder_member()` is membership only; the grant/accept/revoke/claim
+RPCs lost EXECUTE; `notes_user_tags`, `notes_tag_grants`,
+`notes_folder_tags.grants_join` and `notes_tags.self_serve` survive only as
+inert columns (the 0012 precedent — not worth a drop). Don't reintroduce any of
+them as an access path.
 
-- Dropping a tag revokes every folder it was opening, at once. That is the
-  point of granting by tag rather than by invitation. Either side can do it:
-  the holder removes it from Account Settings, and the granter calls
-  `notes_revoke_tag()` to stop vouching. A tag granted by two people survives
-  until the last grant is revoked, so one person cannot strip another's grant.
-- Implied access is read-only, and an explicit `notes_folder_members` row always
-  wins, since it is the only thing `notes_can_write_folder()` consults.
+A tag is now a **topic**: a label a manager puts on a folder (typed freely in
+`FolderManagePanel`; `ensureTag` reuses an existing slug). Topics are visible to
+anyone who can see the folder (`notes_folder_tags` SELECT is
+`notes_can_read_folder`) and `notes_search_folders` matches on them, so Discover
+finds folders by topic. They grant nothing.
 
-### The one published tag
+## Featured folders and onboarding
 
-`notes_tags.self_serve` (0025) is the single exception to "never
-self-assigned", and it is a property of the **tag**, not of the claimer: a tag
-marked self-serve is one its author has published to everyone, and
-`notes_claim_tag(slug)` hands it to any signed-in caller with no follow edge and
-no grant. The RPC reads the column off the tag and takes nothing on trust from
-the caller, so a tag cannot be made claimable by asking for it; an unpublished
-tag reads as absent rather than refused, so this is not a way to probe the
-vocabulary either.
+A new account owns nothing and belongs to nothing. `notes_folders.featured`
+(0028) is an owner's standing offer that anyone new may start in that folder,
+and `notes_onboard()` acts on it **once per account**:
 
-It exists because a brand-new account can read nothing at all — no folders of
-its own until it generates some, none shared until somebody follows it back and
-vouches for it — which makes the app's first screen empty for reasons that look
-like a fault. One published tag is what `StarterBanner` offers instead, over
-`/api/collab/me/starter`.
+- a `viewer` membership in every non-deleted featured folder;
+- an **accepted** follow of each featured folder's owner. This is the single
+  exception to follow consent, and it is justified by the featured flag itself:
+  featuring a folder is the owner's consent to being followed by newcomers.
 
-Two consequences, both intended:
+`notes_profiles_onboarded` records that it ran, so the RPC answers `0` on every
+later call and a reader who leaves a featured folder is never put back. The app
+calls it on every workspace mount (`AppShell`) and needs no client state.
+`featured` is not client-writable — authenticated holds column-level UPDATE on
+other columns only — so featuring is a migration decision for now. Currently
+featured: `General-Education`, `Wireless-Network`, `Operating-System` (wyco),
+all `public`.
 
-- **No `notes_tag_grants` row is written**, so `notes_revoke_tag()` cannot
-  reach it: there is no granter to stop vouching. Dropping it stays the
-  holder's own right (Account → My tags), which is the only revocation that
-  means anything for a tag published to all.
-- Access arrives exactly as it does for any other tag — implied, read-only
-  membership, gone everywhere the moment the tag is dropped. Self-serve changes
-  who may *take* the tag, never what holding one does.
+## Feed and profiles
 
-Every other tag keeps the follow-then-grant path, and must: that is what makes
-a tag worth something as a credential.
+Both only ever surface what the caller can already see — they are new views,
+not new access.
 
-**Tags are deliberately not searchable.** A tag is a credential now, so
-`notes_search_folders` cannot filter or match on one — being able to ask "which
-folders does ISNE3RD open" would publish exactly the list worth acquiring it
-for. Folder tags stay visible on a folder you can already see; they are simply
-not a way to find one.
-
-**A folder's tag list is itself gated by holding.** Seeing a folder does not
-mean seeing every tag on it: `notes_folder_tags` SELECT (and the equivalent
-filter inside `notes_search_folders()`/`notes_my_folders()`'s lateral joins,
-which are `SECURITY DEFINER` and so don't inherit table RLS) only surfaces a
-tag to someone who holds it (a `notes_user_tags` row for that tag) — with one
-exception: **a folder's manager (`notes_can_manage_folder()`) always sees
-every tag on their own folder**, since `FolderManagePanel`'s tag list is how
-they remove one, and hiding a tag from its own manager would make it
-unmanageable. A tag a viewer doesn't hold is simply absent from what they see
-of that folder, not shown-but-locked.
+- `notes_feed(before, limit)`: `doc` items are documents in folders the caller
+  is a **member** of; `folder` items are **public** folders created by someone
+  the caller follows (accepted), metadata only. A document title from a folder
+  the caller is not in never appears. Keyset-paged on the item time.
+- `notes_profile(username)`: accepted follower/following counts, public folder
+  count, and the caller's own `follow_state` (`none|pending|accepted|self`).
+- `notes_user_folders(username, limit, offset)`: that person's folders filtered
+  by `notes_can_read_folder` — public ones plus private ones the caller is in —
+  featured first, in the discovery shape.
 
 ## Tables and why each exists
 
@@ -211,15 +185,16 @@ Existing tables are extended in preference to new ones.
 | Table | Why |
 |---|---|
 | `profiles` | *(existing)* the one identity pool, shared with BookCommunity |
-| `notes_folders` | *(existing, extended)* gains `owner_id`, `description`, `visibility`, `search_tsv`. `discoverable`/`join_policy` are retired leftovers nothing reads |
+| `notes_folders` | *(existing, extended)* gains `owner_id`, `description`, `visibility`, `search_tsv`, `featured`. `discoverable`/`join_policy` are retired leftovers nothing reads |
 | `notes_documents` | *(existing, unchanged)* permissions are inherited from the folder — adding a permission column here is a design error |
 | `notes_folder_roles` | makes roles data instead of code, so the set is extensible |
 | `notes_folder_members` | the membership edge; composite PK `(folder_id, user_id)` |
-| `notes_tags` | normalized free-form tag vocabulary, user-created — deliberately not the hardcoded `categories` table. `self_serve` marks the rare tag its author has published for anyone to claim (see "The one published tag") |
-| `notes_folder_tags` | folder↔tag edge. Carries `grants_join`, a retired per-tag toggle nothing reads as `false` any more — every association grants joining (see "Follows, and tags as credentials") |
-| `notes_user_tags` | user↔tag edge — the other half of the match; written only by accepting a grant |
-| `notes_tag_grants` | a tag offered to a follower, `pending` → `accepted` \| `declined` \| `revoked` |
-| `notes_follows` | follow edge, `pending` → `accepted` (or deleted on decline); the gate for tagging and inviting, only once accepted |
+| `notes_tags` | normalized free-form **topic** vocabulary, user-created — deliberately not the hardcoded `categories` table. `self_serve` is an inert leftover of 0025 |
+| `notes_folder_tags` | folder↔topic edge, visible to anyone who can see the folder. `grants_join` is inert since 0026 |
+| `notes_user_tags` | *(inert since 0026)* held tags from the credential era |
+| `notes_tag_grants` | *(inert since 0026)* tag offers from the credential era |
+| `notes_profiles_onboarded` | one row per account that has run `notes_onboard()` — what makes it once-only |
+| `notes_follows` | follow edge, `pending` → `accepted` (or deleted on decline); once accepted, feeds public folders and gates inviting |
 | `notes_folder_invitations` | owner → user direction |
 | `notes_folder_join_requests` | user → owner direction |
 
@@ -266,8 +241,8 @@ Predicates used by policies (`STABLE SECURITY DEFINER`):
 | Function | True when |
 |---|---|
 | `notes_folder_role(folder)` | returns the caller's role text, or NULL |
-| `notes_is_folder_member(folder)` | member row ∨ holds a `grants_join` tag the folder carries — **the gate on files** |
-| `notes_can_read_folder(folder)` | owner ∨ member ∨ tag-implied ∨ `visibility = 'public'` — folder metadata only, and the only axis discovery consults |
+| `notes_is_folder_member(folder)` | the caller has a member row — **the gate on files** |
+| `notes_can_read_folder(folder)` | member ∨ `visibility = 'public'` — folder metadata only, and the only axis discovery consults |
 | `notes_follows_me(user)` | that user follows the caller with an **accepted** `notes_follows` row — a pending request doesn't count |
 | `notes_can_write_folder(folder)` | the caller's role has `can_write` |
 | `notes_can_manage_folder(folder)` | the caller's role has `can_manage` |
@@ -278,18 +253,20 @@ Action RPCs — the only writers of `notes_folder_members`:
 `notes_respond_invitation(invitation, accept)`,
 `notes_request_join(folder, message)`,
 `notes_respond_join_request(request, approve)`,
-`notes_grant_tag(username, label)` *(requires the grantee follows the caller)*,
-`notes_respond_tag_grant(grant, accept)`,
-`notes_claim_tag(slug)` *(only a tag whose `self_serve` is true)*,
+`notes_onboard()` *(once per account; featured folders + their owners)*,
 `notes_respond_follow(follower, accept)` *(caller must be the followee on a `pending` row; decline deletes it)*,
 `notes_set_member_role(folder, user, role)`,
 `notes_remove_member(folder, user)`,
 `notes_leave_folder(folder)`,
 `notes_transfer_ownership(folder, user)`,
-`notes_search_folders(q, limit, offset)`.
+`notes_search_folders(q, limit, offset)` *(matches topics)*.
 
-Retired: `notes_join_by_tag()` and `notes_suggested_folders()`. Both turned a tag
-into a membership row through a join; there is no join in the tag path any more.
+Read RPCs for the social layer: `notes_feed(before, limit)`,
+`notes_profile(username)`, `notes_user_folders(username, limit, offset)`.
+
+Retired: `notes_join_by_tag()`, `notes_suggested_folders()`, and since 0026
+`notes_grant_tag()`, `notes_respond_tag_grant()`, `notes_revoke_tag()`,
+`notes_granted_tags()` and `notes_claim_tag()` (EXECUTE revoked from everyone).
 
 Invite-by-username resolves `profiles.username` inside the function, so the
 `profiles` table never needs a broad SELECT policy for member search.
@@ -302,7 +279,7 @@ Invite-by-username resolves `profiles.username` inside the function, so the
 | Supabase client factories | `lib/supabase/server.ts`, `lib/supabase/client.ts` — anon key only, no business logic |
 | Collaboration data layer | `lib/collab/*.ts` — typed wrappers over the RPCs |
 | HTTP surface | `app/api/collab/**` — see [api-contract.md](api-contract.md) |
-| UI | `components/collab/` — `DiscoverPanel`, `PeoplePanel` and `FolderManagePanel` render in the workspace's content column (AppShell) and as the standalone `app/discover/`, `app/people/`, `app/vault/[folder]/manage/` routes a deep link lands on. `NotificationsPanel` renders invitations, follow requests and tag offers as one merged list, fed by `NotificationsProvider` (the single reader of those three endpoints) and opened from the `SidebarNav` nav group — which is present whether or not anything is pending |
+| UI | `components/collab/` — `FeedPanel` (Home, shown when no document is open), `ProfilePanel`, `DiscoverPanel`, `PeoplePanel` and `FolderManagePanel` render in the workspace's content column (AppShell) and as the standalone `app/u/[username]/`, `app/discover/`, `app/people/`, `app/vault/[folder]/manage/` routes a deep link lands on. `NotificationsPanel` renders invitations and follow requests as one merged list, fed by `NotificationsProvider` (the single reader of those two endpoints) and opened from the `SidebarNav` nav group — which is present whether or not anything is pending |
 
 Content persistence (`lib/vault/store.ts`) runs on the same user-scoped client
 and holds no permission logic of its own — same rule as slugs and sequences:
