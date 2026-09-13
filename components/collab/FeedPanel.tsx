@@ -106,7 +106,7 @@ export default function FeedPanel({
   }
 
   return (
-    <div className="mx-auto max-w-2xl p-4 sm:p-8">
+    <div className="mx-auto w-full max-w-7xl px-3 py-4 sm:px-6 sm:py-8">
       <h1 className="mb-1 text-xl font-semibold tracking-tight text-gray-900 dark:text-gray-100">
         Home
       </h1>
@@ -115,7 +115,8 @@ export default function FeedPanel({
       </p>
 
       {items === null ? (
-        <div className="grid gap-4">
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,24rem),1fr))] items-start gap-3 sm:gap-4">
+          <SkeletonCard lines={4} />
           <SkeletonCard lines={4} />
           <SkeletonCard lines={4} />
         </div>
@@ -125,11 +126,12 @@ export default function FeedPanel({
         </p>
       ) : (
         <>
-          <ul className="grid gap-4">
+          <ul className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,24rem),1fr))] items-start gap-3 sm:gap-4">
             {items.map((item, i) => (
               <li
                 key={`${item.kind}:${item.folderSlug}:${item.kind === "doc" ? item.docKey : ""}:${item.at}`}
                 style={{ animationDelay: `${Math.min(i, 6) * 25}ms` }}
+                className="min-w-0"
               >
                 {/* The whole card is the link: a lesson or quiz opens in the reader, a
                     new folder opens its owner's profile. The profile photo and name
@@ -151,10 +153,10 @@ export default function FeedPanel({
                       open(item);
                     }
                   }}
-                  className="ui-rise ui-card ui-card-hover ui-focus cursor-pointer overflow-hidden bg-white p-0 dark:bg-[#161b22]"
+                  className="ui-rise ui-card ui-card-hover ui-focus min-w-0 cursor-pointer overflow-hidden break-words bg-white p-0 [overflow-wrap:anywhere] dark:bg-[#161b22]"
                 >
                   {/* Header, as a post: small round photo, name, then where and when. */}
-                  <header className="flex items-center gap-2.5 px-4 pt-3">
+                  <header className="flex items-center gap-2.5 px-3 pt-3 sm:px-4">
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
@@ -189,18 +191,18 @@ export default function FeedPanel({
                   </header>
 
                   {/* Caption: the title, like a post's text line. */}
-                  <p className="px-4 pb-3 pt-2 text-[15px] text-gray-900 dark:text-gray-100">
+                  <p className="px-3 pb-3 pt-2 text-sm font-medium text-gray-900 sm:px-4 sm:text-[15px] dark:text-gray-100">
                     {item.kind === "doc" ? item.title : item.folderName}
                   </p>
 
                   {/* Media: the Overview (or folder description) as the post's full-width body. */}
                   {item.kind === "doc" && item.overview ? (
-                    <section className="relative border-y border-black/5 bg-gray-50 px-5 py-6 dark:border-white/10 dark:bg-black">
-                      <h3 className="mb-2 text-lg font-semibold text-violet-600 dark:text-violet-300">
+                    <section className="relative border-y border-black/5 bg-gray-50 px-4 py-4 sm:px-5 sm:py-6 dark:border-white/10 dark:bg-black">
+                      <h3 className="mb-2 text-base font-semibold text-violet-600 sm:text-lg dark:text-violet-300">
                         Overview
                       </h3>
                       <div
-                        className="max-h-64 space-y-3 overflow-hidden text-[15px] leading-relaxed text-gray-700 dark:text-gray-300 [&_code]:rounded [&_code]:bg-black/5 [&_code]:px-1 dark:[&_code]:bg-white/10 [&_strong]:font-semibold [&_strong]:text-gray-900 dark:[&_strong]:text-gray-100"
+                        className="max-h-48 space-y-2.5 overflow-hidden text-sm leading-relaxed sm:max-h-64 sm:space-y-3 sm:text-[15px] text-gray-700 dark:text-gray-300 [&_code]:rounded [&_code]:bg-black/5 [&_code]:px-1 dark:[&_code]:bg-white/10 [&_strong]:font-semibold [&_strong]:text-gray-900 dark:[&_strong]:text-gray-100"
                         dangerouslySetInnerHTML={{ __html: overviewHtml(item.overview) }}
                       />
                       <div
@@ -209,7 +211,7 @@ export default function FeedPanel({
                       />
                     </section>
                   ) : item.kind === "folder" && item.description ? (
-                    <section className="border-y border-black/5 bg-gray-50 px-5 py-6 text-[15px] leading-relaxed text-gray-700 dark:border-white/10 dark:bg-black dark:text-gray-300">
+                    <section className="border-y border-black/5 bg-gray-50 px-4 py-4 text-sm leading-relaxed sm:px-5 sm:py-6 sm:text-[15px] text-gray-700 dark:border-white/10 dark:bg-black dark:text-gray-300">
                       {item.description}
                     </section>
                   ) : null}
