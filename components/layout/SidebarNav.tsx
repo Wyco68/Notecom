@@ -1,6 +1,7 @@
 "use client";
 
 import BellIcon from "@/components/icons/BellIcon";
+import StarIcon from "@/components/icons/StarIcon";
 import SearchIcon from "@/components/icons/SearchIcon";
 import UserIcon from "@/components/icons/UserIcon";
 import { useNotifications } from "@/components/collab/NotificationsProvider";
@@ -23,8 +24,8 @@ export default function SidebarNav({
   active,
   onOpen,
 }: {
-  active: "notifications" | "discover" | "people" | null;
-  onOpen: (kind: "notifications" | "discover" | "people") => void;
+  active: "home" | "notifications" | "discover" | "people" | null;
+  onOpen: (kind: "home" | "notifications" | "discover" | "people") => void;
 }) {
   // Null when collaboration isn't configured on this build — the whole group
   // goes with it, since all three destinations are collaboration.
@@ -33,6 +34,12 @@ export default function SidebarNav({
 
   return (
     <nav aria-label="Workspace" className="border-b border-black/10 px-2 py-2 dark:border-white/10">
+      <NavRow
+        icon={<StarIcon className="h-4 w-4" />}
+        label="Home"
+        active={active === "home"}
+        onClick={() => onOpen("home")}
+      />
       <NavRow
         icon={<BellIcon className="h-4 w-4" />}
         label="Notifications"

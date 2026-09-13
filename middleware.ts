@@ -197,7 +197,12 @@ const PROTECTED_EXACT = new Set([
   "/vault",
 ]);
 function isProtected(path: string): boolean {
-  return path.startsWith("/api/") || path.startsWith("/vault/") || PROTECTED_EXACT.has(path);
+  return (
+    path.startsWith("/api/") ||
+    path.startsWith("/vault/") ||
+    path.startsWith("/u/") ||
+    PROTECTED_EXACT.has(path)
+  );
 }
 
 export async function middleware(req: NextRequest) {

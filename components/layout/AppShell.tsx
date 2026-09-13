@@ -27,7 +27,8 @@ import ContentTopBar from "./ContentTopBar";
 import AccountControl from "../collab/AccountControl";
 import AccountPanel from "../account/AccountPanel";
 import DiscoverPanel from "../collab/DiscoverPanel";
-import StarterBanner from "../collab/StarterBanner";
+import FeedPanel from "../collab/FeedPanel";
+import ProfilePanel from "../collab/ProfilePanel";
 import PeoplePanel from "../collab/PeoplePanel";
 import FolderManagePanel from "../collab/FolderManagePanel";
 import ThemeToggle from "../theme/ThemeToggle";
@@ -41,6 +42,7 @@ type Overlay =
   | { kind: "profile" }
   | { kind: "discover" }
   | { kind: "people" }
+  | { kind: "user"; username: string }
   | { kind: "notifications" }
   | { kind: "manage"; slug: string };
 
@@ -332,7 +334,7 @@ export default function AppShell() {
   // Both overlays are opened from the sidebar, which on a narrow screen is
   // covering the column they render into.
   const openOverlay = useCallback(
-    (next: Overlay) => {
+    (next: Overlay | null) => {
       setOverlay(next);
       if (!window.matchMedia("(min-width: 1024px)").matches) setSidebarOpen(false);
     },
@@ -424,6 +426,24 @@ export default function AppShell() {
     };
   }, [refreshFolderNames]);
 
+  // Onboarding. The RPC runs once per account and answers 0 ever after, so
+  // this is safe on every mount and needs no client-side memory. A first run
+  // puts a new account into the featured folders; the tree re-reads so they
+  // are there without a refresh, and one toast says where they came from.
+  useEffect(() => {
+    fetch("/api/collab/me/onboard", { method: "POST" })
+      .then((r) => (r.ok ? r.json() : { joined: 0 }))
+      .then(({ joined }: { joined: number }) => {
+        if (!joined) return;
+        refreshTree();
+        toast.success(
+          `Added ${joined} featured course${joined === 1 ? "" : "s"} to your vault. Leave any from its folder settings.`
+        );
+      })
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   return (
     // The provider wraps the whole shell rather than sitting in the layout: it
     // owns the one copy of the pending list that both the sidebar's bell and
@@ -509,9 +529,18 @@ export default function AppShell() {
             overlay?.kind === "discover" ||
             overlay?.kind === "people"
               ? overlay.kind
-              : null
+              : !overlay && !selected
+                ? "home"
+                : null
           }
-          onOpen={(kind) => openOverlay({ kind })}
+          onOpen={(kind) => {
+            if (kind === "home") {
+              setSelected(null);
+              openOverlay(null);
+            } else {
+              openOverlay({ kind });
+            }
+          }}
         />
 
         {/* Generation runs in the background, so this row is what a closed
@@ -689,13 +718,6 @@ export default function AppShell() {
           title={selected && !overlay ? currentTitle : null}
         />
 
-        {/* A new account has nothing to read: no folders of its own, and none
-            shared with it until somebody hands it a tag. The banner is the way
-            out of that, and it sits above whatever the column is showing —
-            including a panel — because it is about the vault, not about the
-            document. It renders nothing once the reader has either. */}
-        <StarterBanner onClaimed={refreshTree} />
-
         {/* The account editor and the sharing console live here rather than at
             /account and /vault/[folder]/manage: the reader keeps their place,
             and closing either returns to the same document. Keyed by slug so
@@ -715,6 +737,13 @@ export default function AppShell() {
           />
         ) : overlay?.kind === "people" ? (
           <PeoplePanel onClose={() => setOverlay(null)} />
+        ) : overlay?.kind === "user" ? (
+          <ProfilePanel
+            key={overlay.username}
+            username={overlay.username}
+            onClose={() => setOverlay(null)}
+            onJoined={refreshTree}
+          />
         ) : overlay?.kind === "notifications" ? (
           <NotificationsPanel
             onClose={() => setOverlay(null)}
@@ -732,8 +761,14 @@ export default function AppShell() {
               refreshTree();
             }}
           />
-        ) : (
+        ) : selected ? (
           <LessonViewer lesson={selected} />
+        ) : (
+          // Nothing open is Home: the feed, not an instruction to pick a lesson.
+          <FeedPanel
+            onSelect={onSelect}
+            onOpenProfile={(username) => openOverlay({ kind: "user", username })}
+          />
         )}
       </main>
 
