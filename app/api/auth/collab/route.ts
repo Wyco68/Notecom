@@ -153,10 +153,27 @@ export async function POST(req: NextRequest) {
       // stores the PKCE code verifier in the caller's browser, and without it
       // /auth/callback cannot exchange the link's code. It mints no session.
       const supabase = await createClient();
-      // Errors are swallowed so a caller can't learn whether the email exists.
-      await supabase.auth
-        .resetPasswordForEmail(email, { redirectTo: recoveryRedirect(req) })
-        .catch(() => {});
+      // `resetPasswordForEmail` reports failure in `error`, it does not throw —
+      // the old `.catch(() => {})` therefore swallowed nothing, and a mail
+      // provider refusing the send (unverified sender domain, SMTP down) still
+      // answered "check your inbox" for an email that never left. An unknown
+      // address is not an error here (Supabase answers 200 without sending), so
+      // anything that does come back is a delivery problem worth saying so.
+      // It can hint that the address has an account; sign-up already answers
+      // that question on purpose (see "email_taken" above), so this is no
+      // new leak.
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: recoveryRedirect(req),
+      });
+      if (error) {
+        console.error("[auth] recovery email failed:", error.status, error.message);
+        return bad(
+          error.status === 429
+            ? "too many reset emails — wait a few minutes and try again"
+            : "we couldn't send the reset email right now — try again later",
+          error.status === 429 ? 429 : 502
+        );
+      }
       return NextResponse.json({ ok: true, factor: "recovery" });
     }
 
