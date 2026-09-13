@@ -20,9 +20,8 @@ import type {
   Invitation,
   JoinRequest,
   Member,
-  GrantedTag,
-  StarterTag,
-  TagGrant,
+  FeedItem,
+  Profile,
   UserTag,
   Visibility,
 } from "./types";
@@ -55,9 +54,8 @@ async function toSummaries(supabase: SupabaseClient, rows: any[]): Promise<Folde
 }
 
 /**
- * Discovery. The RPC lists public folders plus the caller's own, and
- * deliberately cannot filter or match on tags — a tag is a credential now, so
- * looking up which folders it opens is not a capability this offers.
+ * Discovery. The RPC lists public folders plus the caller's own, and its term
+ * also matches topics — tags are labels now, not access (0026).
  */
 export async function searchFolders(
   q?: string,
@@ -147,13 +145,12 @@ export async function listFolderTags(folderId: string): Promise<FolderTag[]> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("notes_folder_tags")
-    .select("grants_join, notes_tags(slug, label)")
+    .select("notes_tags(slug, label)")
     .eq("folder_id", folderId);
   if (error) throw new Error(error.message);
   return (data ?? []).map((row: any) => ({
     slug: row.notes_tags?.slug ?? "",
     label: row.notes_tags?.label ?? "",
-    grantsJoin: !!row.grants_join,
   }));
 }
 
@@ -361,29 +358,10 @@ export async function removeFolderTag(folderId: string, slug: string): Promise<v
   if (error) throw new Error(error.message);
 }
 
-/* --- user tags and suggestions ------------------------------------------- */
+/* --- topics ---------------------------------------------------------------- */
 
 /**
- * The caller's own tags. RLS restricts notes_user_tags to the caller's rows,
- * so this needs no user_id filter — asking for "all of them" already means
- * "all of mine".
- */
-export async function myTags(): Promise<UserTag[]> {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("notes_user_tags")
-    .select("notes_tags(slug, label)")
-    .order("tag_id");
-  if (error) throw new Error(error.message);
-  return (data ?? []).map((row: any) => ({
-    slug: row.notes_tags?.slug ?? "",
-    label: row.notes_tags?.label ?? "",
-  }));
-}
-
-/**
- * Tags the caller created, for the "pick from tags you've already created"
- * flow on FolderManagePanel. notes_tags is a shared vocabulary with a broad
+ * Topics the caller created. notes_tags is a shared vocabulary with a broad
  * SELECT policy (`true`), so this needs the created_by filter to mean
  * anything — it is not RLS restricting the result.
  */
@@ -398,65 +376,6 @@ export async function myCreatedTags(): Promise<UserTag[]> {
     .order("label");
   if (error) throw new Error(error.message);
   return (data ?? []).map((row: any) => ({ slug: row.slug, label: row.label }));
-}
-
-/**
- * Offer a tag to someone who follows you. There is no self-assign counterpart:
- * a tag is a claim another person makes about you, which is what makes it
- * meaningful for access. The RPC refuses unless the target follows the caller.
- */
-export const grantTag = (username: string, label: string) =>
-  rpc("notes_grant_tag", { p_username: username, p_label: label }) as Promise<string>;
-
-export const respondTagGrant = (grantId: string, accept: boolean) =>
-  rpc("notes_respond_tag_grant", { p_grant: grantId, p_accept: accept }) as Promise<string>;
-
-/**
- * Stop vouching for someone. Only the granter may call this, and it closes
- * every folder that tag was opening for them at once. A tag granted by more
- * than one person survives until the last grant is revoked.
- */
-export const revokeTag = (username: string, label: string) =>
-  rpc("notes_revoke_tag", { p_username: username, p_label: label }) as Promise<string>;
-
-/** Tags the caller has handed out and that are still held. */
-export async function grantedTags(): Promise<GrantedTag[]> {
-  const supabase = await createClient();
-  const { data, error } = await supabase.rpc("notes_granted_tags");
-  if (error) throw new Error(error.message);
-  const rows = data ?? [];
-  const avatars = await resolveAvatarUrls(supabase, rows.map((row: any) => row.avatar_url));
-  return rows.map((row: any) => ({
-    username: row.username,
-    avatarUrl: avatars.get(row.avatar_url ?? "") ?? null,
-    slug: row.tag_slug,
-    label: row.tag_label,
-    grantedAt: row.granted_at,
-  }));
-}
-
-/** Tag offers awaiting the caller's answer. */
-export async function myTagGrants(): Promise<TagGrant[]> {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("notes_tag_grants")
-    .select(
-      "id, status, created_at, notes_tags(slug, label), " +
-        "granter:profiles!notes_tag_grants_granter_id_fkey(username, avatar_url)"
-    )
-    .eq("status", "pending")
-    .order("created_at", { ascending: false });
-  if (error) throw new Error(error.message);
-  const rows = data ?? [];
-  const avatars = await resolveAvatarUrls(supabase, rows.map((row: any) => row.granter?.avatar_url));
-  return rows.map((row: any) => ({
-    id: row.id,
-    slug: row.notes_tags?.slug ?? "",
-    label: row.notes_tags?.label ?? "",
-    granterUsername: row.granter?.username ?? "someone",
-    granterAvatarUrl: avatars.get(row.granter?.avatar_url ?? "") ?? null,
-    createdAt: row.created_at,
-  }));
 }
 
 /* --- follows: request/accept, and the gate for tagging and inviting ------- */
@@ -479,6 +398,9 @@ export async function follow(username: string): Promise<void> {
     .ilike("username", username.trim())
     .maybeSingle();
   if (!target) throw new Error("no such user");
+  // The table's CHECK refuses this too, but as driver text that reaches the
+  // caller as a bare 500. Say what happened instead.
+  if (target.id === user.user.id) throw new Error("you cannot follow yourself");
 
   const { error } = await supabase
     .from("notes_follows")
@@ -592,80 +514,85 @@ export async function listFollows(
   };
 }
 
-export async function removeMyTag(slug: string): Promise<void> {
+/* --- social: onboarding, feed, profiles ------------------------------------ */
+
+/**
+ * Put a new account into every featured folder and follow their owners. Once
+ * per account — the RPC records that it ran, so leaving a featured folder is
+ * permanent. Returns how many folders were joined (0 on every later call).
+ */
+export const onboard = () => rpc("notes_onboard", {}) as Promise<number>;
+
+/** A page of the home feed, newest first. Pass the oldest `at` as `before`. */
+export async function feed(opts: { before?: string; limit?: number } = {}): Promise<FeedItem[]> {
   const supabase = await createClient();
-  const { data: tag } = await supabase
-    .from("notes_tags")
-    .select("id")
-    .eq("slug", slug)
-    .maybeSingle();
-  if (!tag) return;
-  // No user_id filter needed: the DELETE policy only exposes the caller's own
-  // rows, so this cannot reach anyone else's tag.
-  const { error } = await supabase.from("notes_user_tags").delete().eq("tag_id", tag.id);
+  const { data, error } = await supabase.rpc("notes_feed", {
+    p_before: opts.before ?? null,
+    p_limit: opts.limit ?? 20,
+  });
   if (error) throw new Error(error.message);
+  const rows = (data ?? []) as any[];
+  const avatars = await resolveAvatarUrls(supabase, rows.map((r) => r.owner_avatar));
+  return rows.map((r): FeedItem => {
+    const ownerAvatar = avatars.get(r.owner_avatar ?? "") ?? null;
+    return r.item_kind === "doc"
+      ? {
+          kind: "doc",
+          at: r.at,
+          docKind: r.doc_kind,
+          docKey: r.doc_key,
+          title: r.doc_title,
+          overview: r.doc_overview ?? null,
+          folderSlug: r.folder_slug,
+          folderName: r.folder_name,
+          ownerUsername: r.owner_username,
+          ownerAvatar,
+        }
+      : {
+          kind: "folder",
+          at: r.at,
+          folderSlug: r.folder_slug,
+          folderName: r.folder_name,
+          description: r.folder_description,
+          ownerUsername: r.owner_username,
+          ownerAvatar,
+        };
+  });
 }
 
-/**
- * The slug of the published tag a brand-new account is offered. Data, not a
- * product rule: which folders it opens is `notes_folder_tags`, and a different
- * demo set is a row change, not a code change. Only the name is fixed here,
- * because two surfaces (the banner and its claim) must agree on it.
- */
-export const STARTER_TAG_SLUG = "demo";
-
-/**
- * The published tag and the two facts that decide whether to offer it: does
- * the caller hold it already, and do they own folders of their own. Null when
- * the database has no such tag at all (a fresh stack, a fork), which is what
- * makes the banner vanish rather than error.
- *
- * Three small selects rather than an RPC: all three run under ordinary RLS —
- * `notes_tags` is a shared vocabulary, `notes_user_tags` and `notes_folders`
- * are already scoped to the caller — so there is nothing here a definer
- * function would be needed to see.
- */
-export async function starterTag(): Promise<StarterTag | null> {
+/** A person's header, or null when no such username exists. */
+export async function profile(username: string): Promise<Profile | null> {
   const supabase = await createClient();
-  const { data: user } = await supabase.auth.getUser();
-  if (!user.user) return null;
-
-  const { data: tag } = await supabase
-    .from("notes_tags")
-    .select("id, slug, label, created_by")
-    .eq("slug", STARTER_TAG_SLUG)
-    .eq("self_serve", true)
-    .maybeSingle();
-  if (!tag) return null;
-
-  const [owner, held, mine] = await Promise.all([
-    tag.created_by
-      ? supabase.from("profiles").select("username").eq("id", tag.created_by).maybeSingle()
-      : Promise.resolve({ data: null }),
-    supabase.from("notes_user_tags").select("tag_id").eq("tag_id", tag.id).maybeSingle(),
-    supabase
-      .from("notes_folders")
-      .select("id", { count: "exact", head: true })
-      .eq("owner_id", user.user.id)
-      .eq("deleted", false),
-  ]);
-
+  const { data, error } = await supabase.rpc("notes_profile", { p_username: username });
+  if (error) throw new Error(error.message);
+  const row = (data as any[])?.[0];
+  if (!row) return null;
+  const avatars = await resolveAvatarUrls(supabase, [row.avatar_url]);
   return {
-    slug: tag.slug,
-    label: tag.label,
-    owner: (owner.data as any)?.username ?? null,
-    held: !!held.data,
-    ownsFolders: (mine.count ?? 0) > 0,
+    userId: row.user_id,
+    username: row.username,
+    avatarUrl: avatars.get(row.avatar_url ?? "") ?? null,
+    followers: Number(row.followers ?? 0),
+    following: Number(row.following ?? 0),
+    publicFolders: Number(row.public_folders ?? 0),
+    followState: row.follow_state,
   };
 }
 
-/**
- * Claim a published tag. The RPC refuses any tag not marked `self_serve`, so
- * this is not a way to self-assign the tags that act as credentials — see
- * 0025 for why the one exception exists.
- */
-export const claimTag = (slug: string) =>
-  rpc("notes_claim_tag", { p_slug: slug }) as Promise<string>;
+/** The folders of theirs the caller can see — public ones, plus private ones they're in. */
+export async function userFolders(
+  username: string,
+  opts: { limit?: number; offset?: number } = {}
+): Promise<FolderSummary[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("notes_user_folders", {
+    p_username: username,
+    p_limit: opts.limit ?? 20,
+    p_offset: opts.offset ?? 0,
+  });
+  if (error) throw new Error(error.message);
+  return toSummaries(supabase, data ?? []);
+}
 
 export const transferOwnership = (folderId: string, userId: string) =>
   rpc("notes_transfer_ownership", { p_folder: folderId, p_user: userId }) as Promise<string>;

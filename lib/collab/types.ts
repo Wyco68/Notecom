@@ -14,7 +14,7 @@ export interface FolderSummary {
   ownerUsername: string;
   ownerAvatar: string | null;
   tags: string[];
-  /** Tags that let anyone who found the folder through them join outright. */
+  /** Inert mirror of `tags` since 0026; kept for the RPC row shape. */
   joinTags: string[];
   memberCount: number;
   documentCount: number;
@@ -33,46 +33,6 @@ export type FolderDetail = FolderSummary;
 export interface UserTag {
   slug: string;
   label: string;
-}
-
-/**
- * The published ("self-serve") tag a new account can claim for itself, and
- * enough around it for the starter banner to decide whether to show at all.
- * Every other tag needs a follow and a grant; this one is a tag whose author
- * has published it to everyone (`notes_tags.self_serve`).
- */
-export interface StarterTag {
-  slug: string;
-  label: string;
-  /** Username of the account that published the tag, for "follow them" copy. */
-  owner: string | null;
-  /** The caller already holds it, so the folders are already in their tree. */
-  held: boolean;
-  /** The caller owns folders of their own, so they are not a new account. */
-  ownsFolders: boolean;
-}
-
-/**
- * A tag someone has offered the caller. Holding the tag is what grants access
- * to folders carrying it, so it only takes effect once accepted — a pending
- * grant confers nothing.
- */
-export interface TagGrant {
-  id: string;
-  slug: string;
-  label: string;
-  granterUsername: string;
-  granterAvatarUrl: string | null;
-  createdAt: string;
-}
-
-/** A tag the caller has given someone, and can take back. */
-export interface GrantedTag {
-  username: string;
-  avatarUrl: string | null;
-  slug: string;
-  label: string;
-  grantedAt: string;
 }
 
 /**
@@ -135,9 +95,50 @@ export interface JoinRequest {
 export interface FolderTag {
   slug: string;
   label: string;
-  grantsJoin: boolean;
 }
 
 /** Permission helpers. Cosmetic only — the database is what enforces these. */
 export const canWrite = (role: FolderRole | null) => role === "owner" || role === "editor";
 export const canManage = (role: FolderRole | null) => role === "owner";
+
+/**
+ * One row of the home feed. Only ever something the caller can already read:
+ * a document in a folder they are a member of, or a public folder created by
+ * someone they follow (metadata only). See notes_feed in 0029.
+ */
+export type FeedItem =
+  | {
+      kind: "doc";
+      at: string;
+      docKind: "lesson" | "quiz";
+      docKey: string;
+      title: string;
+      /** The lesson's Overview section as HTML, or null (quizzes, no section). */
+      overview: string | null;
+      folderSlug: string;
+      folderName: string;
+      ownerUsername: string;
+      ownerAvatar: string | null;
+    }
+  | {
+      kind: "folder";
+      at: string;
+      folderSlug: string;
+      folderName: string;
+      description: string | null;
+      ownerUsername: string;
+      ownerAvatar: string | null;
+    };
+
+export type FollowState = "none" | "pending" | "accepted" | "self";
+
+/** A person's profile header. Counts are accepted follows only. */
+export interface Profile {
+  userId: string;
+  username: string;
+  avatarUrl: string | null;
+  followers: number;
+  following: number;
+  publicFolders: number;
+  followState: FollowState;
+}

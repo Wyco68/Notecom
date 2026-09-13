@@ -17,9 +17,9 @@ const MAX_MESSAGE_LENGTH = MAX_SHORT_TEXT_LENGTH;
 // the RPC: notes_request_join joins outright when join_policy is 'open', files
 // a request when it is 'request', and refuses when it is 'invite_only'.
 //
-// There is deliberately no tag path any more. A tag is not something you join
-// through — holding one grants access to folders carrying it directly, and the
-// tag itself arrives as an offer you accept (see /api/collab/me/grants).
+// There is deliberately no tag path. Tags are topics, not access (0026): the
+// ways into a folder are a request here, an invitation, or onboarding into a
+// featured folder (/api/collab/me/onboard).
 
 export async function POST(req: NextRequest) {
   const user = await requireUser(req);

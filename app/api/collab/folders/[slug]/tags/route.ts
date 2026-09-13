@@ -9,11 +9,9 @@ import {
   requireUser,
 } from "../../../route-helpers";
 
-// Folder tags. Every tag placed on a folder grants joining now — anyone who
-// holds it gets tag-implied viewer access to the folder, with no join step
-// and no approval. grants_join survives as a column (see the
-// notes_tag_implied_folder_access migration) but the app no longer offers a
-// way to set it false, so addFolderTag always writes true.
+// Folder topics. A topic is a label that helps people find a folder in
+// Discover; it grants no access (0026). addFolderTag still writes the inert
+// grants_join column as true only because the column survives.
 
 export async function GET(req: NextRequest, ctx: { params: Promise<{ slug: string }> }) {
   const user = await requireUser(req);
