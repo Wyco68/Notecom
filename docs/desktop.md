@@ -154,6 +154,22 @@ Prerequisites (one-time, machine setup): Node 20+, Rust
 Tauri builds are **not** cross-compiled — run the build on the OS you want
 an installer for (a Mac produces the Mac installer, etc.).
 
+None of that reaches the person who downloads an installer: the bundle
+carries its own Node runtime and the built server, so there is no toolchain,
+no checkout and no `.env.local` on their machine. The one thing they do need
+is the app's Supabase credentials, and those are baked in at build time —
+`next build` inlines `NEXT_PUBLIC_*`, so a build that cannot see
+`NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` produces an
+installer that answers every sign-in with "accounts are not configured on
+this server", with no way to fix it short of rebuilding.
+`prepare-desktop-resources.mjs` therefore refuses to build without them.
+Locally they come from `.env.local`; in CI, from the repository's
+`NEXT_PUBLIC_SUPABASE_URL` variable and `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+secret. Shipping them is not a leak — the anon key is public by design and
+is in the client bundle of every Supabase app; RLS is what protects the data,
+and this app holds no service-role key anywhere (see
+[collaboration.md](collaboration.md)).
+
 **Build the installer:**
 
 ```bash
@@ -218,6 +234,12 @@ their project dir at runtime now (see the table above); it would have shipped
 broken installers under the old compile-time-baked path. A user who just
 wants a local build without cutting a release still runs `npm run
 install:desktop`, which is unaffected by any of this.
+
+Before the first release, set the two Supabase values on the repository
+(Settings → Secrets and variables → Actions): `NEXT_PUBLIC_SUPABASE_URL` as a
+**variable**, `NEXT_PUBLIC_SUPABASE_ANON_KEY` as a **secret**. Without them
+the build stops early with a message naming the one that is missing, rather
+than publishing installers nobody can log into.
 
 ## Verifying a change here
 

@@ -8,6 +8,7 @@
 // gone: the app reads and writes Supabase directly, so nothing local is served.
 
 import { spawnSync } from "child_process";
+import nextEnv from "@next/env";
 import { existsSync, mkdirSync, rmSync, cpSync, copyFileSync } from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -39,6 +40,25 @@ const CLAUDE_PROJECT_FILES = [
   "scripts/validate-lesson.mjs",
   "scripts/validate-quiz.mjs",
 ];
+
+// `next build` inlines NEXT_PUBLIC_* into the bundle, so missing credentials
+// are not a runtime problem the installed app can recover from — they ship.
+// An installer built without them answers every sign-in with "accounts are
+// not configured on this server" and the only fix is building again. Next's
+// own loader is what reads .env.local, so this sees exactly what the build
+// will see.
+function requireSupabaseCredentials() {
+  const { combinedEnv } = nextEnv.loadEnvConfig(ROOT, false);
+  const missing = ["NEXT_PUBLIC_SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_ANON_KEY"].filter(
+    (name) => !combinedEnv[name]
+  );
+  if (missing.length) {
+    throw new Error(
+      `${missing.join(" and ")} not set — put them in .env.local for a local build, or in the workflow environment for CI. ` +
+        "An installer built without them cannot sign anyone in."
+    );
+  }
+}
 
 function run(cmd, args, opts = {}) {
   const result = spawnSync(cmd, args, { stdio: "inherit", shell: process.platform === "win32", ...opts });
@@ -80,6 +100,7 @@ function buildClaudeProject() {
 }
 
 const triple = targetTriple();
+requireSupabaseCredentials();
 buildNextStandalone();
 copyNodeSidecar(triple);
 buildClaudeProject();
