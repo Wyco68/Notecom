@@ -93,8 +93,19 @@ jobs:
       # `tauri build` — see scripts/prepare-desktop-resources.mjs. Bundles
       # are constrained per OS instead of the config's default "all" so
       # Linux doesn't also attempt an rpm build with no rpmbuild installed.
+      # NEXT_PUBLIC_* is inlined by `next build`, so these have to be present
+      # *here* — an installer built without them can never sign anyone in, no
+      # matter what the machine running it has set. Both values are public by
+      # design (the anon key ships inside every client bundle; Row Level
+      # Security is the boundary, and no service-role key exists in this app).
+      # The key sits in `secrets` only so it is masked in build logs; the URL
+      # in `vars` so it stays readable there. prepare-desktop-resources.mjs
+      # fails the build if either is empty, before the Rust compile starts.
       - name: Build installer
         shell: bash
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
         run: |
           if [ -n "${{ matrix.rust-target }}" ]; then
             npx tauri build --config desktop/tauri.conf.json --target ${{ matrix.rust-target }} --bundles ${{ matrix.bundles }}

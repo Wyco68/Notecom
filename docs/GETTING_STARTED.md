@@ -21,6 +21,20 @@ npm install
 npm run setup
 ```
 
+Then point the app at your Supabase project — it is the store, so there is
+no local-only mode and nothing works without it. Create `.env.local` in the
+project folder with the two values from Supabase → Project Settings → API:
+
+```
+NEXT_PUBLIC_SUPABASE_URL=https://YOUR-PROJECT-REF.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=YOUR-PUBLISHABLE-KEY
+```
+
+The `NEXT_PUBLIC_` prefix is not decoration: it is the only prefix Next reads
+into the app. A file that names them anything else (`VITE_*`, say) loads
+fine and leaves every sign-in answering "accounts are not configured on this
+server".
+
 `npm run setup` checks every tool, installs the file-conversion helper
 (`markitdown-mcp`), builds both backend services, and prints exactly what's
 left to do by hand. Re-run it any time — it's a checklist, not a one-shot.
