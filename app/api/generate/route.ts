@@ -8,8 +8,7 @@ import { resolveWritableFolderId } from "@/lib/vault/store";
 import { VERIFIED_USER_HEADER } from "@/middleware";
 
 const KINDS = new Set(["lect", "quiz"]);
-// Folder lands in a CLI prompt and a filesystem path, so it gets the same
-// segment guard the vault importer applies.
+// A folder slug, never free text — the shape every folder slug has.
 const SAFE = /^[A-Za-z0-9][A-Za-z0-9-]*$/;
 // A lecture upload is slides or a scanned PDF, not a video — 50MB comfortably
 // covers a dense, image-heavy slide deck. This bounds what gets written to
@@ -74,11 +73,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "invalid folder or kind" }, { status: 400 });
   }
 
-  // The spawned CLI writes to this folder on disk with no RLS in front of
-  // it — the database only ever sees the import step afterward, by which
-  // point the file already exists. Folder slugs are unique per owner, not
-  // globally, so without this check a caller could name another owner's
-  // folder and have the CLI write inside it. Same "not found" either way as
+  // The save at the end of the run goes through RLS like any other write and
+  // would be refused for a folder the caller can't write to — but only after a
+  // run has spent minutes and real tokens. Check first, with the same
+  // `notes_can_write_folder` function RLS calls. Same "not found" either way as
   // every other folder lookup in this app, so a probe can't tell "no such
   // folder" from "not yours".
   if (!(await resolveWritableFolderId(folder))) {

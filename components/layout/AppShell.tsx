@@ -240,31 +240,19 @@ export default function AppShell() {
     refreshTags();
   }, [refreshFolderNames, fetchDocs, refreshTags]);
 
-  // Ingest anything Claude Code wrote into vault/, and re-chunk documents whose
-  // search index is stale. Off the tree's critical path on purpose (see
-  // app/api/tree/route.ts): the sidebar draws first, and this re-reads it only
-  // when it actually changed something.
+  // Re-chunk documents whose search index is stale. Off the tree's critical
+  // path on purpose (see app/api/tree/route.ts): the sidebar draws first, and
+  // this re-reads it only when it actually changed something.
   const sync = useCallback(async () => {
     try {
       const res = await fetch("/api/tree", { method: "POST" });
-      if (!res.ok) {
-        toast.error("Couldn't sync the vault — see the server log.");
-        return;
-      }
+      if (!res.ok) return;
       const data = await res.json();
-      if (data.errors > 0) {
-        toast.error(
-          data.importError
-            ? `Vault sync failed: ${data.importError}`
-            : `${data.errors} file(s) failed to sync — see the server log.`
-        );
-      }
-      if (data.imported > 0 || data.reindexed > 0) refreshTree();
+      if (data.reindexed > 0) refreshTree();
     } catch {
-      // A box with no vault/ has nothing to ingest — the common case, not an
-      // error worth showing.
+      // Best effort — a stale search index is not worth interrupting anyone.
     }
-  }, [refreshTree, toast]);
+  }, [refreshTree]);
 
   // The document on screen, held so it can be filed under "Recent" when the
   // reader leaves it. A ref, not state: it must not trigger a render, and the
@@ -345,8 +333,7 @@ export default function AppShell() {
   const favoriteKeys = new Set(favorites.map((f) => `${f.kind}:${f.folder}:${f.id}`));
 
   // The button is the deliberate full pass: re-read the tree *and* run the
-  // ingest/reindex. Window focus only re-reads, since that fires constantly and
-  // a lesson written by a terminal is what this button is for.
+  // reindex. Window focus only re-reads, since that fires constantly.
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
@@ -358,19 +345,19 @@ export default function AppShell() {
   }, [refreshTree, sync]);
 
   // The tree first, then the housekeeping pass behind it. Ordered, not
-  // parallel: an import that finds nothing new — the usual case — must not make
-  // the reader wait for the folder list it was already entitled to.
+  // parallel: a reindex that finds nothing stale — the usual case — must not
+  // make the reader wait for the folder list it was already entitled to.
   useEffect(() => {
     refreshTree().then(sync);
   }, [refreshTree, sync]);
 
-  // A finished run wrote a file into vault/; the sync pass is what ingests it
-  // into the database. The dialog used to trigger this, which meant closing it
-  // lost the refresh — the job itself announces completion now, wherever the
-  // reader happens to be.
+  // A finished run has already saved its document (and its search chunks) to
+  // Supabase; the tree only has to be re-read to show it. The dialog used to
+  // trigger this, which meant closing it lost the refresh — the job itself
+  // announces completion now, wherever the reader happens to be.
   useEffect(() => {
-    if (completedTick) sync();
-  }, [completedTick, sync]);
+    if (completedTick) refreshTree();
+  }, [completedTick, refreshTree]);
 
   // Generating runs the local Claude Code CLI, so a signed-out session is a
   // dead end the user should see before they upload a file, not after a run

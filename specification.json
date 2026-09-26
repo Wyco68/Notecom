@@ -6,11 +6,11 @@
   "specVersion": "1.0.0",
   "purpose": "Notes are written in plain high-school-level language with technically correct terminology (Information Systems & Network Engineering program). Content creation happens entirely outside the web application — Claude Code is the sole author; the Next.js app is the reader/manager.",
   "principles": [
-    "Claude Code authors content as files; the Next.js app reads and manages it in Supabase. Claude Code is the author but is not a layer inside the app.",
+    "Claude Code authors content and replies with it; the Next.js app checks, names and saves it to Supabase. Claude Code is the author but is not a layer inside the app.",
     "Supabase is the source of truth. No local database, no sync worker, no per-instance state.",
-    "Naming/slug/sequence logic lives in the app (lib/vault/slug.ts, the generated index.json) — every value reaches the database fully resolved.",
+    "Naming/slug/sequence logic lives in the app (lib/vault/slug.ts, lib/generate/save.ts) — every value reaches the database fully resolved.",
     "No content persistence from a React component or API route directly — always through lib/vault/store.ts.",
-    "The app writes no files. vault/ is generation output, ingested one-way by lib/vault/import.ts.",
+    "Nothing writes files — not the app, not the generation run. Generated content reaches Supabase through lib/generate/save.ts only.",
     "No AI generation logic or Anthropic API calls in the Next.js app itself; one sanctioned delegation exists (the generation job runner).",
     "Retrieval and ranking live in SQL (notes_search_chunks, notes_related_docs), not in TypeScript.",
     "Authorization is Row Level Security. No service-role key exists anywhere in this app; every query carries the caller's JWT.",
@@ -28,12 +28,13 @@
         {
           "name": "Generate from file",
           "path": "lib/generate/runner.ts",
-          "mechanism": "spawns local Claude Code CLI headlessly (-p, --output-format stream-json)",
+          "mechanism": "spawns local Claude Code CLI headlessly (-p, --output-format stream-json) with read-only tools (--tools Read, markitdown allowed, --permission-mode dontAsk); its reply is the document",
           "invokes": [
             "/lect",
             "/quiz"
           ],
-          "requiresLocalClaudeSubscription": true
+          "requiresLocalClaudeSubscription": true,
+          "afterRun": "lib/generate/validate.ts contract check (violations resumed in the same session, max 2), then POST /api/generate/[id] saves via lib/generate/save.ts"
         }
       ]
     },
@@ -60,12 +61,14 @@
       ],
       "deletesAreTombstones": true
     },
-    "vaultImport": {
-      "role": "one-way ingest of Claude-authored vault files into Supabase",
-      "path": "lib/vault/import.ts",
-      "envRoot": "VAULT_ROOT",
+    "generationSave": {
+      "role": "contract check, naming and saving of generated documents",
+      "path": [
+        "lib/generate/validate.ts",
+        "lib/generate/save.ts"
+      ],
       "writesFiles": false,
-      "noOpWithoutVaultDir": true
+      "savesThrough": "lib/vault/store.ts saveDoc (RLS, caller's session)"
     },
     "search": {
       "role": "section chunking in the app, ranking in Postgres",
@@ -95,8 +98,7 @@
       "language": "Rust",
       "sidecars": [
         "node (Next standalone server)"
-      ],
-      "vaultLocation": "checkout's vault/, baked in at compile time (single-vault, checkout-centric design)"
+      ]
     }
   },
   "apiRoutes": [
@@ -108,8 +110,8 @@
     {
       "path": "/api/tree",
       "method": "POST",
-      "response": "{imported,skipped,errors,reindexed}",
-      "note": "housekeeping pass: importVault() + reindexStale(), off the tree's critical path"
+      "response": "{reindexed}",
+      "note": "housekeeping pass: reindexStale(), off the tree's critical path"
     },
     {
       "path": "/api/folders/[name]",
@@ -176,26 +178,18 @@
       "path": "/api/generate/[id]",
       "methods": [
         "GET",
+        "POST",
         "DELETE"
       ],
       "readOnlyBlocked": [
         "DELETE"
-      ]
+      ],
+      "note": "GET: SSE tail, ends with status ready|done|error|aborted; POST: save a ready job's document to Supabase"
     }
   ],
   "storageModel": {
     "sourceOfTruth": "Supabase Postgres (notes_folders, notes_documents; notes_doc_chunks is the derived search index)",
-    "generationOutput": {
-      "root": "vault/",
-      "layout": [
-        "<folder-slug>/index.json",
-        "<folder-slug>/<seq>-<slug>.html (lesson)",
-        "<folder-slug>/quiz-<seq>-<slug>.html (quiz)"
-      ],
-      "gitignored": true,
-      "writtenBy": "Claude Code only",
-      "readBy": "lib/vault/import.ts only"
-    }
+    "localFiles": "none — the upload is an OS temp file deleted when its run ends"
   },
   "commands": {
     "/lect": {

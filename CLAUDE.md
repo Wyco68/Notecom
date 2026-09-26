@@ -36,10 +36,11 @@ generation follows the teaching docs; application work follows the
 architecture docs. Doing both in one pass mixes two contracts that disagree
 about what the vault is — split them.
 
-Generated lesson/quiz files (`vault/**/*.html`, `vault/**/index.json`,
-`vault/.quiz-state.json`) are **application data**, not application source.
-Application work never edits them except for an explicit, requested migration
-or format conversion.
+Generated lessons and quizzes are rows in Supabase (`notes_documents`) —
+**application data**, not application source. `/lect` and `/quiz` only reply
+with HTML; the app checks, names and saves it, and nothing writes local files.
+Application work never edits generated content except for an explicit,
+requested migration or format conversion.
 
 ## Caveman mode scope
 Caveman mode (ultra): use aggressive for dev work (`/feat`, code edits, debugging,

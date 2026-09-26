@@ -14,8 +14,8 @@ import {
 // The dialog does not own the run — GenerateJobsProvider does. That is what
 // makes generation a background job: closing this returns the reader to their
 // notes while the log keeps filling, the sidebar keeps a live row, and the tree
-// refreshes itself when the file lands. Reopening from that row lands back here
-// on the same job.
+// refreshes itself when the document is saved. Reopening from that row lands
+// back here on the same job.
 export default function GenerateModal({
   folders,
   onClose,

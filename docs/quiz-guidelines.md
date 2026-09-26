@@ -4,8 +4,9 @@ Loaded by `/quiz` only. Defines the quiz HTML contract — a sibling of
 [html-output-contract.md](html-output-contract.md), not lesson content, so
 it gets its own doc instead of overloading the lesson heading scheme.
 
-Enforced by [scripts/validate-quiz.mjs](../scripts/validate-quiz.mjs) —
-`/quiz` must run it after every save, same as `/lect` does for lessons.
+Enforced by the app, not by `/quiz`: `lib/generate/validate.ts` checks
+every generated quiz before it is saved, and sends violations back to the
+session to fix.
 
 ## Format (strict)
 Quiz content is **semantic HTML only**, same allowed-tag allowlist as
@@ -36,8 +37,8 @@ h2  Q2. <question text>
 ```
 
 - One `h2` per question, always starting with `Q<n>.` where `<n>` is a
-  1-based, strictly increasing counter across the whole file (continuing
-  from the highest existing `Q<n>` when appending — never restart at 1).
+  1-based, strictly increasing counter across the whole file, starting at
+  `Q1.`.
 - Immediately under each question's `h2`: exactly one `Reasoning:`
   callout, then exactly one `Answer:` callout, in that order. No other
   content between a question's `h2` and its two callouts.
@@ -51,23 +52,13 @@ h2  Q2. <question text>
 - Never use `h3` inside a quiz file — the scheme is flat, one `h2` per
   question, no sub-headings.
 
-## Two ways content arrives
+## Where content comes from
 
-**From a pasted Markdown file.** The user supplies a Markdown file (and,
-implicitly or explicitly, the destination folder). Read every question in
-it, and for each one produce a `Q<n>.` block: the question as the `h2`
+**From an uploaded file.** The user uploads a file of questions in the
+app's Generate dialog, which also picks the destination folder. Read every
+question in it (after markitdown conversion, unless it is already
+Markdown), and for each one produce a `Q<n>.` block: the question as the `h2`
 text, worked `Reasoning:`, and a plain `Answer:`. If the Markdown already
 states an answer, verify it by re-deriving it — the `Reasoning:` and
 `Answer:` here are `/quiz`'s own output, not a copy of the source file's
 answer key.
-
-**From a pasted sentence.** The user pastes one question (a sentence,
-sometimes with its own context). Reason through it and produce one new
-`Q<n>.` block, appended after the last existing block in the target file
-(or as `Q1.` if the file is new).
-
-## Appending
-
-Appending means: read the existing quiz `<h1>` and all existing `Q<n>.`
-blocks, add the new block(s) after the last one, keep the `<h1>` and every
-prior block byte-for-byte unchanged. Never renumber existing questions.

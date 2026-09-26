@@ -6,7 +6,7 @@ export interface Lesson {
 }
 
 // Same shape as Lesson — kept as a distinct alias since quizzes are a
-// separate index.json array and a separate document kind.
+// numbered separately and are a separate document kind.
 export type Quiz = Lesson;
 
 // A folder in the tree is its identity (slug) and its label (name) — nothing

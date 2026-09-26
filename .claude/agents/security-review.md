@@ -66,15 +66,18 @@ exploitable, not merely untidy:
   Check that every route that reads user data is inside it, and that the
   `/api/auth/*` exemption still only covers obtaining a session.
 - **The generation spawn** (`lib/generate/runner.ts`, `app/api/generate/`).
-  This executes a local binary with user-supplied input: verify the argument
+  This executes a local binary with user-supplied input. The run must stay
+  read-only (`--tools Read`, `--permission-mode dontAsk`, the `ALLOWED_TOOLS`
+  list) — a write-capable tool there reopens a path to disk. Verify the argument
   vector is passed as an array and never through a shell, that `folder`/`kind`
   are validated against a fixed set before they reach a path or an argument,
   that the uploaded file lands somewhere the CLI cannot escape, and that job ids
   are unguessable and scoped — a job's SSE log must not be readable by whoever
   asks for another id.
-- **Path handling** (`lib/vault/import.ts`, any `[folder]`/`[id]` route
+- **Path handling** (the generate upload, any `[folder]`/`[id]` route
   segment). Every segment that reaches a filesystem path or a `LIKE` pattern
-  must be validated — the `SAFE` regex in `import.ts` is the standard. Look for
+  must be validated — the `SAFE` regex in `app/api/generate/route.ts` is the
+  standard. Look for
   `..`, absolute paths, URL-encoded separators, and null bytes.
 - **Untrusted HTML** (`components/viewer/HtmlRenderer.tsx`, `Mermaid.tsx`,
   `VizRenderer.tsx`). Lesson HTML is authored by a model and can arrive from

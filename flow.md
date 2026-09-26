@@ -1,49 +1,41 @@
 # Data Flow — Next.js + Supabase
 
-Two separate workflows: **lesson creation** (Claude Code, outside the app) and
-**lesson reading/management** (the Next.js app). They meet in Supabase — the
-source of truth — with `vault/` as the one-way bridge that carries generated
-files into it.
+Two separate workflows: **lesson creation** (Claude Code authors, the app
+files) and **lesson reading/management** (the Next.js app). Both end in
+Supabase — the source of truth. Nothing is written to local disk.
 
 ---
 
-## 1. Lesson creation (Claude Code → vault/ → Supabase)
+## 1. Lesson creation (Generate → Claude Code → app → Supabase)
 
-Claude Code is the only tool that writes lesson content.
+Claude Code is the only tool that authors lesson content; the app is the only
+thing that saves it.
 
 ```
-/lect (Claude Code CLI)
-  → Claude reads uploaded lecture file (PDF, image, slides)
-  → Claude generates semantic HTML following the output contract,
-    grounded strictly in that source (no invented content)
-  → Claude writes vault/<Folder>/<id>.html
-  → Claude upserts vault/<Folder>/index.json
-  → Done
+Generate dialog (folder + file)
+  → POST /api/generate            upload to OS temp, spawn the CLI (read-only)
+  → /lect or /quiz (Claude Code)
+      reads the upload, converts it with markitdown
+      generates semantic HTML, grounded strictly in that source
+      replies with the HTML — it has no tool that can write
+  → lib/generate/validate.ts      contract check; violations go back to the
+                                  same session to fix (at most twice)
+  → job "ready", HTML in memory   upload deleted
+  → POST /api/generate/[id]       the client, as soon as the tail ends
+  → lib/generate/save.ts          seq = max in folder + 1, id = <seq>-<slug>
+  → saveDoc()                     notes_documents + search chunks, under RLS
+  → Done — the tree re-reads
 ```
 
-This happens entirely outside the Next.js process. On the next tree fetch the
-app runs `importVault()` (`lib/vault/import.ts`), which upserts the new files
-into Supabase and rebuilds their search chunks. Idempotent: a file identical to
-the stored row is skipped, so a re-import churns no versions.
+The CLI's tools are `Read` and the markitdown converter, with
+`--permission-mode dontAsk`, so anything else is refused rather than prompted.
+The save is a separate request because it runs as the signed-in user, and only
+a request carries that session.
 
-Strict generation: the saved file is what the importer persists, so it must be
-faithful to the lecture — the content comes from the uploaded source, not the
-model's prior knowledge. The in-app Generate button drives the same `/lect` (or
-`/quiz`) flow via `lib/generate/runner.ts`, whose prompt pins the exact
-destination folder and enforces that grounding (fail rather than fabricate if
-the source can't be read). It never writes to storage directly — it only
-produces the vault file, and the import path above does the rest.
-
-**Naming convention (Claude Code must follow):**
-- `<folder>` = kebab-case slug of the subject name, e.g. `computer-networks`
+**Naming (the app's, `lib/generate/save.ts`):**
 - `<id>` = `<seq padded to 2 digits>-<slug>`, e.g. `03-routing-protocols`
-- `<slug>` = title lowercased, non-alphanumerics → `-`, trimmed
-- `<seq>` = max existing seq in the folder + 1
-
-**index.json shape:**
-```json
-[{ "id": "01-introduction", "slug": "introduction", "title": "Introduction", "seq": 1 }]
-```
+- `<slug>` = the `<h1>` title lowercased, non-alphanumerics → `-`, trimmed
+- `<seq>` = max existing seq of that kind in the folder + 1
 
 ---
 
@@ -66,9 +58,8 @@ Supabase
 AppShell renders the sidebar's folder list
 
   │  (behind it) POST /api/tree
-  │     importVault()    (ingest Claude-authored files, if any)
   │     reindexStale()   (re-chunk anything indexed at an older version)
-  │     → re-reads the tree only if either changed something
+  │     → re-reads the tree only if it changed something
 
   │  user opens a folder
   ▼
@@ -184,8 +175,9 @@ window focus, ahead of the first thing the reader was waiting for.
 
 | Layer | Files | Responsibility |
 |---|---|---|
-| **Claude Code** | `/lect`, `/quiz` commands | Content creation: generate HTML, write vault/ files, update index.json |
+| **Claude Code** | `/lect`, `/quiz` commands | Content creation: generate HTML and reply with it. Writes nothing |
+| **Generation** | `lib/generate/*` | Run the CLI read-only, check the contract, name and save the result |
 | **Next.js routes** | `app/api/*` | Turn HTTP into data-layer calls and errors into `{ error }`. No permission logic |
-| **Data layer** | `lib/vault/store.ts`, `lib/vault/import.ts` | All content persistence, and the one-way vault ingest. Zero permission logic |
+| **Data layer** | `lib/vault/store.ts` | All content persistence. Zero permission logic |
 | **Search** | `lib/search/chunker.ts`, `lib/search/search.ts` | Split lessons into sections; forward queries. Ranking lives in SQL |
 | **Supabase** | `supabase/migrations/*` | The source of truth, and the authorization boundary (RLS) |

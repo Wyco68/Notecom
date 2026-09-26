@@ -36,9 +36,8 @@ irrelevant to application work.
 ## Restrictions (strict)
 - Never generate lessons.
 - Never regenerate or rewrite an existing lesson's explanation/content.
-- Never edit generated lesson files (`vault/**/*.html`,
-  `vault/**/index.json`) unless the task is explicitly a migration or
-  format conversion. Generated lessons are application **data**, not
+- Never edit generated lesson/quiz content (`notes_documents` rows) unless
+  the task is explicitly a migration or format conversion. Generated lessons are application **data**, not
   application source code.
 
 ## Redirect rule

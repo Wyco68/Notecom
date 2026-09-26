@@ -8,7 +8,7 @@ Loaded by `/feat` only. Source of truth is the route files themselves
 | Route | Method | Body | Response |
 |---|---|---|---|
 | `/api/tree` | GET | — | `{ folders: [{ name, displayName }] }` — folder names only, one indexed query. The sidebar's first paint |
-| `/api/tree` | POST | — | `{ imported, skipped, errors, reindexed }` — the housekeeping pass: ingest `vault/`, re-chunk stale documents. Best-effort, never fails the request |
+| `/api/tree` | POST | — | `{ reindexed }` — the housekeeping pass: re-chunk stale documents. Best-effort, never fails the request |
 | `/api/folders` | POST | `{ name }` | `{ ok, folder }` — the app slugifies `name`; the database invents no names |
 | `/api/folders/[name]` | GET | — | `{ lessons: [{id,slug,title,seq}], quizzes: [...] }` — one folder's documents, fetched when the reader opens it |
 | `/api/folders/[name]` | DELETE | — | `{ ok }` |
@@ -21,37 +21,41 @@ Loaded by `/feat` only. Source of truth is the route files themselves
 | `/api/quiz/[folder]/[id]` | POST | `{ newTitle }` | `{ ok }` (rename) |
 | `/api/search` | GET | `?q&folder&kind&limit` | `{ mode: "keyword", results: [chunk hits] }` — `notes_search_chunks` |
 | `/api/related/[folder]/[id]` | GET | `?kind` | `{ results: [{folder,id,kind,title,score}] }` — `notes_related_docs` |
-| `/api/generate` | POST | multipart `file, folder, kind(lect\|quiz)` | `{ jobId }` — saves upload, spawns local Claude Code CLI |
+| `/api/generate` | POST | multipart `file, folder, kind(lect\|quiz)` | `{ jobId }` — spawns local Claude Code CLI (read-only) on the upload |
 | `/api/generate/[id]` | GET | — | SSE job log (`line` events, then `end` with status) |
+| `/api/generate/[id]` | POST | — | `{ ok, id, title }` — saves a `ready` job's document to Supabase |
 
 Error shape is always `{ error: string }` with a non-2xx status.
 
 **The tree loads in two steps.** `GET /api/tree` used to return every readable
-document in the account, and to run the vault import and a full stale-chunk scan
+document in the account, and to run a vault import and a full stale-chunk scan
 before answering — all on every page load, window focus and refresh, to draw a
 list of collapsed folder names. Now the folder list is its own cheap query,
 `GET /api/folders/[name]` fetches a folder's documents when it is opened, and
 the housekeeping pass is `POST /api/tree`, which the client fires *after* the
-tree is on screen (and again when a generation run finishes). A folder that is
+tree is on screen. A folder that is
 unreadable or absent answers `GET` with empty lists rather than 404 — which
 folders exist is what RLS is hiding.
 
 There is no route that *generates* anything itself. Content creation happens via
-Claude Code (`/lect` for lessons, `/quiz` for quizzes); these routes only start
-and observe that local CLI run — see `lib/generate/runner.ts`.
+Claude Code (`/lect` for lessons, `/quiz` for quizzes); these routes start and
+observe that local CLI run, and save what it hands back — see
+`lib/generate/runner.ts`. The CLI writes nothing: its reply is the document,
+which the app checks against the contract and files in Supabase.
 
 | Route | Method | Body/params | Response |
 |---|---|---|---|
 | `/api/generate` | GET | — | `{ jobs }` — every job this server process knows, newest first, without log bodies. Lets a reloaded client find a run still in flight and re-attach instead of orphaning it |
 | `/api/generate` | POST | multipart `file`, `folder`, `kind` | `{ jobId }` — spawns the CLI and returns immediately |
-| `/api/generate/[id]` | GET | — | SSE tail: `line`, `tokens`, then `end` with `{ status, tokens, needsAuth }`. Replays the log from the beginning, so attaching late loses nothing |
+| `/api/generate/[id]` | GET | — | SSE tail: `line`, `tokens`, then `end` with `{ status, tokens, needsAuth }`. `status` is `ready` when the document passed the contract check and waits for the save below. Replays the log from the beginning, so attaching late loses nothing |
+| `/api/generate/[id]` | POST | — | `{ ok, id, title }` — names the `ready` document and saves it to Supabase as the caller (RLS). Idempotent; 409 when there is nothing to save. The client calls it as soon as the tail ends `ready`, and on reload for any job still `ready` |
 | `/api/generate/[id]` | DELETE | — | `{ ok }` — force-stop (the log view's Ctrl+C) |
 
 **Generation is a background job.** The run belongs to the server process, not to
 the dialog: `GenerateJobsProvider` (mounted above `AppShell` in
 `app/vault/page.tsx`) owns the job list and the SSE follow, so closing the dialog
 leaves the run going, the sidebar keeps a live row, the completion toast still
-fires and the tree still refreshes when the file lands. At most
+fires and the tree still refreshes when the document is saved. At most
 `MAX_CONCURRENT_JOBS` (3) run at once — each is a real CLI process spending real
 tokens, so background must not also mean unbounded.
 
@@ -158,13 +162,9 @@ Route handlers call these functions, which query Supabase as the signed-in user.
 lesson-vs-quiz translation, no logic. Deletes are tombstones (`deleted = true`,
 `version + 1`), never row removal.
 
-`vault/<folder>/index.json` holds `{ "lessons": [...], "quizzes": [...] }` and is
-written by Claude Code, read by `lib/vault/import.ts`, and never written by the
-app. Quiz files share a folder with lesson files but never collide: quiz
-filenames carry a `quiz-` prefix on disk, and each array has its own independent
-`id`/`seq` sequencing. Older folders whose `index.json` is still a bare array
-(lessons only, pre-quiz format) — or the retired `{lessons,quizzes,assignments}`
-shape — are read transparently.
+Lessons and quizzes share a folder but never collide: a document's identity is
+(folder, kind, doc key), and each kind has its own independent `seq` counter,
+assigned by `lib/generate/save.ts` at save time.
 
 ## Search functions (Postgres)
 

@@ -28,8 +28,8 @@ on a background thread:
 
 1. Pick a free port for the Next server (bind `127.0.0.1:0`, read back the
    assigned port).
-2. Start the Next server, given `VAULT_ROOT` so it can import Claude-authored
-   lessons, and poll its port.
+2. Start the Next server (release: given `REPO_ROOT`, the project dir the
+   Generate runner spawns the CLI in), and poll its port.
 3. Emit `stage-update` events to the splash window (it listens via
    `window.__TAURI__.event.listen`, enabled by `app.withGlobalTauri`).
 4. Create the main window pointed at `http://127.0.0.1:<port>/vault`, close
@@ -88,13 +88,12 @@ CI installer to justify it; now there is one, so the split earns its keep.
 `release::project_root()` (`desktop/src/lib.rs`) resolves
 `app.path().app_data_dir()/project` at launch instead, and
 `release::sync_project_template()` copies `.claude/commands/{lect,quiz}.md`,
-the docs they load, `CLAUDE.md`, `.mcp.json` and the validator scripts into
+the docs they load, the lesson template, `CLAUDE.md` and `.mcp.json` into
 it from `bundle.resources` (`desktop/resources/claude-project/`, assembled by
 `scripts/prepare-desktop-resources.mjs`) on every launch — an app update
-always ships current commands. `vault/` lives inside that same project dir
-but is never part of the bundled resource, so a user's actual notes are
-never touched by the sync. `REPO_ROOT` and `VAULT_ROOT` both point inside
-it, same as before.
+always ships current commands. No notes live there — generated documents
+go straight to Supabase — so the sync has nothing of the user's to touch.
+`REPO_ROOT` points at it.
 
 Net effect: a release build no longer depends on the checkout that built
 it, on any platform — a locally built install survives moving or deleting
