@@ -231,9 +231,9 @@ appearing.
   [components/sidebar/FileTreeNode.tsx](../components/sidebar/FileTreeNode.tsx)
   for the pattern (`group` on the row, `hidden group-hover:flex` on the
   icon button).
-- **File rows**: lesson/quiz rows in the tree carry the vault's own sequence
-  number (`seq` from `index.json`, rendered `01`, `02`, …) before the title, so
-  the sidebar reads in the same order as the folder on disk.
+- **File rows**: lesson/quiz rows in the tree carry the document's sequence
+  number (`seq`, rendered `01`, `02`, …) before the title, so the sidebar
+  reads in generation order.
 - **Icons**: hand-rolled inline SVG components under
   [components/icons/](../components/icons/) (e.g. `TrashIcon`), no icon
   library dependency.

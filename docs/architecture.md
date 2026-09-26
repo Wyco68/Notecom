@@ -7,7 +7,7 @@ duplicated here — read both before any architecture-affecting change):
   authors content, the Next.js app reads and manages it. Claude Code is the
   author but is not a layer inside the app.
 - [flow.md](../flow.md) — concrete request-by-request data flow:
-  lesson creation (Claude Code → vault/), viewing, folder/lesson management.
+  lesson creation, viewing, folder/lesson management.
 - [docs/desktop.md](desktop.md) — the Tauri shell (`desktop/`): startup
   orchestration, splash screen, dev vs production layout.
 
@@ -28,10 +28,31 @@ deployment had to build and run a Go trio to show a lesson. The
 `VAULT_SOURCE=gcs`/`worker`/`supabase` flags are retired too — there is one
 source now, so there is nothing to select.
 
-What remains local is `vault/`: the folder Claude Code writes generated lessons
-into. The app only ever **reads** it — `lib/vault/import.ts` ingests those files
-into Supabase on the next tree load. A box without a `vault/` directory (a VPS)
-simply has nothing to import.
+Nothing is local, generated content included (2026-09). The `vault/`
+directory Claude Code used to write lessons into — and `lib/vault/import.ts`,
+which ingested it on the next tree load — are gone. A generation run now hands
+its HTML back to the app, which checks it and saves it straight to Supabase
+(below, "Generation").
+
+## Generation: the CLI authors, the app files (2026-09)
+
+`lib/generate/runner.ts` runs `/lect` or `/quiz` with **read-only tools**
+(`--tools Read`, markitdown allowed, `--permission-mode dontAsk` — anything
+else is refused, not prompted). The CLI cannot write a file, so "the app
+saves" is a property of the run, not a request in the prompt. Its final reply
+is the document. Then, in the app:
+
+1. `lib/generate/validate.ts` checks it against the output contract. On a
+   violation the runner resumes the same CLI session with the list (at most
+   twice); nothing is saved until it passes.
+2. The job ends `ready`, holding the HTML in memory. The client's
+   `POST /api/generate/[id]` saves it — a request, because the save runs as
+   the signed-in user under RLS and only a request carries that session.
+3. `lib/generate/save.ts` names it (`<seq>-<slug>`, seq from what the folder
+   already holds in Supabase) and writes it through `saveDoc`.
+
+The upload is the one file on disk, in the OS temp dir, deleted when the run
+ends — the CLI needs a path to read it from.
 
 ## No broad read-only mode — but a capability signal (2026-08)
 
@@ -80,9 +101,9 @@ Don't move logic across the layers when fixing or extending the app:
   through `lib/vault/store.ts` (documents and folders) or `lib/collab/*`
   (membership, invitations, join requests, tags, folder search). Those two are
   the only places that touch the `notes_*` tables.
-- Don't write files from the app. `vault/` is generation output, read by
-  `lib/vault/import.ts` and never written back. A feature that wants to persist
-  something wants a table.
+- Don't write files — not from the app, and not from the generation run. A
+  feature that wants to persist something wants a table; generated content
+  reaches Supabase through `lib/generate/save.ts` only.
 - Don't add any AI generation logic or Anthropic API calls to the Next.js
   app. One delegation is the sanctioned exception (2026-07): the generation
   job runner (`lib/generate/runner.ts` spawns the local Claude Code CLI to
@@ -109,8 +130,8 @@ of collapsed folder names.
 Two rules it inherits from the sidecar it replaced:
 
 - **Naming stays in the app.** Slugs, folder-local document keys and sequence
-  numbers arrive fully resolved (`lib/vault/slug.ts`, the generated
-  `index.json`); the database invents none of them.
+  numbers arrive fully resolved (`lib/vault/slug.ts`,
+  `lib/generate/save.ts`); the database invents none of them.
 - **Deletes are tombstones** — `deleted = true`, `version + 1`. A row that
   simply vanished would reappear the moment a client holding an older copy wrote
   anything, and the collaboration UI still needs to tell "removed" from "never
@@ -143,11 +164,11 @@ boundaries are how the lessons are actually taught.
 - **Next.js** (`lib/search/search.ts`, `/api/search`, `/api/related/...`) only
   forwards the query and formats the answer.
 
-Freshness: the vault import and the stale-chunk reindex are `POST /api/tree`,
-fired by the client once the tree is on screen, again when a generation run
-finishes, and on the refresh button. They used to sit in front of `GET
-/api/tree`, where every page load and every window focus paid for a full scan of
-`vault/` and of every document's chunk version before the sidebar could draw.
-Neither may take the tree down with it, and window focus re-reads the tree only.
+Freshness: the stale-chunk reindex is `POST /api/tree`, fired by the client
+once the tree is on screen and on the refresh button. It used to sit in front of
+`GET /api/tree`, where every page load and every window focus paid for a scan of
+every document's chunk version before the sidebar could draw. It may not take
+the tree down with it, and window focus re-reads the tree only. A generated
+document needs no reindex — `saveDoc` writes its chunks.
 
 Endpoints: [api-contract.md](api-contract.md).

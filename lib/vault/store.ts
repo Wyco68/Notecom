@@ -12,8 +12,8 @@
 // would be a second, weaker copy of the rules in supabase/migrations/0003.
 // See docs/collaboration.md.
 //
-// Content is generated outside the app (Claude Code writes vault/*.html) and
-// ingested by lib/vault/import.ts; nothing here writes files.
+// Generated content arrives through lib/generate/save.ts — the CLI authors
+// HTML, the app names it and saves it here; nothing here writes files.
 
 import { createClient } from "@/lib/supabase/server";
 import { chunkHTML } from "@/lib/search/chunker";
@@ -70,11 +70,10 @@ async function requireFolderId(slug: string): Promise<string> {
 }
 
 /**
- * Resolves a folder slug to an id the caller may write to, or null. For a
- * write path that happens entirely outside Supabase (lib/generate/runner.ts
- * spawns a local CLI process against a filesystem path, not a Supabase call),
- * so RLS never gets a chance to refuse it — this is a fail-fast check in
- * front of that, using the same `notes_can_write_folder` function RLS itself
+ * Resolves a folder slug to an id the caller may write to, or null. Generation
+ * saves through RLS like any other write, but only after a run has spent
+ * minutes of the user's subscription — this is a fail-fast check in front of
+ * starting one, using the same `notes_can_write_folder` function RLS itself
  * calls, not a second copy of the rule. `folderIdsBySlug` already orders the
  * caller's own folder first, matching how every other write here resolves a
  * shared slug.
@@ -185,12 +184,9 @@ export async function listFolderDocs(
 // undiscoverable — sharing is an explicit act performed later from the web UI,
 // never a default.
 //
-// `displayName` defaults to `slug` for the one caller (lib/vault/import.ts)
-// where they're genuinely the same string — a vault folder's on-disk name
-// already is Claude Code's own kebab-case slug, nothing else to preserve.
-// The in-app "create folder" route is the other caller, and passes both: a
-// slug column exists precisely so casing/spacing typed by a person doesn't
-// have to be thrown away to get one.
+// A slug column exists precisely so casing/spacing typed by a person doesn't
+// have to be thrown away to get one — `displayName` keeps it, and falls back
+// to the slug when there is nothing else to preserve.
 export async function createFolder(slug: string, displayName: string = slug): Promise<{ ok: boolean }> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -356,8 +352,8 @@ export async function renameDoc(
     .from("notes_documents")
     .update({
       title: newTitle,
-      // The generated title stays in vault/index.json — the app writes no
-      // files — so without this the next import would restore it (see
+      // A later save of the same document (saveDoc) must not restore the
+      // generated title over the reader's (see
       // 0023_notes_documents_title_pinned.sql).
       title_pinned: true,
       version: doc.version + 1,
@@ -381,7 +377,7 @@ export interface SaveInput {
 
 /** Upserts one document keyed by (folder, kind, docKey) and rebuilds its search
  *  chunks. Returns false when the content was already identical, so the caller
- *  can report how much of an import actually changed. */
+ *  can tell a no-op save from a real one. */
 export async function saveDoc(input: SaveInput): Promise<boolean> {
   const supabase = await createClient();
   const folderId = await requireFolderId(input.folder);
@@ -397,8 +393,8 @@ export async function saveDoc(input: SaveInput): Promise<boolean> {
   if (lookupErr) fail("save failed", lookupErr);
   const existing = rows?.[0];
 
-  // A title the user renamed in the app wins over the one in the file, and
-  // only the title: html, slug and seq still come from vault/ on every import.
+  // A title the user renamed in the app wins over the generated one, and only
+  // the title: html, slug and seq still come from the save.
   const keepTitle = existing?.title_pinned === true;
 
   if (
@@ -409,7 +405,7 @@ export async function saveDoc(input: SaveInput): Promise<boolean> {
     existing.slug === input.slug &&
     existing.seq === input.seq
   ) {
-    // Identical on both sides: skip, so a re-import doesn't churn versions and
+    // Identical on both sides: skip, so a repeated save doesn't churn versions and
     // updated_at, and another device doesn't see a phantom edit.
     return false;
   }
@@ -432,7 +428,7 @@ export async function saveDoc(input: SaveInput): Promise<boolean> {
     if (error) fail("save failed", error);
   } else {
     // Upsert, not insert: the lookup above and this write are two round trips,
-    // so a concurrent import can create the row in between and both callers
+    // so a concurrent save can create the row in between and both callers
     // arrive here believing the document is new. Conflicting on the document's
     // identity turns that second write into an update of the first row instead
     // of a duplicate (0022_notes_documents_unique_doc_key.sql). The returned id

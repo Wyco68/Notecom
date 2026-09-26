@@ -4,10 +4,10 @@ Loaded by `/lect` only. Enforced two ways — keep all three in sync when
 this contract changes:
 - [lib/vault/sanitize.ts](../lib/vault/sanitize.ts) strips anything
   outside the tag allowlist before a lesson is ever rendered.
-- [scripts/validate-lesson.mjs](../scripts/validate-lesson.mjs) checks a
-  saved lesson against every rule below (headings, callouts, tags) and
-  exits non-zero on any violation — `/lect` must run it after every save,
-  see [lect.md](../.claude/commands/lect.md).
+- [lib/generate/validate.ts](../lib/generate/validate.ts) checks every
+  generated lesson against the rules below (headings, callouts, tags)
+  before the app saves it, and sends violations back to the `/lect`
+  session to fix — see [lect.md](../.claude/commands/lect.md).
 
 ## Format (strict)
 Generated lesson content is **semantic HTML only** — never Markdown, never

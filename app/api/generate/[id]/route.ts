@@ -1,8 +1,9 @@
 import { NextRequest } from "next/server";
-import { getJob, stopJob } from "@/lib/generate/runner";
+import { getJob, saveJob, stopJob } from "@/lib/generate/runner";
 import { VERIFIED_USER_HEADER } from "@/middleware";
 
-// SSE tail of a generation job: log lines, token-count updates, then end.
+// SSE tail of a generation job: log lines, token-count updates, then end —
+// with status "ready" when the document is waiting for the POST below.
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -57,6 +58,29 @@ export async function GET(
   return new Response(stream, {
     headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache" },
   });
+}
+
+// Save a finished job's document to Supabase. The client calls this as soon as
+// the tail ends with "ready"; it is the save's only trigger because only a
+// request carries the caller's session, which RLS needs (see saveJob).
+export async function POST(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const userId = req.headers.get(VERIFIED_USER_HEADER);
+  if (!userId) return Response.json({ error: "sign in required" }, { status: 401 });
+  const { id } = await params;
+  const job = getJob(id, userId);
+  if (!job) return Response.json({ error: "job not found" }, { status: 404 });
+  if (job.status !== "ready" && !job.saved) {
+    return Response.json({ error: "nothing to save" }, { status: 409 });
+  }
+  try {
+    const saved = await saveJob(job);
+    return Response.json({ ok: true, id: saved.id, title: saved.title });
+  } catch (err: any) {
+    return Response.json({ error: err.message }, { status: 502 });
+  }
 }
 
 // Force-stop a running job — the modal's Ctrl+C.

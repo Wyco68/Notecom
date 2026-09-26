@@ -125,13 +125,10 @@ mod dev {
         cmd
     }
 
-    // VAULT_ROOT still points at the repo's vault/: that is where Claude Code
-    // writes generated lessons, and the app imports them from there on the next
-    // tree load. Read-only as far as the app is concerned.
     fn spawn_next(root: &Path, port: u16) -> u32 {
         let port_arg = port.to_string();
         let mut cmd = npm(&["run", "dev", "--", "-p", &port_arg]);
-        cmd.current_dir(root).env("VAULT_ROOT", root.join("vault"));
+        cmd.current_dir(root);
         hide_window(&mut cmd);
         cmd.spawn().expect("failed to start next dev server").id()
     }
@@ -150,9 +147,9 @@ mod dev {
 }
 
 // Release: a bundled Node runtime is the only sidecar, resolved from the
-// installed app's resources. The vault, and the /lect + /quiz command files
-// that write to it, live in a per-user app-data directory instead of the
-// checkout that built the app — CARGO_MANIFEST_DIR is baked in at compile
+// installed app's resources. The /lect + /quiz command files the Generate
+// runner needs live in a per-user app-data directory instead of the checkout
+// that built the app — CARGO_MANIFEST_DIR is baked in at compile
 // time, so an installer built on a CI runner would bake in that runner's
 // ephemeral checkout path and be unable to find anything once installed
 // somewhere else. Resolving the project dir at runtime (`app.path()
@@ -169,12 +166,6 @@ mod release {
             .app_data_dir()
             .expect("no app data dir")
             .join("project")
-    }
-
-    fn vault_dir(app: &AppHandle) -> PathBuf {
-        let dir = project_root(app).join("vault");
-        std::fs::create_dir_all(&dir).expect("failed to create vault dir");
-        dir
     }
 
     fn copy_dir_recursive(src: &Path, dst: &Path) {
@@ -194,8 +185,7 @@ mod release {
     }
 
     // Re-synced on every launch, so an app update always ships the current
-    // /lect, /quiz, docs and validators. vault/ is never part of the bundled
-    // resource, so a user's actual notes are never touched by this.
+    // /lect, /quiz and docs. Notes live in Supabase, never here.
     fn sync_project_template(app: &AppHandle) {
         let bundled = app
             .path()
@@ -206,7 +196,7 @@ mod release {
         copy_dir_recursive(&bundled, &project_root(app));
     }
 
-    fn spawn_next(app: &AppHandle, port: u16, vault_root: &str, repo_root: &str) -> u32 {
+    fn spawn_next(app: &AppHandle, port: u16, repo_root: &str) -> u32 {
         let frontend_dir = app
             .path()
             .resource_dir()
@@ -221,9 +211,6 @@ mod release {
             .current_dir(frontend_dir)
             .args(["server.js"])
             .env("PORT", port.to_string())
-            // Where Claude Code (/lect, /quiz) writes generated lessons. The
-            // app imports from here; it never writes back.
-            .env("VAULT_ROOT", vault_root.to_string())
             // Generate (lib/generate/runner.ts) must run the claude CLI from
             // a directory holding .claude/commands/ — the standalone
             // server's own cwd is the installed resources dir, not this one.
@@ -235,12 +222,11 @@ mod release {
 
     pub fn orchestrate(app: AppHandle) {
         sync_project_template(&app);
-        let vault_root = vault_dir(&app).to_string_lossy().to_string();
         let repo_root = project_root(&app).to_string_lossy().to_string();
         let next_port = free_port();
 
         emit_stage(&app, "Preparing interface...");
-        let next_pid = spawn_next(&app, next_port, &vault_root, &repo_root);
+        let next_pid = spawn_next(&app, next_port, &repo_root);
         wait_for_port(next_port, Duration::from_secs(30));
 
         track_pids(&app, &[next_pid]);

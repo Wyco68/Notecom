@@ -54,8 +54,8 @@ dev server and a VPS all see the same rows at the same time.
   else writes `notes_folders` or `notes_documents`.
 - Deletes are tombstones (`deleted = true`, `version + 1`), never row removal.
 - It receives fully-resolved values only — no slugify logic, no sequence-number
-  generation, no content logic. Naming stays in `lib/vault/slug.ts` and in the
-  generated `index.json`.
+  generation, no content logic. Naming stays in `lib/vault/slug.ts` and
+  `lib/generate/save.ts`.
 - Authorization is Row Level Security, in the database. This layer contains no
   permission checks, and must not grow any.
 
@@ -63,11 +63,12 @@ Superseded (2026-07) an offline-first design in which three Go sidecars —
 `vaultd` (files), `stored` (local SQLite + background Supabase sync) and
 `indexd` (FTS5 search) — ran on every machine. They are removed from the repo.
 
-### 2.3 Vault import (`lib/vault/import.ts`) — one direction only
+### 2.3 Generation save (`lib/generate/*`) — the only way content arrives
 
-Claude Code writes generated lessons to `vault/` as files. This reads them and
-upserts them into Supabase on the next tree load. The app writes no files
-anywhere; a box with no `vault/` directory simply has nothing to import.
+The CLI replies with HTML and cannot write (read-only tools). The app checks the
+reply against the output contract (`validate.ts`), names and numbers it
+(`save.ts`) and saves it through `store.ts` under RLS. Nothing is written to
+local disk; the upload itself is a temp file deleted when the run ends.
 
 ### 2.4 Search — Postgres full-text
 
@@ -89,30 +90,27 @@ Claude Code is the sole author of lesson content.
 **Responsibilities:**
 - Read uploaded lecture files (slides, PDFs, images)
 - Generate lesson HTML following the output contract
-- Regenerate and improve existing lessons
-- Save lesson files directly to `vault/`
-- Maintain `index.json` for each folder
+- Reply with that HTML — the app saves it
 
-**How Claude Code saves a lesson:**
+**How a generated lesson is saved:**
 
 ```
-/lect
-  → Claude reads uploaded file
-  → Claude generates semantic HTML
-  → Claude writes vault/<Folder>/<id>.html
-  → Claude upserts vault/<Folder>/index.json
-  → Done — app refreshes on next load
+/lect (spawned by the app, read-only tools)
+  → Claude reads the uploaded file, converts it with markitdown
+  → Claude generates semantic HTML and replies with it
+  → the app checks it against the contract (fix round if needed)
+  → the app names it and saves it to Supabase
+  → Done — the tree re-reads
 ```
 
-Claude Code writes files using its own file tools. It does not go through any
-Next.js API route to create content. The app's own management operations
-(delete, rename, list) go through `lib/vault/store.ts` to Supabase; the two
-meet at the import step, never at a shared write path.
+Claude Code has no write path at all: the run's tools are `Read` and the
+markitdown converter, under `--permission-mode dontAsk`. Every write — generated
+content and the app's own management operations alike — goes through
+`lib/vault/store.ts` to Supabase.
 
 Claude must never:
-- choose app-level folder names without following the slug format
-- generate filesystem paths inconsistent with the storage model below
-- write anything to `app/`, `components/`, or `lib/`
+- choose folder names, document ids or sequence numbers — the app does
+- write any file
 
 Claude returns **semantic HTML only** — never Markdown, never a file.
 Allowed tags: `h1 h2 h3 p ul ol li table thead tbody tr td th pre code blockquote
@@ -127,37 +125,16 @@ no custom classes other than `class="mermaid"`.
 with device-independent UUID ids, per-row `version` + `updated_at`, and
 soft-delete tombstones. `notes_doc_chunks` holds the derived search index.
 
-The file tree below is **generation output**, written only by Claude Code and
-read only by the importer. It stays exactly:
+There is no local storage for notes. Documents are identified by
+(folder, kind, doc key):
 
-```
-vault/
-  <folder-slug>/
-    index.json                    -- ordered lesson/quiz index
-    01-topic-slug.html            -- one lesson's generated HTML
-    02-another-topic.html
-    quiz-01-topic-quiz.html       -- one quiz's generated HTML
-```
+- doc key = `<seq padded to 2 digits>-<slug>`, e.g. `"01-introduction"`
+- `slug` = the `<h1>` title lowercased, non-alphanumerics collapsed to `-`, trimmed
+- `seq` = 1-based integer, monotonically increasing within the folder, counted
+  separately for lessons and quizzes
 
-`index.json` shape:
-```json
-{
-  "lessons": [{ "id": "01-topic-slug", "slug": "topic-slug", "title": "Topic", "seq": 1 }],
-  "quizzes": []
-}
-```
-
-Quiz files (`quiz-` prefix) share the folder with lessons but never collide,
-and each array sequences its `id`/`seq` independently. A legacy bare-array
-`index.json` (lessons only) — or the retired `{lessons,quizzes,assignments}`
-shape — is read transparently and upgraded on the next save.
-
-- `id` = `<seq padded to 2 digits>-<slug>`, e.g. `"01-introduction"`
-- `slug` = lowercased, non-alphanumerics collapsed to `-`, leading/trailing `-` trimmed
-- `seq` = 1-based integer, monotonically increasing within the folder
-
-The `.html` file holds exactly the generated HTML. The app reads it verbatim.
-Gitignored and portable — never committed.
+All three are assigned by `lib/generate/save.ts` at save time. The stored HTML
+is exactly the generated HTML; the app renders it verbatim.
 
 ---
 
@@ -196,9 +173,8 @@ browser -> GET /vault
         -> listFolders() selects notes_folders (RLS-scoped)
         -> returns folder names only — the sidebar draws immediately
    -> behind it, POST /api/tree
-        -> importVault() ingests Claude-authored vault files into Supabase
         -> reindexStale() re-chunks anything whose search index lags
-        -> the client re-reads the tree only if either changed something
+        -> the client re-reads the tree only if it changed something
    -> user opens a folder
    -> FileTreeNode calls GET /api/folders/<Folder>
         -> listFolderDocs() selects notes_documents (RLS-scoped)
@@ -232,8 +208,8 @@ this section used to specify is gone with the sidecars.
 | `deleteDoc(folder, id, kind)` | `{ ok }` — tombstone |
 | `renameDoc(folder, id, kind, title)` | `{ ok }` — title only |
 
-Saving is the importer's path, not a user-facing one: content is created by
-Claude Code as files and enters the database through `lib/vault/import.ts`. See
+Saving is the generation path's, not a user-facing one: content is authored by
+Claude Code and enters the database through `lib/generate/save.ts`. See
 [docs/api-contract.md](docs/api-contract.md) for the HTTP routes.
 
 ---
@@ -253,7 +229,6 @@ Claude Code as files and enters the database through `lib/vault/import.ts`. See
 | Datastore | Supabase Postgres (`notes_*` tables, RLS-enforced) | The source of truth: folders, documents, sharing, search index |
 | Data layer | `lib/vault/store.ts` (user-scoped Supabase client) | Folder/document CRUD; no permission logic of its own |
 | Search | Postgres full-text (`notes_doc_chunks` + two SQL functions) | Section chunking, keyword retrieval |
-| Notes storage | `.html` + `index.json` under `vault/` | Generation output, imported once and never written back; gitignored |
 | Desktop shell | Tauri (Rust) | Native window, startup orchestration, splash screen, packaging |
 
 No AI SDK, no Anthropic API key. Generation =

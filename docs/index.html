@@ -375,15 +375,15 @@
     </p>
 
     <ol class="step-list">
-      <li><span class="n">1</span><div><b>You hand over a file.</b> <span class="sub">A lecture PDF, slide deck, or photo — dragged into the terminal, or dropped on the app's Generate button.</span></div></li>
+      <li><span class="n">1</span><div><b>You hand over a file.</b> <span class="sub">A lecture PDF, slide deck, or photo — dropped on the app's Generate button, with the subject folder it belongs in.</span></div></li>
       <li><span class="n">2</span><div><b>Claude reads it and writes the note.</b> <span class="sub">Plain, high-school-level sentences, technical terms kept exact — grounded only in what's on the page.</span></div></li>
-      <li><span class="n">3</span><div><b>The note is saved to <code>vault/</code>, on your machine.</b> <span class="sub">One file per note, filed under its subject folder, its place in the list recorded alongside it.</span></div></li>
-      <li><span class="n">4</span><div><b>The app picks it up and stores it for good.</b> <span class="sub">Next time the note list loads, Notecom copies the file into Supabase — the shared library everyone reads from.</span></div></li>
+      <li><span class="n">3</span><div><b>The app checks it.</b> <span class="sub">Claude can only read, never save. It hands the note back, and Notecom checks it against the note format — anything off goes back to Claude to fix.</span></div></li>
+      <li><span class="n">4</span><div><b>The app stores it for good.</b> <span class="sub">Notecom numbers it in its subject folder and saves it straight to Supabase — the shared library everyone reads from. Nothing is kept on your machine.</span></div></li>
     </ol>
 
     <figure>
       <div class="diagram-frame">
-        <svg viewBox="0 0 880 210" role="img" aria-label="Diagram: a lecture file is read by the Claude Code CLI, which writes an html file into the local vault folder, which is then imported into Supabase, the shared library.">
+        <svg viewBox="0 0 880 210" role="img" aria-label="Diagram: a lecture file is read by the Claude Code CLI, which hands the note back to the Notecom app, which checks it and saves it to Supabase, the shared library.">
           <defs>
             <marker id="d1arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
               <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
@@ -400,8 +400,8 @@
             <text x="330" y="136" text-anchor="middle" fill="var(--accent)" font-size="11">writes the note</text>
 
             <rect x="490" y="65" width="180" height="80" rx="8" fill="var(--surface-2)" stroke="currentColor" opacity="0.6"/>
-            <text x="580" y="98" text-anchor="middle" class="lbl">vault/</text>
-            <text x="580" y="118" text-anchor="middle" font-size="11.5" opacity="0.7">on your machine</text>
+            <text x="580" y="98" text-anchor="middle" class="lbl">Notecom app</text>
+            <text x="580" y="118" text-anchor="middle" font-size="11.5" opacity="0.7">checks · names</text>
 
             <rect x="700" y="55" width="170" height="100" rx="8" fill="var(--accent-2-soft)" stroke="var(--accent-2)"/>
             <text x="785" y="98" text-anchor="middle" fill="var(--accent-2)" font-weight="600">Supabase</text>
@@ -411,17 +411,16 @@
             <text x="207" y="90" text-anchor="middle" class="lbl" font-size="11" opacity="0.75">reads</text>
 
             <line x1="420" y1="105" x2="485" y2="105" stroke="currentColor" opacity="0.6" marker-end="url(#d1arrow)"/>
-            <text x="452" y="90" text-anchor="middle" class="lbl" font-size="11" opacity="0.75">writes .html</text>
+            <text x="452" y="90" text-anchor="middle" class="lbl" font-size="11" opacity="0.75">hands back</text>
 
             <line x1="670" y1="105" x2="695" y2="105" stroke="currentColor" opacity="0.6" marker-end="url(#d1arrow)"/>
             <text x="682" y="185" text-anchor="middle" class="lbl" font-size="11" opacity="0.75" transform="translate(0,0)"></text>
             <text x="683" y="90" text-anchor="middle" class="lbl" font-size="10.5" opacity="0.75"> </text>
-            <text x="683" y="170" text-anchor="middle" class="lbl" font-size="11" opacity="0.75">imported on</text>
-            <text x="683" y="184" text-anchor="middle" class="lbl" font-size="11" opacity="0.75">next load</text>
+            <text x="683" y="170" text-anchor="middle" class="lbl" font-size="11" opacity="0.75">saves</text>
           </g>
         </svg>
       </div>
-      <figcaption>One direction only: the CLI writes files; the app copies them into Supabase and never writes back to <code class="mono">vault/</code>.</figcaption>
+      <figcaption>Claude only reads and replies; the app is the only thing that saves, and it saves to Supabase, never to disk.</figcaption>
     </figure>
   </div>
 </section>

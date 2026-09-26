@@ -44,22 +44,22 @@ Nothing gets invented. Claude reads only the file you give it and writes
 what's actually in there, in clearer words.
 
 ```
-/lect Cybersecurity Fundamentals   (typed into `claude`, or the app's Generate button)
-  → Claude reads the uploaded lecture file (PDF, slides, photo)
+Generate → "Cybersecurity Fundamentals" + your lecture file
+  → Claude (read-only) reads the file (PDF, slides, photo)
   → Claude writes a plain-language note, technical terms kept correct,
-    grounded strictly in that file — nothing added from memory
-  → Claude writes vault/cybersecurity-fundamentals/04-firewall-configuration.html
-  → Claude updates vault/cybersecurity-fundamentals/index.json
+    grounded strictly in that file — nothing added from memory —
+    and hands it back to the app
+  → the app checks it against the note format (Claude fixes anything off)
+  → the app numbers it (04-firewall-configuration) and saves it to Supabase
   → done
 ```
 
-That's the whole write path, and it happens outside the running app.
-`vault/` is just files on your machine — the app only ever reads it. Next
-time the note list loads, Notecom's importer copies the new file into
-Supabase, the one place every device actually reads from.
+Claude never saves anything: it can only read. The app is the one that
+saves, straight to Supabase, the one place every device reads from. Nothing
+is kept on your machine.
 
 ```
-Claude Code  ──writes──►  vault/ (your machine)  ──imported on next load──►  Supabase
+Claude Code  ──HTML──►  Notecom (check, name)  ──saves──►  Supabase
 ```
 
 ---

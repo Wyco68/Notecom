@@ -16,7 +16,7 @@ import { useToast } from "../toast/ToastProvider";
 // it; otherwise the manage page just 501s, so the control is hidden.
 const COLLAB_ENABLED = !!process.env.NEXT_PUBLIC_SUPABASE_URL;
 
-// The vault numbers files on disk (`01-introduction`, `seq: 1` in index.json);
+// Every document carries its folder-local number (`01-introduction`, seq 1);
 // showing that same number in the tree keeps the sidebar order readable as an
 // index rather than an arbitrary list.
 function SeqBadge({ seq }: { seq: number }) {

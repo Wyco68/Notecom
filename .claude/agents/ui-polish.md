@@ -17,7 +17,7 @@ may not touch:
 - state, props, handlers, effects, fetch calls, route logic, or component
   structure that carries data;
 - anything under `app/api/`, `lib/`, `middleware.ts`, `supabase/`, `tools/`;
-- generated content in `vault/`.
+- generated lesson/quiz content.
 
 If a visual fix seems to need a logic change, stop and report it instead of
 doing it. Re-parenting an element inside a new wrapper is allowed only when the

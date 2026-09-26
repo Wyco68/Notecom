@@ -23,8 +23,8 @@ const RESOURCES_DIR = path.join(DESKTOP_DIR, "resources", "frontend");
 const CLAUDE_PROJECT_DIR = path.join(DESKTOP_DIR, "resources", "claude-project");
 
 // Everything /lect and /quiz need to run stand-alone, with no source checkout
-// nearby: the command files themselves, the docs they load, the validators
-// they shell out to, and the project-level MCP config for markitdown. The app
+// nearby: the command files themselves, the docs they load, and the
+// project-level MCP config for markitdown. The app
 // copies this into a per-user data directory at runtime (desktop/src/lib.rs,
 // release::sync_project_template) so a CI-built installer works on whatever
 // machine it's installed on, not just the one that built it.
@@ -36,9 +36,10 @@ const CLAUDE_PROJECT_FILES = [
   "docs/teaching-guidelines.md",
   "docs/html-output-contract.md",
   "docs/lesson-template.md",
+  // docs/lesson-template.md is only a pointer — the worked skeleton it
+  // sends /lect to lives here.
+  "_templates/lesson-template.md",
   "docs/quiz-guidelines.md",
-  "scripts/validate-lesson.mjs",
-  "scripts/validate-quiz.mjs",
 ];
 
 // `next build` inlines NEXT_PUBLIC_* into the bundle, so missing credentials

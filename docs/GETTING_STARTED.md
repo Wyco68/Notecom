@@ -1,7 +1,7 @@
 # Getting started
 
-Everything lives in this repo: the app, the `/lect` `/quiz` commands, the
-teaching templates, and your notes (`vault/`). Setup is:
+Everything lives in this repo: the app, the `/lect` `/quiz` commands and the
+teaching templates. Your notes live in Supabase, per account. Setup is:
 clone, install, run one setup command, log in to Claude once.
 
 ## 1. Install the base tools
@@ -52,21 +52,11 @@ it for you.
 
 ## 4. Write your first note
 
-From the project folder:
-
-```bash
-claude
-```
-
-Attach a slide deck or PDF (drag it into the conversation), then type:
-
-```
-/lect Wireless Network
-```
-
-("Wireless Network" is the subject folder — reuse the same name to add more
-lessons to that subject.) Claude converts the file, writes a plain-language
-lesson, and saves it under `vault/`.
+Start the app (step 5 below), sign in, create a subject folder (e.g.
+"Wireless Network"), then click **Generate**, pick that folder and a slide
+deck or PDF. The app runs `/lect` in your local Claude Code — read-only —
+which converts the file and writes a plain-language lesson; the app checks
+it against the lesson contract and saves it to your Supabase account.
 
 ## 5. Read your notes
 
@@ -81,32 +71,32 @@ of a browser tab:
 npm run dev:desktop        # needs Rust — see docs/desktop.md
 ```
 
-Both read the same `vault/` folder `/lect` writes into — new notes show up
-as soon as they're generated (there's a refresh button next to the theme
-toggle). There is **one** vault: this checkout's. Every way of running the
-app uses it.
+Both read your notes from Supabase — new notes show up as soon as they're
+generated (there's a refresh button next to the theme toggle). Nothing is
+stored on this machine, so every way of running the app, on any device,
+shows the same notes.
 
 ## 6. Optional extras
 
-- **`/quiz <Subject>`** — turn questions into a saved quiz.
-- **Generate button in the app** — same as `/lect`/`/quiz`, but from an
-  upload dialog inside the reader. Uses your local Claude Code login.
+- **Quizzes** — pick "quiz" in the Generate dialog to turn a file of
+  questions into a quiz.
+- **Generate button in the app** — the way notes are made: it runs
+  `/lect`/`/quiz` in your local Claude Code (read-only), checks the result
+  and saves it to Supabase. Run in a terminal, `/lect` only prints the HTML
+  — the app is what saves.
 - **Installable desktop build** — `npm run install:desktop` produces a
   native installer for *this machine* so you can launch Notecom from the
-  Start Menu / Applications without a terminal. It still reads this
-  checkout's `vault/`. See [desktop.md](desktop.md).
+  Start Menu / Applications without a terminal. See [desktop.md](desktop.md).
 
 ## Troubleshooting
 
 - **`claude: command not found`** — reopen your terminal after the global
   npm install, or check `npm root -g` is on PATH.
-- **`/lect` says markitdown isn't connected** — `pip install markitdown-mcp`
-  (or re-run `npm run setup`), then start a fresh `claude` session.
-- **App shows no notes** — confirm `vault/<Subject>/` folders exist in this
-  checkout; if you have several checkouts, make sure you're running the app
-  from the one `/lect` wrote into. Notes are imported from this checkout's
-  `vault/` into your Supabase project on the first page load after they're
-  written, so also confirm you're signed in.
-- **Search returns nothing** — search runs on the imported copy, so open the
-  vault page once after generating (that is what triggers the import), then
-  search again.
+- **Generate says markitdown isn't connected** — `uv tool install
+  markitdown-mcp` (or `pip install markitdown-mcp`, or re-run `npm run
+  setup`), so `markitdown-mcp` is on PATH, then generate again.
+- **App shows no notes** — confirm you're signed in to the same account
+  that generated them; notes live in Supabase, per account.
+- **Search returns nothing** — a generated note is searchable as soon as it
+  is saved; for notes made on another device, press the refresh button once
+  (it re-indexes anything stale), then search again.

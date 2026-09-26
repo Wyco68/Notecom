@@ -20,12 +20,16 @@ import { useToast } from "../toast/ToastProvider";
 //
 // So the follow loop lives here instead, above the workspace: the modal is a
 // view onto a job, not its owner. Close it, open a lesson, start a second run —
-// the log keeps filling and the tree still refreshes when the file lands.
+// the log keeps filling and the tree still refreshes when the document lands.
 //
 // Nothing here is persisted. A job belongs to one server process and one page
 // session; on reload the provider re-attaches to whatever is still running by
 // asking `/api/generate`, which is the difference between "kept running" and
 // "kept running, and you can still see it".
+//
+// Saving is also triggered from here: a run ends "ready" with its document
+// held server-side, and this POSTs it into Supabase — the save must run as the
+// signed-in user, and only a request carries that session.
 
 export type JobStatus = "running" | "done" | "error" | "aborted";
 
@@ -100,7 +104,7 @@ export default function GenerateJobsProvider({ children }: { children: React.Rea
     async (id: string) => {
       if (following.current.has(id)) return;
       following.current.add(id);
-      let status: JobStatus = "error";
+      let status: JobStatus | "ready" = "error";
       let needsAuth = false;
       try {
         const events = await fetch(`/api/generate/${id}`);
@@ -144,9 +148,9 @@ export default function GenerateJobsProvider({ children }: { children: React.Rea
       // The stream can drop (window closed, network blip, `break` from a
       // truncated `done` with no `end` event) after the job actually finished
       // server-side. Defaulting to "error" here would both misreport a
-      // successful run and skip the sync trigger below, leaving a file sitting
-      // in vault/ that never reaches Supabase. Ask the server for the
-      // authoritative status before giving up on it.
+      // successful run and skip the save below, leaving a finished document
+      // that never reaches Supabase. Ask the server for the authoritative
+      // status before giving up on it.
       if (status === "error") {
         try {
           const r = await fetch("/api/generate");
@@ -158,6 +162,19 @@ export default function GenerateJobsProvider({ children }: { children: React.Rea
           }
         } catch {
           // Best effort — falls through to "error" below.
+        }
+      }
+
+      if (status === "ready") {
+        try {
+          const res = await fetch(`/api/generate/${id}`, { method: "POST" });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data.error || "save failed");
+          patch(id, (j) => ({ ...j, log: [...j.log, `Saved "${data.title}".`, "Finished."] }));
+          status = "done";
+        } catch (err: any) {
+          patch(id, (j) => ({ ...j, log: [...j.log, `Save failed: ${err.message}`] }));
+          status = "error";
         }
       }
 
@@ -179,8 +196,9 @@ export default function GenerateJobsProvider({ children }: { children: React.Rea
   );
 
   // A reload drops the SSE reader but not the run behind it. Ask what is still
-  // going and re-attach, so a refresh mid-generation doesn't orphan a job the
-  // user can no longer see.
+  // going — or finished but not yet saved — and re-attach, so a refresh
+  // mid-generation doesn't orphan a job the user can no longer see. A "ready"
+  // job's tail ends at once, and follow() saves it.
   //
   // This provider mounts above AppShell, so its own mount coincides with the
   // tree/tags/auth requests that draw the first screen. A job is running only
@@ -196,7 +214,9 @@ export default function GenerateJobsProvider({ children }: { children: React.Rea
         .then((r) => (r.ok ? r.json() : { jobs: [] }))
         .then((data) => {
           if (cancelled) return;
-          const running = (data.jobs ?? []).filter((j: any) => j.status === "running");
+          const running = (data.jobs ?? []).filter(
+            (j: any) => j.status === "running" || j.status === "ready"
+          );
           if (!running.length) return;
           setJobs(
             running.map((j: any) => ({
