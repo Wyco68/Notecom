@@ -16,6 +16,8 @@ import SearchResults from "../sidebar/SearchResults";
 import LessonViewer from "../viewer/LessonViewer";
 import NewFolderModal from "../modals/NewFolderModal";
 import GenerateModal from "../modals/GenerateModal";
+import CheatsheetModal from "../modals/CheatsheetModal";
+import SheetPanel from "../sheet/SheetPanel";
 import SignInModal from "../modals/SignInModal";
 import GenerateJobList from "../generate/GenerateJobList";
 import { useGenerateJobs } from "../generate/GenerateJobsProvider";
@@ -36,6 +38,7 @@ import RefreshIcon from "../icons/RefreshIcon";
 import SearchIcon from "../icons/SearchIcon";
 import SidebarIcon from "../icons/SidebarIcon";
 import UploadIcon from "../icons/UploadIcon";
+import SheetIcon from "../icons/SheetIcon";
 
 /** What the content column is showing instead of the open document. */
 type Overlay =
@@ -44,7 +47,8 @@ type Overlay =
   | { kind: "people" }
   | { kind: "user"; username: string }
   | { kind: "notifications" }
-  | { kind: "manage"; slug: string };
+  | { kind: "manage"; slug: string }
+  | { kind: "sheet"; jobId: string };
 
 export default function AppShell() {
   const [folders, setFolders] = useState<Folder[] | null>(null);
@@ -64,6 +68,8 @@ export default function AppShell() {
   const [showNewFolder, setShowNewFolder] = useState(false);
   // `true` opens the form; a job id opens that run's log instead.
   const [showGenerate, setShowGenerate] = useState<boolean | string>(false);
+  // Same shape: true opens the cheatsheet form, a job id opens its log.
+  const [showSheet, setShowSheet] = useState<boolean | string>(false);
   const [showSignIn, setShowSignIn] = useState(false);
   // What the content column is showing instead of the document. The account
   // editor and the sharing console both take it over rather than navigating
@@ -95,7 +101,7 @@ export default function AppShell() {
   const [favorites, setFavorites] = useState<FavoriteEntry[]>([]);
   // Generation jobs are owned above this component so they survive the dialog
   // closing; this only reads them.
-  const { completedTick } = useGenerateJobs();
+  const { completedTick, jobs: generateJobs } = useGenerateJobs();
   const toast = useToast();
 
   // Null until the open document's folder has been fetched, which is why
@@ -184,7 +190,21 @@ export default function AppShell() {
   // the manual refresh button, a folder create/delete — keeps forcing
   // `no-store`.
   const refreshFolderNames = useCallback(async (passive = false) => {
-    const res = await fetch("/api/tree", passive ? {} : { cache: "no-store" });
+    // An unreachable server (restarting, the network dropped) or an error
+    // reply keeps the tree that is on screen — an error body has no folders,
+    // and treating it as an empty list would wipe the sidebar. The focus
+    // refresh says nothing; the refresh button and first load say why.
+    let res: Response;
+    try {
+      res = await fetch("/api/tree", passive ? {} : { cache: "no-store" });
+    } catch {
+      if (!passive) toast.error("Couldn't reach the app server — the folder list wasn't refreshed.");
+      return;
+    }
+    if (!res.ok) {
+      if (!passive) toast.error("The folder list couldn't be loaded — try refresh in a moment.");
+      return;
+    }
     const data: VaultTree = await res.json();
     const list = data.folders ?? [];
     setFolders(list);
@@ -227,7 +247,7 @@ export default function AppShell() {
       if (!names.has(name)) stamps.current.delete(name);
     }
     await Promise.all(changed.map((f) => fetchDocs(f.name)));
-  }, [fetchDocs]);
+  }, [fetchDocs, toast]);
 
   // The expensive pass: folder names, every already-open folder's documents
   // re-fetched, and the tag map. Reserved for moments a stale doc list is
@@ -533,7 +553,16 @@ export default function AppShell() {
         {/* Generation runs in the background, so this row is what a closed
             dialog leaves behind: proof the run is alive, and the way back into
             its log. Renders nothing when nothing is running. */}
-        <GenerateJobList onOpen={(jobId) => setShowGenerate(jobId)} folderNames={folderNames} />
+        <GenerateJobList
+          onOpen={(jobId) => {
+            const job = generateJobs.find((j) => j.id === jobId);
+            if (job?.kind !== "sheet") setShowGenerate(jobId);
+            // A finished sheet opens as its pages; one still running, as its log.
+            else if (job.status === "done") openOverlay({ kind: "sheet", jobId });
+            else setShowSheet(jobId);
+          }}
+          folderNames={folderNames}
+        />
 
         {!query.trim() && (
           <FavoriteFiles
@@ -582,14 +611,24 @@ export default function AppShell() {
                       Sign in
                     </button>
                   ) : (
-                    <button
-                      onClick={() => setShowGenerate(true)}
-                      title="Generate a lesson or quiz from a file (runs local Claude Code)"
-                      aria-label="Generate a lesson or quiz from a file"
-                      className="ui-icon-btn h-6 w-6"
-                    >
-                      <UploadIcon className="h-3.5 w-3.5" />
-                    </button>
+                    <>
+                      <button
+                        onClick={() => setShowGenerate(true)}
+                        title="Generate a lesson or quiz from a file (runs local Claude Code)"
+                        aria-label="Generate a lesson or quiz from a file"
+                        className="ui-icon-btn h-6 w-6"
+                      >
+                        <UploadIcon className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        onClick={() => setShowSheet(true)}
+                        title="Make a printable cheatsheet from a folder's lessons (runs local Claude Code)"
+                        aria-label="Make a cheatsheet"
+                        className="ui-icon-btn h-6 w-6"
+                      >
+                        <SheetIcon className="h-3.5 w-3.5" />
+                      </button>
+                    </>
                   )}
                   {/* Only what acts on folders lives here. Discover and
                       People moved to the nav group: they are destinations, and
@@ -748,6 +787,17 @@ export default function AppShell() {
               refreshTree();
             }}
           />
+        ) : overlay?.kind === "sheet" ? (
+          <SheetPanel
+            key={overlay.jobId}
+            jobId={overlay.jobId}
+            folderName={(() => {
+              const slug = generateJobs.find((j) => j.id === overlay.jobId)?.folder ?? "";
+              return folderNames[slug] ?? slug.replace(/-/g, " ");
+            })()}
+            onClose={() => setOverlay(null)}
+            onShowLog={() => setShowSheet(overlay.jobId)}
+          />
         ) : selected ? (
           <LessonViewer lesson={selected} />
         ) : (
@@ -774,6 +824,22 @@ export default function AppShell() {
           onSignIn={() => {
             setShowGenerate(false);
             setShowSignIn(true);
+          }}
+        />
+      )}
+
+      {showSheet && (
+        <CheatsheetModal
+          folders={folders ?? []}
+          watchJobId={typeof showSheet === "string" ? showSheet : undefined}
+          onClose={() => setShowSheet(false)}
+          onSignIn={() => {
+            setShowSheet(false);
+            setShowSignIn(true);
+          }}
+          onOpenSheet={(jobId) => {
+            setShowSheet(false);
+            openOverlay({ kind: "sheet", jobId });
           }}
         />
       )}

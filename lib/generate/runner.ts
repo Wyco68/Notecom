@@ -15,19 +15,53 @@
 
 import { spawn, type ChildProcess } from "child_process";
 import { randomUUID } from "crypto";
-import { existsSync } from "fs";
-import { rm } from "fs/promises";
+import { existsSync, readFileSync } from "fs";
+import { rm, writeFile } from "fs/promises";
 import path from "path";
-import { checkLesson, checkQuiz, extractHtml } from "./validate";
+import { checkLesson, checkQuiz, checkSheet, extractHtml, extractSheet } from "./validate";
 import { saveGenerated, type SavedDoc } from "./save";
+import { LAYOUTS, visibleChars, type SheetSpec } from "../sheet/layout";
+import { plainText, sourceIssues, type ChapterSource } from "../sheet/sources";
+
+export type JobKind = "lect" | "quiz" | "sheet";
+
+interface SheetRun {
+  dir: string;
+  chapters: Array<{ seq: number; path: string }>;
+  extras: string[];
+  sources: ChapterSource[];
+  model: string;
+  effort: string;
+  cleanup?: ReturnType<typeof setTimeout>;
+}
+
+/** Shown with the sheet: how many review passes ran, what they found, and
+ *  anything still open when the rounds ran out. */
+export interface SheetReview {
+  passes: number;
+  found: number;
+  open: string[];
+}
 
 export interface Job {
   id: string;
   /** "ready": generated and contract-checked, waiting for the save request
-   *  (see saveJob) — the one step that needs the caller's session. */
+   *  (see saveJob) — the one step that needs the caller's session. A sheet is
+   *  never saved, so it goes straight to "done" holding its HTML. */
   status: "running" | "ready" | "done" | "error" | "aborted";
   folder: string;
-  kind: "lect" | "quiz";
+  kind: JobKind;
+  /** set on cheatsheet runs only */
+  sheet?: SheetSpec;
+  /** the CLI session of the last writing round — a sheet the reader wants
+   *  changed (reviseSheet) goes back to it rather than starting over */
+  sessionId?: string;
+  /** a sheet's inputs: the temp dir holding the chapter files and slides, the
+   *  chapters' text for the source check, the slide paths, and the model in
+   *  use (it can fall back mid-job). Server-side only — never listed. */
+  sheetRun?: SheetRun;
+  /** what the source checks and the review session found */
+  review?: SheetReview;
   log: string[];
   startedAt: number;
   tokens: { input: number; output: number };
@@ -41,7 +75,8 @@ export interface Job {
    *  only thing standing between "list every job on the box" and "list mine" —
    *  every read/write below is scoped by it. */
   startedBy: string;
-  /** the checked document, held in memory only until it is saved */
+  /** the checked document, held in memory until it is saved — or, for a
+   *  sheet, for as long as this server process runs */
   html?: string;
   saving?: Promise<SavedDoc>;
   saved?: SavedDoc;
@@ -92,11 +127,15 @@ export function getJob(id: string, userId: string): Job | undefined {
  */
 export function listJobs(
   userId: string
-): Array<Omit<Job, "log" | "child" | "html" | "saving">> {
+): Array<Pick<Job, "id" | "status" | "folder" | "kind" | "sheet" | "startedAt" | "tokens" | "needsAuth" | "saved">> {
+  // Picked, not spread: a job carries server-side state (temp paths, source
+  // text, the CLI session) that has no business leaving this process.
   return [...jobs.values()]
     .filter((j) => j.startedBy === userId)
     .sort((a, b) => b.startedAt - a.startedAt)
-    .map(({ log: _log, child: _child, html: _html, saving: _saving, ...rest }) => rest);
+    .map(({ id, status, folder, kind, sheet, startedAt, tokens, needsAuth, saved }) => ({
+      id, status, folder, kind, sheet, startedAt, tokens, needsAuth, saved,
+    }));
 }
 
 export function startJob(
@@ -123,20 +162,8 @@ export function startJob(
   // CLI must run from the checkout. In dev that's process.cwd(); in the
   // packaged app the standalone server's cwd is the installed resources
   // dir, and the Tauri shell passes the checkout as REPO_ROOT instead.
-  // Without the command file, claude "succeeds" with a confused one-turn
-  // reply and no generated document — fail fast and say why.
   const repoRoot = process.env.REPO_ROOT || process.cwd();
-  const commandFile = path.join(repoRoot, ".claude", "commands", `${kind}.md`);
-  if (!existsSync(commandFile)) {
-    job.log.push(
-      `Generate needs the project checkout: /${kind} is defined by .claude/commands/${kind}.md, ` +
-        `which doesn't exist at ${repoRoot}.`,
-      "Check the app was set up per docs/GETTING_STARTED.md (clone + npm run setup)."
-    );
-    job.status = "error";
-    rm(filePath, { force: true }).catch(() => {});
-    return job;
-  }
+  if (!commandReady(job, repoRoot, [filePath])) return job;
 
   const safeOriginal = oneLine(originalName);
   const noun = kind === "quiz" ? "quiz" : "lesson";
@@ -165,10 +192,154 @@ export function startJob(
     job.log.push(`Queued — waiting for another generation in "${folder}" to finish first.`);
   }
   const priorInFolder = folderChains.get(folder) ?? Promise.resolve();
-  const thisRun = priorInFolder.then(() => generate(job, repoRoot, filePath, prompt, safeOriginal));
+  const thisRun = priorInFolder.then(() => generate(job, repoRoot, [filePath], prompt, safeOriginal));
   folderChains.set(folder, thisRun.catch(() => {}));
 
   return job;
+}
+
+/**
+ * A cheatsheet run. `dir` holds its inputs — one HTML file per chapter, read
+ * from Supabase by the route as the caller, plus any uploaded slides. It
+ * outlives the run (the review reads it, and so does a later revision) and is
+ * removed a few hours after the sheet is done, or at once if the run fails.
+ * No folder chain: a sheet takes no sequence number.
+ */
+export function startSheetJob(
+  folder: string,
+  spec: SheetSpec,
+  dir: string,
+  chapters: Array<{ seq: number; path: string }>,
+  extras: string[],
+  startedBy: string
+): Job {
+  const job: Job = {
+    id: randomUUID(),
+    status: "running",
+    folder,
+    kind: "sheet",
+    sheet: spec,
+    log: [],
+    startedAt: Date.now(),
+    tokens: { input: 0, output: 0 },
+    startedBy,
+    sheetRun: {
+      dir,
+      chapters,
+      extras,
+      sources: chapters.map((c) => ({ seq: c.seq, text: plainText(readFileSync(c.path, "utf8")) })),
+      // The sheet is the one document the reader takes into the room on its
+      // own, so it gets the strongest model at full effort. Both overridable;
+      // the model falls back if the subscription doesn't include it.
+      model: process.env.SHEET_MODEL || SHEET_MODELS[0],
+      effort: process.env.SHEET_EFFORT || "max",
+    },
+  };
+  jobs.set(job.id, job);
+
+  const repoRoot = process.env.REPO_ROOT || process.cwd();
+  if (!commandReady(job, repoRoot, [dir])) return job;
+
+  const L = LAYOUTS[spec.layout];
+  const prompt =
+    `/sheet ` +
+    `Make one cheatsheet for chapters ${spec.from} to ${spec.to}. Do not create, write or edit any file; you only have read access, and the app lays out and prints the sheet itself. ` +
+    `Chapter files, in order: ${chapters.map((c) => oneLine(c.path)).join(", ")}. ` +
+    (extras.length
+      ? `Extra source files (slides) to check the notes against: ${extras.map(oneLine).join(", ")}; convert them with the markitdown tool. `
+      : `There are no extra source files. `) +
+    `Page limit: ${spec.pages} page(s), ${L.label}, body font ${L.font}pt. ` +
+    `Character budget: about ${(L.budget * spec.pages).toLocaleString("en-US")} visible characters, whitespace excluded; aim for 90 to 100 percent of it. ` +
+    `Ground every fact strictly in these files; if a file cannot be read, stop and say so instead of guessing. ` +
+    `When the sheet is ready, reply with only its HTML fragment, starting at the first <h2>: no code fence, no summary, and no text before or after it.`;
+
+  generateSheet(job, repoRoot, prompt, `chapters ${spec.from}-${spec.to}, ${spec.pages} page(s)`);
+  return job;
+}
+
+/**
+ * Sends a finished sheet back to the session that wrote it, with what the
+ * browser measured: the page count at the smallest font when it is over the
+ * limit, and any layout problems the audit found (a block outside its column,
+ * an overlap, a clipped block). The result goes through every check again,
+ * the review included — a cut can drop or garble a fact.
+ */
+export function reviseSheet(
+  id: string,
+  userId: string,
+  measured: { pages?: number; layout?: string[] }
+): "ok" | "nothing" | "expired" {
+  const job = getJob(id, userId);
+  if (!job || job.kind !== "sheet" || job.status !== "done" || !job.sheet || !job.sessionId || !job.sheetRun) {
+    return "nothing";
+  }
+  if (!existsSync(job.sheetRun.dir)) return "expired";
+  const limit = job.sheet.pages;
+  const over = measured.pages && measured.pages > limit ? measured.pages : 0;
+  const layout = (measured.layout ?? []).slice(0, 15);
+  if (!over && !layout.length) return "nothing";
+
+  const parts: string[] = [];
+  if (over) {
+    const cut = Math.min(60, Math.ceil((1 - limit / over) * 100) + 5);
+    parts.push(
+      `The app laid the sheet out at the smallest allowed font and it printed on ${over} pages; the limit is ${limit}. ` +
+        `Cut about ${cut} percent of the visible text, following the compression order in the cheatsheet guidelines, and keep every fact.`
+    );
+    job.log.push(`Printed on ${over} page(s) at the smallest font; the limit is ${limit}. Asking Claude to cut about ${cut}%.`);
+  }
+  if (layout.length) {
+    parts.push(
+      `The app's layout audit found these problems in the printed pages: ${oneLine(layout.map((l) => l.slice(0, 160)).join("; "))}. ` +
+        `Fix each one: split or narrow a table that is too wide, shorten a code line or diagram label that runs out of its box, move diagram labels that overlap.`
+    );
+    job.log.push(`Layout audit found ${layout.length} problem(s). Asking Claude to fix them.`);
+  }
+  if (job.sheetRun.cleanup) clearTimeout(job.sheetRun.cleanup);
+  job.status = "running";
+  const repoRoot = process.env.REPO_ROOT || process.cwd();
+  generateSheet(job, repoRoot, `${parts.join(" ")} Reply with only the complete fragment, starting at the first <h2>.`, "revise", job.sessionId);
+  return "ok";
+}
+
+// Without the command file, claude "succeeds" with a confused one-turn reply
+// and no document — fail fast and say why.
+function commandReady(job: Job, repoRoot: string, inputs: string[]): boolean {
+  const commandFile = path.join(repoRoot, ".claude", "commands", `${job.kind}.md`);
+  if (existsSync(commandFile)) return true;
+  job.log.push(
+    `Generate needs the project checkout: /${job.kind} is defined by .claude/commands/${job.kind}.md, ` +
+      `which doesn't exist at ${repoRoot}.`,
+    "Check the app was set up per docs/GETTING_STARTED.md (clone + npm run setup)."
+  );
+  job.status = "error";
+  for (const p of inputs) rm(p, { recursive: true, force: true }).catch(() => {});
+  return false;
+}
+
+// What each kind of run must hand back, and what happens once it does.
+interface Contract {
+  noun: string;
+  /** what the reply must start at, for the fix prompt */
+  startsAt: string;
+  extract: (reply: string) => string | null;
+  check: (html: string) => string[];
+  accept: (html: string) => void;
+}
+
+function contractFor(job: Job): Contract {
+  const noun = job.kind === "quiz" ? "quiz" : "lesson";
+  return {
+    noun,
+    startsAt: "the <h1>",
+    extract: extractHtml,
+    check: job.kind === "quiz" ? checkQuiz : checkLesson,
+    accept: (html) => {
+      job.html = html;
+      job.status = "ready";
+      job.log.push(`The ${noun} passed the contract check — saving it.`);
+    },
+  };
 }
 
 // The prompt must satisfy three hard constraints at once:
@@ -185,19 +356,20 @@ const oneLine = (s: string) => s.replace(/["%\r\n]/g, "");
 async function generate(
   job: Job,
   repoRoot: string,
-  filePath: string,
+  inputs: string[],
   prompt: string,
-  safeOriginal: string
+  label: string,
+  resumeFrom?: string
 ): Promise<void> {
-  const noun = job.kind === "quiz" ? "quiz" : "lesson";
+  const { noun, startsAt, extract, check, accept } = contractFor(job);
   const model = process.env.GENERATE_MODEL || "sonnet";
-  let sessionId: string | undefined;
+  let sessionId = resumeFrom;
   try {
     for (let fixes = 0; ; fixes++) {
       // Aborted (or otherwise no longer running) while it sat queued behind
       // an earlier same-folder job, or between rounds — never spawn it.
       if (job.status !== "running") return;
-      if (!sessionId) job.log.push(`Job: /${job.kind} → ${job.folder} (${safeOriginal}) · model ${model}`);
+      if (!sessionId) job.log.push(`Job: /${job.kind} → ${job.folder} (${label}) · model ${model}`);
 
       const run = await runClaude(job, repoRoot, model, prompt, sessionId);
       if (job.status !== "running") return;
@@ -206,17 +378,16 @@ async function generate(
         return;
       }
 
-      const html = extractHtml(run.reply);
+      if (run.sessionId) job.sessionId = run.sessionId;
+      const html = extract(run.reply);
       if (!html) {
         job.log.push(`No ${noun} came back — the reply above says why. Nothing was saved.`);
         job.status = "error";
         return;
       }
-      const violations = job.kind === "quiz" ? checkQuiz(html) : checkLesson(html);
+      const violations = check(html);
       if (!violations.length) {
-        job.html = html;
-        job.status = "ready";
-        job.log.push(`The ${noun} passed the contract check — saving it.`);
+        accept(html);
         return;
       }
 
@@ -231,11 +402,206 @@ async function generate(
       prompt =
         `The app rejected that ${noun} against its output contract: ` +
         oneLine(violations.slice(0, 10).map((v) => v.slice(0, 200)).join("; ")) +
-        `. Fix exactly these problems without changing anything else, and reply with only the complete corrected HTML, starting at the <h1>.`;
+        `. Fix exactly these problems without changing anything else, and reply with only the complete corrected HTML, starting at ${startsAt}.`;
     }
   } finally {
     // The upload is input for this run only — it never outlives it.
-    rm(filePath, { force: true }).catch(() => {});
+    for (const p of inputs) rm(p, { recursive: true, force: true }).catch(() => {});
+  }
+}
+
+// --- cheatsheets ---------------------------------------------------------------
+
+// Strongest first. A subscription without the first answers with a model
+// error, and the run steps down rather than failing.
+const SHEET_MODELS = ["fable", "opus"];
+// Writing rounds (the first plus fixes) and review passes, each bounded: every
+// round re-sends the whole sheet at full effort.
+const SHEET_MAX_ROUNDS = 5;
+const SHEET_MAX_REVIEWS = 3;
+// A finished sheet keeps its sources this long, for a revision.
+const SHEET_SOURCES_TTL_MS = 6 * 60 * 60_000;
+
+/**
+ * Write → check → review → fix, until a sheet passes everything or the rounds
+ * run out. Every reply goes through, in order:
+ *
+ * 1. the contract (checkSheet: tags, attributes, classes, banned wording) and
+ *    a coarse length cap;
+ * 2. the source check (sources.ts): every chapter present, every number found
+ *    in the notes;
+ * 3. a review: a separate, fresh session reads the sheet and the same sources
+ *    and lists what is wrong, unsupported or missing. Fresh, because the writer
+ *    grading its own work finds what it meant to write, not what it wrote.
+ *
+ * A failure at any step goes back to the writer's session with the list. The
+ * last review's findings, if the rounds run out, are shown with the sheet
+ * rather than hidden.
+ */
+async function generateSheet(
+  job: Job,
+  repoRoot: string,
+  firstPrompt: string,
+  label: string,
+  resumeFrom?: string
+): Promise<void> {
+  const spec = job.sheet!;
+  const run0 = job.sheetRun!;
+  const room = LAYOUTS[spec.layout].budget * spec.pages;
+  let prompt = firstPrompt;
+  let sessionId = resumeFrom;
+  let reviews = 0;
+  job.review = { passes: 0, found: 0, open: [] };
+  try {
+    for (let round = 0; ; round++) {
+      if (job.status !== "running") return;
+      if (!sessionId) {
+        job.log.push(`Job: /sheet → ${job.folder} (${label}) · model ${run0.model} · effort ${run0.effort}`);
+      }
+      const run = await runSheetClaude(job, repoRoot, prompt, sessionId);
+      if (job.status !== "running") return;
+      if (!run.ok) {
+        explainFailure(job);
+        return;
+      }
+      if (run.sessionId) job.sessionId = sessionId = run.sessionId;
+
+      const html = extractSheet(run.reply);
+      if (!html) {
+        job.log.push("No cheatsheet came back — the reply above says why.");
+        job.status = "error";
+        return;
+      }
+
+      const sources = sourceIssues(html, run0.sources, run0.extras.length > 0);
+      const violations = [...checkSheet(html, spec), ...sources.hard];
+      const chars = visibleChars(html);
+      if (chars > room * 1.25) {
+        violations.push(
+          `too long: about ${chars} visible characters for ${spec.pages} page(s), room for about ${room}; ` +
+            `cut about ${Math.ceil((1 - room / chars) * 100)} percent`
+        );
+      }
+
+      let fix: string | null = null;
+      if (violations.length) {
+        job.log.push(`Checks failed: ${violations.join("; ")}`);
+        fix =
+          `The app rejected that cheatsheet: ` +
+          oneLine(violations.slice(0, 12).map((v) => v.slice(0, 240)).join("; ")) +
+          `. Fix exactly these problems, change nothing else, and reply with only the complete corrected fragment, starting at the first <h2>.`;
+      } else if (reviews < SHEET_MAX_REVIEWS) {
+        reviews++;
+        job.log.push(`Checks passed. Review ${reviews}: a fresh session is comparing the sheet with the sources.`);
+        const issues = await reviewSheet(job, repoRoot, html, sources.unverified);
+        if (job.status !== "running") return;
+        job.review.passes = reviews;
+        if (issues === null) {
+          job.review.open = ["The source review did not finish, so the sheet has not been checked against the notes."];
+          job.log.push("The review did not finish; showing the sheet unreviewed.");
+        } else if (issues.length) {
+          job.review.found += issues.length;
+          job.log.push(`Review ${reviews} found ${issues.length} problem(s): ${issues.join("; ")}`);
+          if (reviews < SHEET_MAX_REVIEWS && round + 1 < SHEET_MAX_ROUNDS) {
+            fix =
+              `A reviewer compared the sheet with the source files and found these problems: ` +
+              oneLine(issues.slice(0, 20).map((v) => v.slice(0, 300)).join("; ")) +
+              `. Fix every one against the sources: correct what is wrong, remove what the sources do not say, add what is missing. ` +
+              `Keep everything else as it is, stay within the character budget, and reply with only the complete fragment, starting at the first <h2>.`;
+          } else {
+            job.review.open = issues;
+          }
+        } else {
+          job.log.push(`Review ${reviews} found nothing to fix.`);
+        }
+      }
+
+      if (!fix) {
+        job.html = html;
+        job.status = "done";
+        job.log.push(
+          job.review.open.length
+            ? `The cheatsheet is ready with ${job.review.open.length} open point(s) from the review. Open it to see them.`
+            : "The cheatsheet passed every check and the review. Open it to see the pages and print.",
+          "Finished."
+        );
+        return;
+      }
+      if (round + 1 >= SHEET_MAX_ROUNDS) {
+        job.log.push(`Still failing after ${round + 1} round(s) — giving up.`);
+        job.status = "error";
+        return;
+      }
+      job.log.push(`Asking Claude to fix it (round ${round + 2} of ${SHEET_MAX_ROUNDS}).`);
+      prompt = fix;
+    }
+  } finally {
+    // Kept for a revision while the sheet is on screen; dropped otherwise.
+    const dir = run0.dir;
+    if (job.status === "done") {
+      run0.cleanup = setTimeout(() => rm(dir, { recursive: true, force: true }).catch(() => {}), SHEET_SOURCES_TTL_MS);
+      run0.cleanup.unref?.();
+    } else if (job.status !== "running") {
+      rm(dir, { recursive: true, force: true }).catch(() => {});
+    }
+  }
+}
+
+/** One CLI round for a sheet, stepping down to the next model on a model error. */
+async function runSheetClaude(job: Job, repoRoot: string, prompt: string, resume?: string): Promise<RunResult> {
+  const r = job.sheetRun!;
+  for (;;) {
+    const before = job.log.length;
+    const run = await runClaude(job, repoRoot, r.model, prompt, resume, r.effort);
+    if (run.ok || job.status !== "running") return run;
+    const said = job.log.slice(before).join("\n");
+    const next = SHEET_MODELS[SHEET_MODELS.indexOf(r.model) + 1];
+    if (!next || !/model/i.test(said) || !/not (found|available|supported|allowed)|invalid|unknown|access|does not exist|not have/i.test(said)) {
+      return run;
+    }
+    job.log.push(`Model "${r.model}" is not available on this subscription — using "${next}".`);
+    r.model = next;
+  }
+}
+
+/**
+ * The independent review: a fresh session (never the writer's) reads the
+ * sheet and its sources and returns a list of problems as JSON. null when the
+ * review itself failed or answered in a shape that can't be read.
+ */
+async function reviewSheet(
+  job: Job,
+  repoRoot: string,
+  html: string,
+  unverified: string[]
+): Promise<string[] | null> {
+  const r = job.sheetRun!;
+  const spec = job.sheet!;
+  const file = `${r.dir}/sheet-under-review.html`;
+  await writeFile(file, html.replace(/(<(?:h2|h3|p|li|tr|table|ul|ol|pre|svg)[\s>])/g, "\n$1"));
+  const prompt =
+    `/sheet Review mode. Do not create, write or edit any file. ` +
+    `The cheatsheet to review is at ${oneLine(file)}. Its only sources are the chapter files ${r.chapters.map((c) => oneLine(c.path)).join(", ")}` +
+    (r.extras.length ? ` and the slides ${r.extras.map(oneLine).join(", ")} (convert them with the markitdown tool)` : "") +
+    `. It covers chapters ${spec.from} to ${spec.to} within a ${spec.pages}-page limit. ` +
+    (unverified.length
+      ? `These numbers on the sheet are not in the chapter notes, so confirm each against the slides: ${unverified.slice(0, 30).join(", ")}. `
+      : "") +
+    `Follow the review section of the /sheet command. Reply with only a JSON object and nothing else, of the form {"issues":[{"kind":"wrong|unsupported|missing|unclear","where":"a short exact quote from the sheet, or the chapter heading","fix":"what the sources say, with the chapter"}]}. An empty list means the sheet is correct and complete.`;
+
+  const run = await runClaude(job, repoRoot, r.model, prompt, undefined, r.effort);
+  if (!run.ok) return null;
+  const a = run.reply.indexOf("{");
+  const b = run.reply.lastIndexOf("}");
+  if (a === -1 || b <= a) return null;
+  try {
+    const parsed = JSON.parse(run.reply.slice(a, b + 1));
+    if (!Array.isArray(parsed?.issues)) return null;
+    return parsed.issues
+      .filter((i: any) => i && typeof i === "object")
+      .map((i: any) => `${String(i.kind ?? "issue")}: "${String(i.where ?? "").slice(0, 160)}" → ${String(i.fix ?? "").slice(0, 300)}`);
+  } catch {
+    return null;
   }
 }
 
@@ -251,7 +617,8 @@ function runClaude(
   repoRoot: string,
   model: string,
   prompt: string,
-  resume: string | undefined
+  resume: string | undefined,
+  effort?: string
 ): Promise<RunResult> {
   return new Promise((resolveRun) => {
     const bin = process.env.CLAUDE_BIN || "claude";
@@ -266,6 +633,7 @@ function runClaude(
       "--permission-mode", "dontAsk",
     ];
     if (resume) args.push("--resume", resume);
+    if (effort) args.push("--effort", effort);
     const child = spawn(bin, args, { cwd: repoRoot, shell: useShell, stdio: ["ignore", "pipe", "pipe"] });
 
     let buf = "";
@@ -296,7 +664,7 @@ function runClaude(
           for (const block of ev.message.content) {
             if (block.type === "text" && block.text?.trim()) {
               // The document itself is the reply, not a log line.
-              job.log.push(/<h1[\s>]/.test(block.text) ? "Received the generated HTML." : block.text.trim());
+              job.log.push(/<h[12][\s>]/.test(block.text) ? "Received the generated HTML." : block.text.trim());
             } else if (block.type === "tool_use") {
               job.log.push(`→ ${block.name}`);
             }
@@ -400,7 +768,10 @@ function explainFailure(job: Job) {
 export function saveJob(job: Job): Promise<SavedDoc> {
   if (job.saved) return Promise.resolve(job.saved);
   if (job.saving) return job.saving;
-  if (job.status !== "ready" || !job.html) return Promise.reject(new Error("nothing to save"));
+  // A sheet never reaches "ready", but the kind check keeps the narrowing honest.
+  if (job.status !== "ready" || !job.html || job.kind === "sheet") {
+    return Promise.reject(new Error("nothing to save"));
+  }
 
   const noun = job.kind === "quiz" ? "quiz" : "lesson";
   job.saving = saveGenerated(job.folder, job.kind, job.html)

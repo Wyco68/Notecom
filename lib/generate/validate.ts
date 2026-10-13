@@ -133,3 +133,195 @@ export function titleOf(html: string): string {
     .replace(/\s+/g, " ")
     .trim();
 }
+
+// --- cheatsheets -------------------------------------------------------------
+// Rules: docs/cheatsheet-guidelines.md. A sheet is a flat fragment the app
+// wraps in its own page, so beyond the wording rules the check is about what
+// may not reach that page: no script, no style, no link, no handler.
+
+const SHEET_TAGS = new Set([
+  "h2", "h3", "p", "ul", "ol", "li",
+  "table", "thead", "tbody", "tr", "th", "td",
+  "pre", "code", "b", "strong", "i", "em", "sup", "sub", "span", "br",
+  "svg", "g", "rect", "line", "path", "polyline", "polygon", "circle", "ellipse", "text", "tspan",
+]);
+const SHEET_ATTRS = new Set([
+  "class", "colspan", "rowspan", "start",
+  "viewbox", "x", "y", "x1", "y1", "x2", "y2", "dx", "dy", "width", "height",
+  "cx", "cy", "r", "rx", "ry", "d", "points", "transform", "text-anchor", "xmlns",
+]);
+const SHEET_CLASSES = new Set([
+  "ex", "warn", "key", "f", "c", "d", "box-b", "box-g", "box-y", "box-r", "box-w",
+]);
+// Study talk and assistant voice. Case-insensitive, whole words where it matters.
+const SHEET_BANNED: Array<[RegExp, string]> = [
+  [/[–—]/, "em or en dash"],
+  [/\bexams?\b/i, '"exam"'],
+  [/\bquiz(zes)?\b/i, '"quiz"'],
+  [/\bassignments?\b/i, '"assignment"'],
+  [/\btraps?\b/i, '"trap"'],
+  [/\btip:/i, '"tip:"'],
+  [/\bQ&(amp;)?A\b/i, '"Q&A"'],
+  [/\bnote that\b/i, '"note that"'],
+  [/\b(key idea|summary|takeaway|ask|mistake|pro tip):/i, "a label such as Key idea:, Summary:, Ask:, Mistake:"],
+  [/\b(this section|in summary|worth noting|let's)\b/i, "assistant phrasing"],
+  [/\b(crucial|key role|vital role|delve|leverage|robust|seamless(ly)?)\b/i, "assistant phrasing"],
+  [/\bredrawn\b/i, '"redrawn"'],
+];
+
+/** The fragment out of the CLI's reply: from the first <h2> to the last closing tag. */
+export function extractSheet(reply: string): string | null {
+  const start = reply.search(/<h2[\s>]/);
+  if (start === -1) return null;
+  const tail = reply.slice(start);
+  const end = tail.lastIndexOf("</");
+  if (end === -1) return null;
+  const close = tail.indexOf(">", end);
+  return close === -1 ? null : tail.slice(0, close + 1).trim();
+}
+
+export interface ScannedTag {
+  name: string;
+  attrs: Array<{ name: string; value: string }>;
+}
+
+/**
+ * Every tag in `html` with its attributes, split the way a browser's tokenizer
+ * splits them — a "/" separates attributes as whitespace does, so
+ * `<iframe/src=...>` is an iframe with a src, not text. A regex keyed on
+ * whitespace misses exactly those. Comments, doctypes and processing
+ * instructions are refused outright (null): a sheet needs none, and they are
+ * where tokenizer edge cases live.
+ */
+export function scanTags(html: string): ScannedTag[] | null {
+  if (html.includes("\0")) return null;
+  const tags: ScannedTag[] = [];
+  let i = 0;
+  while ((i = html.indexOf("<", i)) !== -1) {
+    const next = html[i + 1] ?? "";
+    if (next === "!" || next === "?") return null;
+    const closing = next === "/";
+    const nameStart = closing ? i + 2 : i + 1;
+    if (!/[a-zA-Z]/.test(html[nameStart] ?? "")) {
+      // A bare "<" in text: the tokenizer reads it as text too.
+      i++;
+      continue;
+    }
+    let j = nameStart;
+    while (j < html.length && !/[\s/>]/.test(html[j])) j++;
+    const tag: ScannedTag = { name: html.slice(nameStart, j).toLowerCase(), attrs: [] };
+    // Attributes, up to the closing ">".
+    for (;;) {
+      while (j < html.length && /[\s/]/.test(html[j])) j++;
+      if (j >= html.length) return null;
+      if (html[j] === ">") break;
+      let k = j;
+      while (k < html.length && !/[\s/>=]/.test(html[k])) k++;
+      // The tokenizer takes a leading "=" into the name; so do we.
+      if (k === j) k++;
+      const name = html.slice(j, k).toLowerCase();
+      let value = "";
+      j = k;
+      while (j < html.length && /\s/.test(html[j])) j++;
+      if (html[j] === "=") {
+        j++;
+        while (j < html.length && /\s/.test(html[j])) j++;
+        const q = html[j];
+        if (q === '"' || q === "'") {
+          const close = html.indexOf(q, j + 1);
+          if (close === -1) return null;
+          value = html.slice(j + 1, close);
+          j = close + 1;
+        } else {
+          k = j;
+          while (k < html.length && !/[\s>]/.test(html[k])) k++;
+          value = html.slice(j, k);
+          j = k;
+        }
+      }
+      if (!closing) tag.attrs.push({ name, value });
+    }
+    if (!closing) tags.push(tag);
+    i = j + 1;
+  }
+  return tags;
+}
+
+/** Tags, attributes and classes outside an allowlist, as violations. */
+function markupIssues(
+  html: string,
+  allow: { tags: Set<string>; attrs: Set<string>; classes: Set<string>; style?: RegExp },
+  contract: string
+): string[] {
+  const tags = scanTags(html);
+  if (!tags) return ["markup the tokenizer refuses: a comment, doctype or unterminated tag"];
+  const badTags = new Set<string>();
+  const badAttrs = new Set<string>();
+  const badClasses = new Set<string>();
+  for (const t of tags) {
+    if (!allow.tags.has(t.name)) badTags.add(t.name);
+    for (const a of t.attrs) {
+      if (a.name === "style" && allow.style?.test(a.value.trim())) continue;
+      if (!allow.attrs.has(a.name)) badAttrs.add(a.name);
+      if (a.name === "class") {
+        for (const c of a.value.split(/\s+/).filter(Boolean)) {
+          if (!allow.classes.has(c)) badClasses.add(c);
+        }
+      }
+    }
+  }
+  const errors = [...badTags].map((t) => `disallowed tag <${t}> — not in the ${contract} allowlist`);
+  if (badAttrs.size) errors.push(`disallowed attribute(s): ${[...badAttrs].join(", ")}`);
+  if (badClasses.size) errors.push(`unknown class(es): ${[...badClasses].join(", ")}`);
+  return errors;
+}
+
+/**
+ * The laid-out pages the browser sends to be printed (see
+ * app/api/sheet/[id]/pdf): the sheet's own markup plus the page boxes the
+ * paginator wrapped it in, and nothing else — the PDF renderer runs with file
+ * access, so this is its input filter, not a style check.
+ */
+export function checkSheetPages(html: string): string[] {
+  return markupIssues(
+    html,
+    {
+      tags: new Set([...SHEET_TAGS, "div"]),
+      attrs: SHEET_ATTRS,
+      classes: new Set([...SHEET_CLASSES, "page", "cols", "pno"]),
+      // The paginator's one inline style: a heading pushed to the next column.
+      style: /^break-before:\s*column;?$/,
+    },
+    "printed sheet"
+  );
+}
+
+export function checkSheet(html: string, chapters: { from: number; to: number }): string[] {
+  const errors = markupIssues(
+    html,
+    { tags: SHEET_TAGS, attrs: SHEET_ATTRS, classes: SHEET_CLASSES },
+    "cheatsheet-guidelines"
+  );
+
+  const heads = [...html.matchAll(/<h2[^>]*>([\s\S]*?)<\/h2>/g)].map((m) =>
+    m[1].replace(/<[^>]+>/g, "").trim()
+  );
+  if (!heads.length) errors.push("no <h2> — every chapter opens with a numbered <h2>");
+  for (const h of heads) {
+    const n = Number(/^(\d+)\./.exec(h)?.[1]);
+    if (!n) errors.push(`<h2> "${h.slice(0, 60)}" does not start with its chapter number, like "3. Title"`);
+    else if (n < chapters.from || n > chapters.to) {
+      errors.push(`<h2> "${h.slice(0, 60)}" is outside chapters ${chapters.from}-${chapters.to}`);
+    }
+  }
+
+  const text = html.replace(/<[^>]+>/g, " ");
+  for (const [re, what] of SHEET_BANNED) {
+    const m = re.exec(text);
+    if (m) {
+      const at = text.slice(Math.max(0, m.index - 30), m.index + m[0].length + 30).replace(/\s+/g, " ").trim();
+      errors.push(`banned wording (${what}): "...${at}..."`);
+    }
+  }
+  return errors;
+}

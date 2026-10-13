@@ -50,6 +50,16 @@ which the app checks against the contract and files in Supabase.
 | `/api/generate/[id]` | GET | — | SSE tail: `line`, `tokens`, then `end` with `{ status, tokens, needsAuth }`. `status` is `ready` when the document passed the contract check and waits for the save below. Replays the log from the beginning, so attaching late loses nothing |
 | `/api/generate/[id]` | POST | — | `{ ok, id, title }` — names the `ready` document and saves it to Supabase as the caller (RLS). Idempotent; 409 when there is nothing to save. The client calls it as soon as the tail ends `ready`, and on reload for any job still `ready` |
 | `/api/generate/[id]` | DELETE | — | `{ ok }` — force-stop (the log view's Ctrl+C) |
+| `/api/sheet` | POST | multipart `folder`, `from`, `to`, `pages` (1–12), optional `files` | `{ jobId, sheet }` — reads lessons `from`..`to` as the caller, hands them to the CLI as files and runs `/sheet`. Followed and stopped through `/api/generate/[id]` like any job; ends `done`, never `ready` |
+| `/api/sheet/[id]` | GET | — | `{ html, folder, sheet, review: { passes, found, open } }` — the finished fragment and what the source review found. 404 once the server process that ran it is gone; 409 while it is still running |
+| `/api/sheet/[id]/pdf` | POST | `{ pages, font }` | `{ ok, path }` — prints the pages the browser laid out (checked by `checkSheetPages`: the sheet allowlist plus the page boxes) with a Chromium-family browser on the machine, via the DevTools protocol, and saves the PDF in the reader's Downloads folder. 501 `{ fallback: "print" }` when no such browser is installed; the client then opens the print dialog. General rate limit, not the generation one |
+| `/api/sheet/[id]` | POST | `{ pages?, layout?: string[] }` | `{ ok }` — what the browser measured: the page count at the smallest font when over the limit, and the layout audit's problems. Resumes the writer's session; every check and the review run again. 409 when there is nothing to revise, 410 when the sources have expired (six hours) |
+
+**Cheatsheets are generation jobs that are never saved.** `/api/sheet` starts
+one in the same job map, so the sidebar row, the log, abort and the
+concurrency cap all come for free. The sheet stays in that server process's
+memory and is printed from the browser; nothing reaches Supabase. Both
+`POST`s share the generate rate limit, since both spend tokens.
 
 **Generation is a background job.** The run belongs to the server process, not to
 the dialog: `GenerateJobsProvider` (mounted above `AppShell` in

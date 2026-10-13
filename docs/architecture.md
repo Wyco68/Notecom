@@ -54,6 +54,63 @@ is the document. Then, in the app:
 The upload is the one file on disk, in the OS temp dir, deleted when the run
 ends — the CLI needs a path to read it from.
 
+## Cheatsheets: printed, never saved (2026-10)
+
+`/sheet` is a third generation run, started from the sidebar's Cheatsheet
+dialog with a folder, a first and last chapter, and a page limit.
+
+1. `POST /api/sheet` reads those lessons as the caller (RLS decides, as for
+   any read) and writes them to a temp dir as files, one per chapter, with any
+   uploaded slides beside them. The CLI has no database access, so it can only
+   ever see what that request could read. The dir goes when the run ends.
+2. `lib/generate/runner.ts` (`generateSheet`) runs `/sheet` with the same
+   read-only tools, on the strongest model at full effort (`SHEET_MODEL`,
+   default `fable`, stepping down to `opus` on a model error; `SHEET_EFFORT`,
+   default `max`). Every reply then has to pass, in order: the contract
+   (`checkSheet` in `validate.ts`: tag, attribute and class allowlist, numbered
+   chapter headings, banned wording, a coarse length cap); the source check
+   (`lib/sheet/sources.ts`: every chapter present, every number found in the
+   notes); and an independent review, a fresh CLI session in `/sheet` review
+   mode that reads the sheet and the same sources and returns what is wrong,
+   unsupported, unclear or missing as JSON. Any failure goes back to the
+   writer's session; rounds and review passes are bounded, and findings still
+   open when they run out are shown with the sheet, not dropped. The job ends
+   `done` holding the fragment in memory. Nothing is saved: a sheet is a
+   print-out, and the lesson contract forbids the styling it needs. The
+   sources stay in the temp dir for six hours, for a revision.
+3. The browser lays it out. `lib/sheet/layout.ts` owns the paper (two
+   layouts, picked from the page limit) and the page document;
+   `lib/sheet/paginate.ts` deals the fragment's blocks into fixed-size pages,
+   shrinking the font to the layout's floor until it fits. Pages are counted
+   exactly because each is its own box, and print gets one box per sheet of
+   paper instead of a column flow each engine fragments differently.
+4. `auditLayout` then checks the laid-out pages: every box inside its own
+   column, no block over another, nothing cut off, diagram labels inside
+   their diagram and not on each other, no heading stranded at a column foot
+   (the paginator already pushes those over). The panel lists every check —
+   the server's and the browser's — and only offers Print as the main action
+   when all pass. Over the limit at the smallest font, or with layout
+   problems, the reader can send it back (`POST /api/sheet/[id]`), which
+   resumes the writer's session with the measurements and runs every check
+   and the review again. A button, not automatic, because it spends tokens.
+
+The preview iframe is sandboxed with no scripts; the panel reaches in from the
+parent to paginate and print. Model-written HTML never runs in the app's
+origin.
+
+**Save PDF is the one file the app writes** outside a run's temp dir, and it
+is narrow on purpose (`lib/sheet/pdf.ts`): a user-asked export of a sheet only
+its owner can reach, named by the server, written without overwriting into the
+Downloads folder of the machine the server runs on — which for a cheatsheet is
+always the reader's own, since sheets only exist where the CLI does. It prints
+with a Chromium-family browser already installed (Chrome, Chromium, Edge,
+Brave; `SHEET_PDF_BROWSER` overrides) through the DevTools protocol, because
+the `--print-to-pdf` switch hangs on some builds. The renderer has file access,
+so its input is filtered twice: the pages must pass `checkSheetPages` (a
+browser-faithful tokenizer, not a regex, against the sheet allowlist), and the
+document they are printed in carries a policy that forbids every load. No
+browser installed: the print dialog, with "Save as PDF".
+
 ## No broad read-only mode — but a capability signal (2026-08)
 
 The 2026-07 `READ_ONLY` / `NEXT_PUBLIC_READ_ONLY` flag, the middleware gate and
@@ -103,7 +160,9 @@ Don't move logic across the layers when fixing or extending the app:
   the only places that touch the `notes_*` tables.
 - Don't write files — not from the app, and not from the generation run. A
   feature that wants to persist something wants a table; generated content
-  reaches Supabase through `lib/generate/save.ts` only.
+  reaches Supabase through `lib/generate/save.ts` only. The single exception
+  is a cheatsheet's Save PDF, an export into the reader's Downloads folder
+  (see "Cheatsheets" above) — not storage, and not a pattern to extend.
 - Don't add any AI generation logic or Anthropic API calls to the Next.js
   app. One delegation is the sanctioned exception (2026-07): the generation
   job runner (`lib/generate/runner.ts` spawns the local Claude Code CLI to

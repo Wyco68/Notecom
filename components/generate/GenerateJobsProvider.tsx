@@ -9,6 +9,7 @@ import {
   useState,
 } from "react";
 import { useToast } from "../toast/ToastProvider";
+import type { SheetSpec } from "@/lib/sheet/layout";
 
 // Generation jobs, tracked above the modal that starts them.
 //
@@ -30,13 +31,21 @@ import { useToast } from "../toast/ToastProvider";
 // Saving is also triggered from here: a run ends "ready" with its document
 // held server-side, and this POSTs it into Supabase — the save must run as the
 // signed-in user, and only a request carries that session.
+//
+// A cheatsheet run is the same kind of job with no save: it ends "done" with
+// the sheet held server-side, and the sheet panel fetches and prints it.
 
 export type JobStatus = "running" | "done" | "error" | "aborted";
 
 export interface GenerateJob {
   id: string;
   folder: string;
-  kind: "lect" | "quiz";
+  kind: "lect" | "quiz" | "sheet";
+  /** what a cheatsheet run was asked for */
+  sheet?: SheetSpec;
+  /** bumped each time a sheet is sent back to be shortened, so the panel
+   *  showing it knows to fetch the new one once it is done */
+  round?: number;
   status: JobStatus;
   log: string[];
   tokens: { input: number; output: number };
@@ -63,6 +72,17 @@ interface GenerateJobsValue {
   completedTick: number;
   /** Starts a run and returns its job id, or null when it could not start. */
   start: (input: { file: File; folder: string; kind: "lect" | "quiz" }) => Promise<string | null>;
+  /** Starts a cheatsheet run over lessons `from`..`to` of a folder. */
+  startSheet: (input: {
+    folder: string;
+    from: number;
+    to: number;
+    pages: number;
+    files: File[];
+  }) => Promise<string | null>;
+  /** Sends a finished sheet back to be fixed: over its page limit at the
+   *  smallest font, or with layout problems the preview's audit found. */
+  revise: (id: string, measured: { pages?: number; layout?: string[] }) => Promise<boolean>;
   abort: (id: string) => void;
   /** Forget a finished job, removing it from the sidebar. */
   dismiss: (id: string) => void;
@@ -95,6 +115,11 @@ export default function GenerateJobsProvider({ children }: { children: React.Rea
   const patch = useCallback((id: string, fn: (job: GenerateJob) => GenerateJob) => {
     setJobs((prev) => prev.map((j) => (j.id === id ? fn(j) : j)));
   }, []);
+
+  // follow() runs long after the render that created it; it reads a job's kind
+  // from here rather than from a stale closure.
+  const jobsRef = useRef(jobs);
+  jobsRef.current = jobs;
 
   // Jobs already being followed, so a re-attach can't open a second reader on
   // the same stream (which would duplicate every log line).
@@ -182,14 +207,17 @@ export default function GenerateJobsProvider({ children }: { children: React.Rea
       // Announce the outcome here rather than in the modal: by now the reader
       // may well have closed the modal and moved on, and a finished run they
       // are not looking at is exactly the one worth announcing.
-      setJobs((prev) => {
-        const job = prev.find((j) => j.id === id);
-        const where = job ? job.folder.replace(/-/g, " ") : "the folder";
-        const noun = job?.kind === "quiz" ? "quiz" : "lesson";
-        if (status === "done") toast.success(`Generated ${noun} in "${where}".`);
-        else if (status === "error") toast.error(`Generation failed in "${where}" — see the log.`);
-        return prev;
-      });
+      const job = jobsRef.current.find((j) => j.id === id);
+      const where = job ? job.folder.replace(/-/g, " ") : "the folder";
+      if (job?.kind === "sheet") {
+        // Nothing was added to the tree, so no refresh.
+        if (status === "done") toast.success(`Cheatsheet for "${where}" is ready — open it from the sidebar.`);
+        else if (status === "error") toast.error(`Cheatsheet for "${where}" failed — see the log.`);
+        return;
+      }
+      const noun = job?.kind === "quiz" ? "quiz" : "lesson";
+      if (status === "done") toast.success(`Generated ${noun} in "${where}".`);
+      else if (status === "error") toast.error(`Generation failed in "${where}" — see the log.`);
       if (status === "done") setCompletedTick((n) => n + 1);
     },
     [patch, toast]
@@ -217,12 +245,18 @@ export default function GenerateJobsProvider({ children }: { children: React.Rea
           const running = (data.jobs ?? []).filter(
             (j: any) => j.status === "running" || j.status === "ready"
           );
-          if (!running.length) return;
-          setJobs(
-            running.map((j: any) => ({
+          // A finished sheet lives only on the server; list it again so the
+          // reader can still open and print it after a reload.
+          const sheets = (data.jobs ?? []).filter(
+            (j: any) => j.kind === "sheet" && j.status === "done"
+          );
+          if (!running.length && !sheets.length) return;
+          setJobs([
+            ...running.map((j: any) => ({
               id: j.id,
               folder: j.folder,
               kind: j.kind,
+              sheet: j.sheet,
               status: "running" as JobStatus,
               // The tail replays the whole log from the beginning, so starting
               // empty is correct — it fills in immediately.
@@ -230,8 +264,19 @@ export default function GenerateJobsProvider({ children }: { children: React.Rea
               tokens: j.tokens ?? { input: 0, output: 0 },
               startedAt: j.startedAt ?? Date.now(),
               lastActivity: Date.now(),
-            }))
-          );
+            })),
+            ...sheets.map((j: any) => ({
+              id: j.id,
+              folder: j.folder,
+              kind: "sheet" as const,
+              sheet: j.sheet,
+              status: "done" as JobStatus,
+              log: ["Finished."],
+              tokens: j.tokens ?? { input: 0, output: 0 },
+              startedAt: j.startedAt ?? Date.now(),
+              lastActivity: Date.now(),
+            })),
+          ]);
           for (const j of running) follow(j.id);
         })
         .catch(() => {});
@@ -282,6 +327,75 @@ export default function GenerateJobsProvider({ children }: { children: React.Rea
     [activeCount, follow, toast]
   );
 
+  const startSheet = useCallback<GenerateJobsValue["startSheet"]>(
+    async ({ folder, from, to, pages, files }) => {
+      if (activeCount >= MAX_CONCURRENT_JOBS) {
+        toast.error(`Already running ${activeCount} jobs — wait for one to finish.`);
+        return null;
+      }
+      try {
+        const form = new FormData();
+        form.set("folder", folder);
+        form.set("from", String(from));
+        form.set("to", String(to));
+        form.set("pages", String(pages));
+        for (const f of files) form.append("files", f);
+        const res = await fetch("/api/sheet", { method: "POST", body: form });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "failed to start");
+        setJobs((prev) => [
+          ...prev,
+          {
+            id: data.jobId,
+            folder,
+            kind: "sheet",
+            sheet: data.sheet,
+            round: 0,
+            status: "running",
+            log: [],
+            tokens: { input: 0, output: 0 },
+            startedAt: Date.now(),
+            lastActivity: Date.now(),
+          },
+        ]);
+        follow(data.jobId);
+        return data.jobId as string;
+      } catch (err: any) {
+        toast.error(err.message);
+        return null;
+      }
+    },
+    [activeCount, follow, toast]
+  );
+
+  const revise = useCallback<GenerateJobsValue["revise"]>(
+    async (id, measured) => {
+      try {
+        const res = await fetch(`/api/sheet/${id}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(measured),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || "could not send the sheet back");
+        // The tail replays the whole log, so start it empty again.
+        patch(id, (j) => ({
+          ...j,
+          status: "running",
+          round: (j.round ?? 0) + 1,
+          log: [],
+          lastActivity: Date.now(),
+        }));
+        follow(id);
+        return true;
+      } catch (err: any) {
+        toast.error(err.message);
+        return false;
+      }
+    },
+    [follow, patch, toast]
+  );
+
   const abort = useCallback((id: string) => {
     // The status change comes back through the stream's `end` event, so this
     // only has to ask; guessing locally could disagree with the server.
@@ -294,7 +408,7 @@ export default function GenerateJobsProvider({ children }: { children: React.Rea
 
   return (
     <Ctx.Provider
-      value={{ jobs, activeCount, now, completedTick, start, abort, dismiss }}
+      value={{ jobs, activeCount, now, completedTick, start, startSheet, revise, abort, dismiss }}
     >
       {children}
     </Ctx.Provider>

@@ -22,7 +22,7 @@ const BIN_DIR = path.join(DESKTOP_DIR, "bin");
 const RESOURCES_DIR = path.join(DESKTOP_DIR, "resources", "frontend");
 const CLAUDE_PROJECT_DIR = path.join(DESKTOP_DIR, "resources", "claude-project");
 
-// Everything /lect and /quiz need to run stand-alone, with no source checkout
+// Everything /lect, /quiz and /sheet need to run stand-alone, with no source checkout
 // nearby: the command files themselves, the docs they load, and the
 // project-level MCP config for markitdown. The app
 // copies this into a per-user data directory at runtime (desktop/src/lib.rs,
@@ -40,6 +40,8 @@ const CLAUDE_PROJECT_FILES = [
   // sends /lect to lives here.
   "_templates/lesson-template.md",
   "docs/quiz-guidelines.md",
+  ".claude/commands/sheet.md",
+  "docs/cheatsheet-guidelines.md",
 ];
 
 // `next build` inlines NEXT_PUBLIC_* into the bundle, so missing credentials

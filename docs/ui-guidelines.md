@@ -81,8 +81,9 @@ what it acts on.**
   People. Icon **and label**, with an active state. Discover and People used to
   be icon-only buttons on the Folders row, which claimed a relationship to the
   folder tree that neither has.
-- **Folders row** — only what acts on folders: generate and new-folder, plus
-  the read-only / CLI sign-in badge.
+- **Folders row** — only what acts on folders: generate, cheatsheet and
+  new-folder, plus the read-only / CLI sign-in badge. A finished cheatsheet
+  opens in the content column (`SheetPanel`), like the other panels.
 - **Account foot** — identity first, then the app-level chrome (refresh,
   theme) right-aligned. `AccountControl` renders its *contents* only; `AppShell`
   owns the bordered row, so the chrome survives on a build with no

@@ -40,7 +40,11 @@ export default function GenerateJobList({
           >
             <button
               onClick={() => onOpen(job.id)}
-              title={`${job.kind === "quiz" ? "Quiz" : "Lesson"} in ${folderLabel} — open the log`}
+              title={
+                job.kind === "sheet"
+                  ? `Cheatsheet for ${folderLabel}${job.sheet ? `, chapters ${job.sheet.from}-${job.sheet.to}` : ""} — ${job.status === "done" ? "open it" : "open the log"}`
+                  : `${job.kind === "quiz" ? "Quiz" : "Lesson"} in ${folderLabel} — open the log`
+              }
               className="ui-row flex min-w-0 flex-1 items-center gap-1.5 px-2 py-1 text-left text-sm"
             >
               {running ? (
@@ -61,7 +65,7 @@ export default function GenerateJobList({
               {/* One line always: this row has a fixed height budget, so a long
                   folder name clips and the title attribute carries the rest. */}
               <span className="min-w-0 flex-1 truncate text-gray-700 dark:text-gray-300">
-                {folderLabel}
+                {job.kind === "sheet" ? `Cheatsheet · ${folderLabel}` : folderLabel}
               </span>
               {running && (
                 <span className="shrink-0 font-mono text-xs tabular-nums text-gray-500">

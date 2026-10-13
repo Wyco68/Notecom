@@ -255,7 +255,15 @@ export async function middleware(req: NextRequest) {
     return withCsp(NextResponse.redirect(to));
   }
 
-  if (path === "/api/generate" && req.method === "POST") {
+  // A cheatsheet run, or sending one back to be shortened, spends the same
+  // tokens as a generation and shares its budget.
+  if (
+    req.method === "POST" &&
+    (path === "/api/generate" ||
+      path === "/api/sheet" ||
+      // Saving a PDF spends no tokens; it stays on the general budget.
+      (path.startsWith("/api/sheet/") && !path.endsWith("/pdf")))
+  ) {
     const retryAfter = rateLimit(`generate:${userId}`, GENERATE_LIMIT, GENERATE_WINDOW_MS);
     if (retryAfter !== null) return withCsp(tooManyRequests(retryAfter));
   }

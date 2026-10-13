@@ -87,7 +87,7 @@ CI installer to justify it; now there is one, so the split earns its keep.
 
 `release::project_root()` (`desktop/src/lib.rs`) resolves
 `app.path().app_data_dir()/project` at launch instead, and
-`release::sync_project_template()` copies `.claude/commands/{lect,quiz}.md`,
+`release::sync_project_template()` copies `.claude/commands/{lect,quiz,sheet}.md`,
 the docs they load, the lesson template, `CLAUDE.md` and `.mcp.json` into
 it from `bundle.resources` (`desktop/resources/claude-project/`, assembled by
 `scripts/prepare-desktop-resources.mjs`) on every launch — an app update
