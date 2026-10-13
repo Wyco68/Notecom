@@ -17,7 +17,7 @@ Application development only.
   the migration procedure and the required RLS proof.
 
 Do not load `docs/teaching-guidelines.md`, `docs/html-output-contract.md`,
-or `docs/lesson-template.md` — lesson-generation instructions are
+`docs/lesson-template.md` or `docs/cheatsheet-guidelines.md` — lesson-generation instructions are
 irrelevant to application work.
 
 ## Responsibilities

@@ -12,7 +12,7 @@ Who it's for and the design principles that follow from that:
 [docs/PRODUCT.md](docs/PRODUCT.md) — strategy only, no visual rules; those
 live in `docs/ui-guidelines.md`.
 
-## The three commands
+## The four commands
 Optional, not required: a request works without one. Each command loads a
 focused doc set, so naming one is the fast path when the work clearly belongs
 to it. Without a command, work out from the request which set applies and load
@@ -24,6 +24,10 @@ that — the split below still says which docs belong to which kind of work.
   `docs/lesson-template.md`.
 - **`/quiz`** — [.claude/commands/quiz.md](.claude/commands/quiz.md).
   Quiz creation and maintenance only. Loads only `docs/quiz-guidelines.md`.
+- **`/sheet`** — [.claude/commands/sheet.md](.claude/commands/sheet.md).
+  Cheatsheet creation only, from a range of a folder's lessons. Loads only
+  `docs/cheatsheet-guidelines.md`. Run by the app's Cheatsheet dialog; the
+  reply is printed, never saved.
 - **`/feat`** — [.claude/commands/feat.md](.claude/commands/feat.md).
   Application development only. Loads only `docs/architecture.md`,
   `docs/coding-style.md`, `docs/ui-guidelines.md`, `docs/api-contract.md`,
@@ -39,13 +43,15 @@ about what the vault is — split them.
 Generated lessons and quizzes are rows in Supabase (`notes_documents`) —
 **application data**, not application source. `/lect` and `/quiz` only reply
 with HTML; the app checks, names and saves it, and nothing writes local files.
+`/sheet` replies with HTML too; the app checks it, lays it out into pages and
+prints it, and saves nothing.
 Application work never edits generated content except for an explicit,
 requested migration or format conversion.
 
 ## Caveman mode scope
 Caveman mode (ultra): use aggressive for dev work (`/feat`, code edits, debugging,
 chat replies). Never for generated files — lesson HTML (`/lect`), quiz content
-(`/quiz`), commits, PRs. Those stay full normal prose per their own docs.
+(`/quiz`), cheatsheets (`/sheet`), commits, PRs. Those stay full normal prose per their own docs.
 
 ## Collaboration and access control
 Folders are the unit of sharing: owner, members with roles, visibility, tags.
