@@ -57,8 +57,8 @@ export interface Job {
    *  changed (reviseSheet) goes back to it rather than starting over */
   sessionId?: string;
   /** a sheet's inputs: the temp dir holding the chapter files and slides, the
-   *  chapters' text for the source check, the slide paths, and the model in
-   *  use (it can fall back mid-job). Server-side only — never listed. */
+   *  chapters' text for the source check, the slide paths, and the model and
+   *  effort it runs on. Server-side only — never listed. */
   sheetRun?: SheetRun;
   /** what the source checks and the review session found */
   review?: SheetReview;
@@ -228,11 +228,8 @@ export function startSheetJob(
       chapters,
       extras,
       sources: chapters.map((c) => ({ seq: c.seq, text: plainText(readFileSync(c.path, "utf8")) })),
-      // The sheet is the one document the reader takes into the room on its
-      // own, so it gets the strongest model at full effort. Both overridable;
-      // the model falls back if the subscription doesn't include it.
-      model: process.env.SHEET_MODEL || SHEET_MODELS[0],
-      effort: process.env.SHEET_EFFORT || "max",
+      model: process.env.SHEET_MODEL || SHEET_MODEL,
+      effort: process.env.SHEET_EFFORT || SHEET_EFFORT,
     },
   };
   jobs.set(job.id, job);
@@ -412,9 +409,13 @@ async function generate(
 
 // --- cheatsheets ---------------------------------------------------------------
 
-// Strongest first. A subscription without the first answers with a model
-// error, and the run steps down rather than failing.
-const SHEET_MODELS = ["fable", "opus"];
+// The sheet is the one document the reader takes into the room on its own,
+// so writing and reviewing both run on Opus 5.5 at extra-high effort, pinned
+// by full id so an alias moving to a newer model can't change it silently.
+// Both overridable (SHEET_MODEL, SHEET_EFFORT); no fallback — a run on a
+// model the reader didn't choose would be worse than one that says why.
+const SHEET_MODEL = "claude-opus-5-5";
+const SHEET_EFFORT = "xhigh";
 // Writing rounds (the first plus fixes) and review passes, each bounded: every
 // round re-sends the whole sheet at full effort.
 const SHEET_MAX_ROUNDS = 5;
@@ -547,21 +548,10 @@ async function generateSheet(
   }
 }
 
-/** One CLI round for a sheet, stepping down to the next model on a model error. */
-async function runSheetClaude(job: Job, repoRoot: string, prompt: string, resume?: string): Promise<RunResult> {
+/** One writing round for a sheet, on the sheet's model and effort. */
+function runSheetClaude(job: Job, repoRoot: string, prompt: string, resume?: string): Promise<RunResult> {
   const r = job.sheetRun!;
-  for (;;) {
-    const before = job.log.length;
-    const run = await runClaude(job, repoRoot, r.model, prompt, resume, r.effort);
-    if (run.ok || job.status !== "running") return run;
-    const said = job.log.slice(before).join("\n");
-    const next = SHEET_MODELS[SHEET_MODELS.indexOf(r.model) + 1];
-    if (!next || !/model/i.test(said) || !/not (found|available|supported|allowed)|invalid|unknown|access|does not exist|not have/i.test(said)) {
-      return run;
-    }
-    job.log.push(`Model "${r.model}" is not available on this subscription — using "${next}".`);
-    r.model = next;
-  }
+  return runClaude(job, repoRoot, r.model, prompt, resume, r.effort);
 }
 
 /**
