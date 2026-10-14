@@ -48,8 +48,9 @@ is the document. Then, in the app:
 2. The job ends `ready`, holding the HTML in memory. The client's
    `POST /api/generate/[id]` saves it — a request, because the save runs as
    the signed-in user under RLS and only a request carries that session.
-3. `lib/generate/save.ts` names it (`<seq>-<slug>`, seq from what the folder
-   already holds in Supabase) and writes it through `saveDoc`.
+3. `lib/generate/save.ts` closes any numbering gap, then names it
+   (`<seq>-<slug>`, seq from what the folder already holds in Supabase) and
+   writes it through `saveDoc`.
 
 The upload is the one file on disk, in the OS temp dir, deleted when the run
 ends — the CLI needs a path to read it from.

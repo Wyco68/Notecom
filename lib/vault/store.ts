@@ -334,7 +334,38 @@ export async function deleteDoc(folder: string, id: string, kind: Kind): Promise
   // Chunks are the searchable copy of a deleted document — drop them rather
   // than tombstone them, or search keeps answering with text nobody can open.
   await supabase.from("notes_doc_chunks").delete().eq("document_id", doc.id);
+  // The delete already stands; a failed renumber is healed by the next save.
+  await resequence(doc.folder_id, kind).catch(() => {});
   return { ok: true };
+}
+
+/** Renumbers one folder's live documents of one kind 1..n, closing the gap a
+ *  delete leaves. Only `seq` moves: the doc key keeps its old number prefix,
+ *  because it is the document's identity (URLs, favorites, open tabs). No
+ *  version bump either — seq is not in the chunks, so nothing goes stale. */
+async function resequence(folderId: string, kind: Kind): Promise<void> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("notes_documents")
+    .select("id,seq")
+    .eq("folder_id", folderId)
+    .eq("kind", kind)
+    .eq("deleted", false)
+    .order("seq")
+    .order("created_at");
+  if (error) fail("renumber failed", error);
+  const moves = (data ?? []).flatMap((d, i) => (d.seq === i + 1 ? [] : [{ id: d.id, seq: i + 1 }]));
+  const results = await Promise.all(
+    moves.map((m) => supabase.from("notes_documents").update({ seq: m.seq }).eq("id", m.id))
+  );
+  const failed = results.find((r) => r.error);
+  if (failed?.error) fail("renumber failed", failed.error);
+}
+
+/** Closes any gap in a folder's numbering before a new document is numbered —
+ *  heals folders whose deletes predate renumbering. */
+export async function resequenceFolder(slug: string, kind: Kind): Promise<void> {
+  await resequence(await requireFolderId(slug), kind);
 }
 
 // Title only: the document's id, key and slug are its identity and survive a

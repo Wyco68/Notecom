@@ -164,7 +164,7 @@ Route handlers call these functions, which query Supabase as the signed-in user.
 | `renameFolder(slug, newName)` | display name only — the slug is identity and never changes, same rule `renameDoc` uses for a document's title |
 | `loadDoc(folder, id, kind)` | `{ html, title }`; "not found" also means "not readable", deliberately — a probe must not confirm a private folder's contents |
 | `saveDoc(input)` | upsert keyed by (folder, kind, docKey); returns `false` when nothing changed, and rewrites the document's search chunks when something did |
-| `deleteDoc(folder, id, kind)` | tombstone; drops the chunks outright |
+| `deleteDoc(folder, id, kind)` | tombstone; drops the chunks outright, then renumbers the folder's remaining documents of that kind 1..n (`seq` only — the doc key keeps its prefix) |
 | `renameDoc(folder, id, kind, title)` | title only — id, key and slug are identity |
 | `reindexStale(limit)` | re-chunks documents whose index is missing or built from an older `version` |
 
@@ -174,7 +174,11 @@ lesson-vs-quiz translation, no logic. Deletes are tombstones (`deleted = true`,
 
 Lessons and quizzes share a folder but never collide: a document's identity is
 (folder, kind, doc key), and each kind has its own independent `seq` counter,
-assigned by `lib/generate/save.ts` at save time.
+assigned by `lib/generate/save.ts` at save time. `seq` is the shown number
+and always runs 1..n with no gaps: a delete renumbers, and a save renumbers
+first too. The doc key (`01-intro`) is identity and never changes, so after a
+renumber its prefix can differ from `seq`; a new key that would collide with a
+live one gets a `-2` suffix.
 
 ## Search functions (Postgres)
 

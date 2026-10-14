@@ -7,7 +7,7 @@
 // name and number from what Supabase already holds, then saves through the
 // data layer like every other write (RLS decides whether it lands).
 
-import { listFolderDocs, saveDoc } from "@/lib/vault/store";
+import { listFolderDocs, resequenceFolder, saveDoc } from "@/lib/vault/store";
 import { slugify } from "@/lib/vault/slug";
 import { titleOf } from "./validate";
 
@@ -28,10 +28,16 @@ export async function saveGenerated(
   const slug = slugify(title).toLowerCase();
 
   // Lessons and quizzes number independently within a folder.
+  await resequenceFolder(folder, docKind);
   const docs = await listFolderDocs(folder);
   const list = docKind === "quiz" ? docs.quizzes : docs.lessons;
   const seq = list.reduce((max, d) => Math.max(max, d.seq), 0) + 1;
-  const id = `${String(seq).padStart(2, "0")}-${slug}`;
+  // Renumbering leaves old keys in place, so "<seq>-<slug>" can already name a
+  // live document with the same title; overwriting it would lose that one.
+  const taken = new Set(list.map((d) => d.id));
+  const base = `${String(seq).padStart(2, "0")}-${slug}`;
+  let id = base;
+  for (let n = 2; taken.has(id); n++) id = `${base}-${n}`;
 
   await saveDoc({ folder, kind: docKind, docKey: id, slug, title, seq, html });
   return { id, title };
