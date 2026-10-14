@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { writeFile, mkdir } from "fs/promises";
+import { writeFile, mkdir, rm } from "fs/promises";
 import { tmpdir } from "os";
 import path from "path";
 import { listJobs, startJob } from "@/lib/generate/runner";
+import { convertLegacyOffice, isLegacyOffice } from "@/lib/generate/convert";
 import { cliInstalled } from "@/lib/auth/cli";
 import { resolveWritableFolderId } from "@/lib/vault/store";
 import { VERIFIED_USER_HEADER } from "@/middleware";
@@ -93,9 +94,19 @@ export async function POST(req: NextRequest) {
   const dir = path.join(tmpdir(), "notes-uploads");
   await mkdir(dir, { recursive: true });
   const safeName = file.name.replace(/[^\w.-]/g, "_");
-  const filePath = path.join(dir, `${Date.now()}-${safeName}`);
+  let filePath = path.join(dir, `${Date.now()}-${safeName}`);
   await writeFile(filePath, Buffer.from(await file.arrayBuffer()));
+  let fileName = file.name;
+  if (isLegacyOffice(file.name)) {
+    try {
+      filePath = await convertLegacyOffice(filePath, file.name);
+      fileName = file.name.replace(/\.\w+$/, path.extname(filePath));
+    } catch (err: any) {
+      await rm(filePath, { force: true });
+      return NextResponse.json({ error: err.message }, { status: 400 });
+    }
+  }
 
-  const job = startJob(folder, kind as "lect" | "quiz", filePath, file.name, userId);
+  const job = startJob(folder, kind as "lect" | "quiz", filePath, fileName, userId);
   return NextResponse.json({ jobId: job.id });
 }

@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { mkdir, writeFile } from "fs/promises";
+import { mkdir, rm, writeFile } from "fs/promises";
 import { tmpdir } from "os";
 import path from "path";
 import { randomUUID } from "crypto";
 import { startSheetJob } from "@/lib/generate/runner";
+import { convertLegacyOffice, isLegacyOffice } from "@/lib/generate/convert";
 import { cliInstalled } from "@/lib/auth/cli";
 import { listFolderDocs, loadDoc } from "@/lib/vault/store";
 import { layoutFor, MAX_PAGES } from "@/lib/sheet/layout";
@@ -86,7 +87,16 @@ export async function POST(req: NextRequest) {
   for (const [i, f] of files.entries()) {
     const file = path.join(dir, `source-${i + 1}-${f.name.replace(/[^\w.-]/g, "_")}`);
     await writeFile(file, Buffer.from(await f.arrayBuffer()));
-    extras.push(file);
+    if (!isLegacyOffice(f.name)) {
+      extras.push(file);
+      continue;
+    }
+    try {
+      extras.push(await convertLegacyOffice(file, f.name));
+    } catch (err: any) {
+      await rm(dir, { recursive: true, force: true });
+      return NextResponse.json({ error: err.message }, { status: 400 });
+    }
   }
 
   const first = chosen[0].seq;

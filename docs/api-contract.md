@@ -21,7 +21,7 @@ Loaded by `/feat` only. Source of truth is the route files themselves
 | `/api/quiz/[folder]/[id]` | POST | `{ newTitle }` | `{ ok }` (rename) |
 | `/api/search` | GET | `?q&folder&kind&limit` | `{ mode: "keyword", results: [chunk hits] }` — `notes_search_chunks` |
 | `/api/related/[folder]/[id]` | GET | `?kind` | `{ results: [{folder,id,kind,title,score}] }` — `notes_related_docs` |
-| `/api/generate` | POST | multipart `file, folder, kind(lect\|quiz)` | `{ jobId }` — spawns local Claude Code CLI (read-only) on the upload |
+| `/api/generate` | POST | multipart `file, folder, kind(lect\|quiz)` | `{ jobId }` — spawns local Claude Code CLI (read-only) on the upload; a `.ppt`/`.doc`/`.xls` is converted with LibreOffice first, or refused with a 400 saying how to save it when LibreOffice is missing |
 | `/api/generate/[id]` | GET | — | SSE job log (`line` events, then `end` with status) |
 | `/api/generate/[id]` | POST | — | `{ ok, id, title }` — saves a `ready` job's document to Supabase |
 

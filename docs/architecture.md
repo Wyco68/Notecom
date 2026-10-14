@@ -55,6 +55,13 @@ is the document. Then, in the app:
 The upload is the one file on disk, in the OS temp dir, deleted when the run
 ends — the CLI needs a path to read it from.
 
+An old binary Office upload (`.ppt`, `.doc`, `.xls`) is converted to its XML
+successor first (`lib/generate/convert.ts`), since markitdown reads only those.
+The converter is the machine's own LibreOffice, run headless in a throwaway
+folder under the home directory (the snap build cannot see `/tmp`); without
+LibreOffice the upload is refused before the run, saying to save it as
+`.pptx`/`.docx`/`.xlsx` or PDF. Cheatsheet slides go through the same step.
+
 ## Cheatsheets: printed, never saved (2026-10)
 
 `/sheet` is a third generation run, started from the sidebar's Cheatsheet
