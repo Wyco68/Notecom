@@ -91,7 +91,9 @@ em dash or en dash; "exam", "quiz", "assignment", "trap", "tip:", "Q&A",
 "note that"; labels like "Key idea:", "Summary:", "Takeaway:", "Ask:",
 "Mistake:", "Pro tip"; "this section", "in summary", "worth noting", "let's",
 "crucial", "key role", "vital role", "delve", "leverage", "robust",
-"seamless", "redrawn".
+"seamless", "redrawn". When the chapters themselves use "trap",
+"assignment" or one of the words from "crucial" to "seamless" (an SNMP trap,
+IP address assignment), it is a term: keep it as the source spells it.
 
 ## Fitting the page limit
 

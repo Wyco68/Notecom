@@ -64,9 +64,9 @@ dialog with a folder, a first and last chapter, and a page limit.
    uploaded slides beside them. The CLI has no database access, so it can only
    ever see what that request could read. The dir goes when the run ends.
 2. `lib/generate/runner.ts` (`generateSheet`) runs `/sheet` with the same
-   read-only tools, on Opus 5.5 at extra-high effort for both writing and
+   read-only tools, on Opus 5.5 at high effort for both writing and
    review (`SHEET_MODEL`, default `claude-opus-5-5`, pinned by full id;
-   `SHEET_EFFORT`, default `xhigh`; no fallback to another model). Every
+   `SHEET_EFFORT`, default `high`; no fallback to another model). Every
    reply then has to pass, in order: the contract
    (`checkSheet` in `validate.ts`: tag, attribute and class allowlist, numbered
    chapter headings, banned wording, a coarse length cap); the source check

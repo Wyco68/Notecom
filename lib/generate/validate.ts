@@ -154,18 +154,22 @@ const SHEET_CLASSES = new Set([
   "ex", "warn", "key", "f", "c", "d", "box-b", "box-g", "box-y", "box-r", "box-w",
 ]);
 // Study talk and assistant voice. Case-insensitive, whole words where it matters.
-const SHEET_BANNED: Array<[RegExp, string]> = [
+// A rule marked `source` gives way when the chapters themselves use the word:
+// "SNMP trap", "IP address assignment" and "robust" are terms there, and the
+// sheet keeps every term as the source spells it. Dashes, study talk and
+// labels never give way.
+const SHEET_BANNED: Array<[RegExp, string, "source"?]> = [
   [/[–—]/, "em or en dash"],
   [/\bexams?\b/i, '"exam"'],
   [/\bquiz(zes)?\b/i, '"quiz"'],
-  [/\bassignments?\b/i, '"assignment"'],
-  [/\btraps?\b/i, '"trap"'],
+  [/\bassignments?\b/i, '"assignment"', "source"],
+  [/\btraps?\b/i, '"trap"', "source"],
   [/\btip:/i, '"tip:"'],
   [/\bQ&(amp;)?A\b/i, '"Q&A"'],
   [/\bnote that\b/i, '"note that"'],
   [/\b(key idea|summary|takeaway|ask|mistake|pro tip):/i, "a label such as Key idea:, Summary:, Ask:, Mistake:"],
   [/\b(this section|in summary|worth noting|let's)\b/i, "assistant phrasing"],
-  [/\b(crucial|key role|vital role|delve|leverage|robust|seamless(ly)?)\b/i, "assistant phrasing"],
+  [/\b(crucial|key role|vital role|delve|leverage|robust|seamless(ly)?)\b/i, "assistant phrasing", "source"],
   [/\bredrawn\b/i, '"redrawn"'],
 ];
 
@@ -296,7 +300,12 @@ export function checkSheetPages(html: string): string[] {
   );
 }
 
-export function checkSheet(html: string, chapters: { from: number; to: number }): string[] {
+/** `sourceText`: the chapters' plain text, for the rules a source term may override. */
+export function checkSheet(
+  html: string,
+  chapters: { from: number; to: number },
+  sourceText = ""
+): string[] {
   const errors = markupIssues(
     html,
     { tags: SHEET_TAGS, attrs: SHEET_ATTRS, classes: SHEET_CLASSES },
@@ -316,9 +325,9 @@ export function checkSheet(html: string, chapters: { from: number; to: number })
   }
 
   const text = html.replace(/<[^>]+>/g, " ");
-  for (const [re, what] of SHEET_BANNED) {
+  for (const [re, what, give] of SHEET_BANNED) {
     const m = re.exec(text);
-    if (m) {
+    if (m && !(give && re.test(sourceText))) {
       const at = text.slice(Math.max(0, m.index - 30), m.index + m[0].length + 30).replace(/\s+/g, " ").trim();
       errors.push(`banned wording (${what}): "...${at}..."`);
     }

@@ -410,12 +410,12 @@ async function generate(
 // --- cheatsheets ---------------------------------------------------------------
 
 // The sheet is the one document the reader takes into the room on its own,
-// so writing and reviewing both run on Opus 5.5 at extra-high effort, pinned
+// so writing and reviewing both run on Opus 5.5 at high effort, pinned
 // by full id so an alias moving to a newer model can't change it silently.
 // Both overridable (SHEET_MODEL, SHEET_EFFORT); no fallback — a run on a
 // model the reader didn't choose would be worse than one that says why.
 const SHEET_MODEL = "claude-opus-5-5";
-const SHEET_EFFORT = "xhigh";
+const SHEET_EFFORT = "high";
 // Writing rounds (the first plus fixes) and review passes, each bounded: every
 // round re-sends the whole sheet at full effort.
 const SHEET_MAX_ROUNDS = 5;
@@ -475,7 +475,7 @@ async function generateSheet(
       }
 
       const sources = sourceIssues(html, run0.sources, run0.extras.length > 0);
-      const violations = [...checkSheet(html, spec), ...sources.hard];
+      const violations = [...checkSheet(html, spec, run0.sources.map((c) => c.text).join(" ")), ...sources.hard];
       const chars = visibleChars(html);
       if (chars > room * 1.25) {
         violations.push(
