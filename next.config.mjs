@@ -38,6 +38,11 @@ const nextConfig = {
   serverExternalPackages: ["@google-cloud/storage"],
   experimental: {
     optimizePackageImports: ["framer-motion"],
+    // With a middleware, Next buffers every request body for it and hands the
+    // route only the first 10MB, so a bigger slide deck reached formData()
+    // cut off. Uploads are capped at 50MB by the routes themselves
+    // (MAX_UPLOAD_BYTES); this leaves room for the multipart framing.
+    middlewareClientMaxBodySize: "51mb",
   },
   // The desktop shell's webview navigates to 127.0.0.1 while Next's dev
   // assets are requested relative to that origin — same host, just not

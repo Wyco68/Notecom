@@ -55,7 +55,14 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const form = await req.formData();
+  let form: FormData;
+  try {
+    form = await req.formData();
+  } catch {
+    // A body that ended early (dropped connection, a proxy's size cap) is not
+    // multipart any more; answer in JSON like every other failure here.
+    return NextResponse.json({ error: "the upload did not arrive whole — try again" }, { status: 400 });
+  }
   const file = form.get("file");
   const folder = String(form.get("folder") ?? "");
   const kind = String(form.get("kind") ?? "");

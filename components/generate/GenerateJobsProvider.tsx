@@ -302,8 +302,10 @@ export default function GenerateJobsProvider({ children }: { children: React.Rea
         form.set("folder", folder);
         form.set("kind", kind);
         const res = await fetch("/api/generate", { method: "POST", body: form });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || "failed to start");
+        // An error page from in front of the route is not JSON; say what failed
+        // instead of the browser's parse error.
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || `failed to start (HTTP ${res.status})`);
         setJobs((prev) => [
           ...prev,
           {
@@ -341,8 +343,10 @@ export default function GenerateJobsProvider({ children }: { children: React.Rea
         form.set("pages", String(pages));
         for (const f of files) form.append("files", f);
         const res = await fetch("/api/sheet", { method: "POST", body: form });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || "failed to start");
+        // An error page from in front of the route is not JSON; say what failed
+        // instead of the browser's parse error.
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || `failed to start (HTTP ${res.status})`);
         setJobs((prev) => [
           ...prev,
           {
