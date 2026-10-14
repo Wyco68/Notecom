@@ -9,6 +9,20 @@ import {
   type GenerateJob,
 } from "../generate/GenerateJobsProvider";
 
+// The folder the last run went into, per device: the next upload usually goes
+// to the same subject.
+const LAST_FOLDER_KEY = "lecture.lastGenerateFolder";
+
+function initialFolder(folders: Folder[]): string {
+  let last: string | null = null;
+  try {
+    last = localStorage.getItem(LAST_FOLDER_KEY);
+  } catch {
+    // Private mode: fall through to the first folder.
+  }
+  return folders.some((f) => f.name === last) ? last! : folders[0]?.name ?? "";
+}
+
 // Start a generation run, and watch one.
 //
 // The dialog does not own the run — GenerateJobsProvider does. That is what
@@ -30,7 +44,7 @@ export default function GenerateModal({
   watchJobId?: string;
 }) {
   const { jobs, activeCount, start, abort } = useGenerateJobs();
-  const [folder, setFolder] = useState(folders[0]?.name ?? "");
+  const [folder, setFolder] = useState(() => initialFolder(folders));
   const [kind, setKind] = useState<"lect" | "quiz">("lect");
   const [file, setFile] = useState<File | null>(null);
   const [starting, setStarting] = useState(false);
@@ -44,6 +58,11 @@ export default function GenerateModal({
   async function begin() {
     if (!file || !folder || starting) return;
     setStarting(true);
+    try {
+      localStorage.setItem(LAST_FOLDER_KEY, folder);
+    } catch {
+      // Not remembered this time; the run is unaffected.
+    }
     try {
       const id = await start({ file, folder, kind });
       if (id) setWatching(id);
