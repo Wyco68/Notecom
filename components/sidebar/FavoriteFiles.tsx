@@ -1,6 +1,7 @@
 "use client";
 
 import QuizIcon from "../icons/QuizIcon";
+import SheetIcon from "../icons/SheetIcon";
 import StarIcon from "../icons/StarIcon";
 import type { FavoriteEntry } from "@/lib/vault/favorites";
 import type { LessonRef } from "@/lib/vault/types";
@@ -51,6 +52,9 @@ export default function FavoriteFiles({
             >
               {entry.kind === "quiz" && (
                 <QuizIcon className="h-3.5 w-3.5 shrink-0 text-gray-400" />
+              )}
+              {entry.kind === "sheet" && (
+                <SheetIcon className="h-3.5 w-3.5 shrink-0 text-gray-400" />
               )}
               <span className="truncate">{entry.title}</span>
             </button>

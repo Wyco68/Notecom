@@ -25,7 +25,9 @@ export interface LessonEntry {
   seq: number;
 }
 
-export type Kind = "lesson" | "quiz";
+// "sheet" is a cheatsheet: stored like the others, but printed rather than
+// read in the viewer, and kept out of search (no chunks).
+export type Kind = "lesson" | "quiz" | "sheet";
 
 /** Rows the app writes; `id` and the timestamps are ours to supply — the
  *  columns predate this app's schema migrations and carry no defaults. */
@@ -153,9 +155,13 @@ export async function listFolders(): Promise<{
  *  listed by the same rule that opens it. */
 export async function listFolderDocs(
   slug: string
-): Promise<{ lessons: LessonEntry[]; quizzes: LessonEntry[] }> {
+): Promise<{ lessons: LessonEntry[]; quizzes: LessonEntry[]; sheets: LessonEntry[] }> {
   const supabase = await createClient();
-  const out: { lessons: LessonEntry[]; quizzes: LessonEntry[] } = { lessons: [], quizzes: [] };
+  const out: { lessons: LessonEntry[]; quizzes: LessonEntry[]; sheets: LessonEntry[] } = {
+    lessons: [],
+    quizzes: [],
+    sheets: [],
+  };
   const folderIds = await folderIdsBySlug(slug);
   // No such folder and no readable folder are the same answer here: an empty
   // one, not an error — the same reason loadDoc refuses to distinguish them.
@@ -172,6 +178,7 @@ export async function listFolderDocs(
   for (const d of data ?? []) {
     const entry: LessonEntry = { id: d.doc_key, slug: d.slug, title: d.title, seq: d.seq };
     if (d.kind === "quiz") out.quizzes.push(entry);
+    else if (d.kind === "sheet") out.sheets.push(entry);
     else out.lessons.push(entry);
   }
   return out;
@@ -286,14 +293,14 @@ export async function loadDoc(
   folder: string,
   id: string,
   kind: Kind
-): Promise<{ html: string; title: string }> {
+): Promise<{ html: string; title: string; meta: unknown }> {
   const supabase = await createClient();
   const folderIds = await folderIdsBySlug(folder);
   if (!folderIds.length) fail(`${kind} not found`);
 
   const { data: rows } = await supabase
     .from("notes_documents")
-    .select("html,title")
+    .select("html,title,meta")
     .eq("deleted", false)
     .eq("kind", kind)
     .eq("doc_key", id)
@@ -304,7 +311,7 @@ export async function loadDoc(
     // so a probe can't confirm a private folder's contents.
     fail(`${kind} not found`);
   }
-  return { html: rows[0].html, title: rows[0].title };
+  return { html: rows[0].html, title: rows[0].title, meta: rows[0].meta ?? null };
 }
 
 async function findDoc(folder: string, id: string, kind: Kind) {
@@ -404,6 +411,8 @@ export interface SaveInput {
   title: string;
   seq: number;
   html: string;
+  /** structured data beside the HTML (cheatsheets); undefined leaves it as is */
+  meta?: unknown;
 }
 
 /** Upserts one document keyed by (folder, kind, docKey) and rebuilds its search
@@ -416,7 +425,7 @@ export async function saveDoc(input: SaveInput): Promise<boolean> {
 
   const { data: rows, error: lookupErr } = await supabase
     .from("notes_documents")
-    .select("id,version,html,title,slug,seq,deleted,title_pinned")
+    .select("id,version,html,title,slug,seq,deleted,title_pinned,meta")
     .eq("folder_id", folderId)
     .eq("kind", input.kind)
     .eq("doc_key", input.docKey)
@@ -434,7 +443,8 @@ export async function saveDoc(input: SaveInput): Promise<boolean> {
     existing.html === input.html &&
     (keepTitle || existing.title === input.title) &&
     existing.slug === input.slug &&
-    existing.seq === input.seq
+    existing.seq === input.seq &&
+    (input.meta === undefined || JSON.stringify(existing.meta) === JSON.stringify(input.meta))
   ) {
     // Identical on both sides: skip, so a repeated save doesn't churn versions and
     // updated_at, and another device doesn't see a phantom edit.
@@ -451,6 +461,7 @@ export async function saveDoc(input: SaveInput): Promise<boolean> {
         ...(keepTitle ? {} : { title: input.title }),
         seq: input.seq,
         html: input.html,
+        ...(input.meta === undefined ? {} : { meta: input.meta }),
         updated_at: now,
         version,
         deleted: false,
@@ -477,6 +488,7 @@ export async function saveDoc(input: SaveInput): Promise<boolean> {
           title: input.title,
           seq: input.seq,
           html: input.html,
+          meta: input.meta ?? null,
           created_at: now,
           updated_at: now,
           version,
@@ -490,7 +502,9 @@ export async function saveDoc(input: SaveInput): Promise<boolean> {
     id = data.id;
   }
 
-  await writeChunks(id, folderId, input.html, version);
+  // A cheatsheet is a print-out of lessons already indexed; searching it too
+  // would answer every query twice.
+  if (input.kind !== "sheet") await writeChunks(id, folderId, input.html, version);
   return true;
 }
 
@@ -547,7 +561,9 @@ export async function reindexStale(limit = 25): Promise<number> {
   const supabase = await createClient();
 
   const [{ data: docs, error }, { data: chunks, error: chunkErr }] = await Promise.all([
-    supabase.from("notes_documents").select("id,folder_id,version").eq("deleted", false),
+    // Sheets carry no chunks on purpose (see saveDoc); without this they would
+    // read as stale forever.
+    supabase.from("notes_documents").select("id,folder_id,version").eq("deleted", false).neq("kind", "sheet"),
     supabase.from("notes_doc_chunks").select("document_id,doc_version"),
   ]);
   if (error) fail("reindex failed", error);

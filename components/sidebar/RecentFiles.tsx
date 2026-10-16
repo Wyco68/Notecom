@@ -1,6 +1,7 @@
 "use client";
 
 import QuizIcon from "../icons/QuizIcon";
+import SheetIcon from "../icons/SheetIcon";
 import type { RecentEntry } from "@/lib/vault/recent";
 import type { LessonRef } from "@/lib/vault/types";
 
@@ -52,6 +53,9 @@ export default function RecentFiles({
           >
             {entry.kind === "quiz" && (
               <QuizIcon className="h-3.5 w-3.5 shrink-0 text-gray-400" />
+            )}
+            {entry.kind === "sheet" && (
+              <SheetIcon className="h-3.5 w-3.5 shrink-0 text-gray-400" />
             )}
             {/* One line, always. Unlike the tree — where a folder name wraps
                 because it is how you find the folder — a recent row has a fixed

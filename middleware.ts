@@ -173,6 +173,11 @@ const AUTH_WINDOW_MS = 10 * 60_000;
 // but not the *rate* of start attempts).
 const GENERATE_LIMIT = 5;
 const GENERATE_WINDOW_MS = 60 * 60_000;
+// A cheatsheet's chat box is a conversation, not a batch of uploads: a reader
+// going back and forth needs more than five turns an hour. Still a ceiling —
+// every turn is a full run — and still on its own bucket so chatting can't
+// use up the budget for generating.
+const SHEET_EDIT_LIMIT = 30;
 
 // The blanket budget for everything else this middleware matches, pages
 // included. Generous enough for real interactive use — the busiest route in
@@ -255,16 +260,15 @@ export async function middleware(req: NextRequest) {
     return withCsp(NextResponse.redirect(to));
   }
 
-  // A cheatsheet run, or sending one back to be shortened, spends the same
-  // tokens as a generation and shares its budget.
-  if (
-    req.method === "POST" &&
-    (path === "/api/generate" ||
-      path === "/api/sheet" ||
-      // Saving a PDF spends no tokens; it stays on the general budget.
-      (path.startsWith("/api/sheet/") && !path.endsWith("/pdf")))
-  ) {
+  // A new cheatsheet spends the same tokens as a generation and shares its
+  // budget; an edit from a sheet's chat box has its own (saving a PDF or
+  // renaming spends no tokens and stays on the general budget).
+  if (req.method === "POST" && (path === "/api/generate" || path === "/api/sheet")) {
     const retryAfter = rateLimit(`generate:${userId}`, GENERATE_LIMIT, GENERATE_WINDOW_MS);
+    if (retryAfter !== null) return withCsp(tooManyRequests(retryAfter));
+  }
+  if (req.method === "POST" && path.startsWith("/api/sheets/") && path.endsWith("/edit")) {
+    const retryAfter = rateLimit(`sheet-edit:${userId}`, SHEET_EDIT_LIMIT, GENERATE_WINDOW_MS);
     if (retryAfter !== null) return withCsp(tooManyRequests(retryAfter));
   }
 

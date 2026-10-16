@@ -6,12 +6,12 @@
 // anything — the entry is just a reference the tree no longer resolves, and
 // pruneFavorites drops it.
 
-import type { LessonRef } from "./types";
+import type { DocKind, LessonRef } from "./types";
 
 export interface FavoriteEntry {
   folder: string;
   id: string;
-  kind: "lesson" | "quiz";
+  kind: DocKind;
   title: string;
 }
 

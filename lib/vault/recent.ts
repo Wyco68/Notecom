@@ -9,12 +9,12 @@
 // it — see AppShell. "Recent" then means "finished with", so the file you are
 // currently reading is never also listed above the tree as history.
 
-import type { LessonRef } from "./types";
+import type { DocKind, LessonRef } from "./types";
 
 export interface RecentEntry {
   folder: string;
   id: string;
-  kind: "lesson" | "quiz";
+  kind: DocKind;
   title: string;
 }
 

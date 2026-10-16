@@ -9,6 +9,7 @@ import TrashIcon from "../icons/TrashIcon";
 import EditIcon from "../icons/EditIcon";
 import StarIcon from "../icons/StarIcon";
 import QuizIcon from "../icons/QuizIcon";
+import SheetIcon from "../icons/SheetIcon";
 import ShareIcon from "../icons/ShareIcon";
 import { useToast } from "../toast/ToastProvider";
 
@@ -28,15 +29,13 @@ function SeqBadge({ seq }: { seq: number }) {
   );
 }
 
-type PendingDelete =
-  | { kind: "folder" }
-  | { kind: "lesson"; id: string; title: string }
-  | { kind: "quiz"; id: string; title: string };
+type DocAction = { kind: "lesson" | "quiz" | "sheet"; id: string; title: string };
+type PendingDelete = { kind: "folder" } | DocAction;
+type PendingRename = { kind: "folder" } | DocAction;
 
-type PendingRename =
-  | { kind: "folder" }
-  | { kind: "lesson"; id: string; title: string }
-  | { kind: "quiz"; id: string; title: string };
+// Each document kind's routes and the word the UI uses for it.
+const DOC_BASE = { lesson: "/api/lesson", quiz: "/api/quiz", sheet: "/api/sheets" } as const;
+const DOC_NOUN = { lesson: "lesson", quiz: "quiz", sheet: "cheatsheet" } as const;
 
 export default function FileTreeNode({
   folder,
@@ -89,6 +88,7 @@ export default function FileTreeNode({
   // `.length`/`.map`.
   const lessons = docs?.lessons ?? [];
   const quizzes = docs?.quizzes ?? [];
+  const sheets = docs?.sheets ?? [];
 
   async function confirmDelete() {
     if (!pending) return;
@@ -101,20 +101,19 @@ export default function FileTreeNode({
         if (!res.ok) throw new Error("failed");
         toast.success(`Deleted folder "${folder.displayName}".`);
       } else {
-        const base = pending.kind === "quiz" ? "/api/quiz" : "/api/lesson";
         const res = await fetch(
-          `${base}/${encodeURIComponent(folder.name)}/${encodeURIComponent(pending.id)}`,
+          `${DOC_BASE[pending.kind]}/${encodeURIComponent(folder.name)}/${encodeURIComponent(pending.id)}`,
           { method: "DELETE" }
         );
         if (!res.ok) throw new Error("failed");
-        toast.success(`Deleted ${pending.kind} "${pending.title}".`);
+        toast.success(`Deleted ${DOC_NOUN[pending.kind]} "${pending.title}".`);
       }
       onChanged();
     } catch {
       toast.error(
         pending.kind === "folder"
           ? `Could not delete folder "${folder.displayName}".`
-          : `Could not delete ${pending.kind} "${pending.title}".`
+          : `Could not delete ${DOC_NOUN[pending.kind]} "${pending.title}".`
       );
     } finally {
       setBusy(false);
@@ -134,9 +133,8 @@ export default function FileTreeNode({
       if (!res.ok) throw new Error(data.error || "failed");
       toast.success(`Renamed folder to "${newValue}".`);
     } else {
-      const base = renaming.kind === "quiz" ? "/api/quiz" : "/api/lesson";
       const res = await fetch(
-        `${base}/${encodeURIComponent(folder.name)}/${encodeURIComponent(renaming.id)}`,
+        `${DOC_BASE[renaming.kind]}/${encodeURIComponent(folder.name)}/${encodeURIComponent(renaming.id)}`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -145,7 +143,7 @@ export default function FileTreeNode({
       );
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "failed");
-      toast.success(`Renamed ${renaming.kind} to "${newValue}".`);
+      toast.success(`Renamed ${DOC_NOUN[renaming.kind]} to "${newValue}".`);
     }
     onChanged();
     setRenaming(null);
@@ -234,7 +232,8 @@ export default function FileTreeNode({
             <SkeletonRows rows={3} />
           ) : (
             lessons.length === 0 &&
-            quizzes.length === 0 && (
+            quizzes.length === 0 &&
+            sheets.length === 0 && (
               <p className="px-2 py-1 text-xs text-gray-500">No lessons yet</p>
             )
           )}
@@ -385,22 +384,80 @@ export default function FileTreeNode({
               </div>
             );
           })}
+
+          {sheets.length > 0 && <p className="px-2 pt-2 pb-1 ui-section-title">Cheatsheets</p>}
+          {sheets.map((sheet, i) => {
+            const ref = { folder: folder.name, id: sheet.id, kind: "sheet" as const };
+            const key = `sheet:${folder.name}:${sheet.id}`;
+            const isActive =
+              selected?.folder === folder.name && selected?.id === sheet.id && selected?.kind === "sheet";
+            return (
+              <div
+                key={sheet.id}
+                style={{ animationDelay: `${Math.min(i, 8) * 20}ms` }}
+                className="ui-rise group flex items-center"
+              >
+                <button
+                  onClick={() => onSelect(ref)}
+                  className={`ui-row flex min-w-0 flex-1 items-start gap-1.5 px-2 py-1 text-left text-sm ${
+                    isActive
+                      ? "bg-blue-600/10 text-blue-700 dark:bg-blue-600/20 dark:text-blue-300"
+                      : "text-gray-700 dark:text-gray-300"
+                  }`}
+                  title={sheet.title}
+                >
+                  <SheetIcon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-gray-400" />
+                  <span className="break-words">{sheet.title}</span>
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onToggleFavorite(ref, sheet.title);
+                  }}
+                  title={favorites.has(key) ? "Remove from favorites" : "Add to favorites"}
+                  className={`ui-icon-btn mr-1 h-5 w-5 ${
+                    favorites.has(key)
+                      ? "text-amber-500 hover:text-amber-500 dark:text-amber-500 dark:hover:text-amber-400"
+                      : "ui-reveal"
+                  }`}
+                >
+                  <StarIcon className="h-3.5 w-3.5" filled={favorites.has(key)} />
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setRenaming({ kind: "sheet", id: sheet.id, title: sheet.title });
+                  }}
+                  title="Rename cheatsheet"
+                  className="ui-icon-btn ui-reveal mr-1 h-5 w-5"
+                >
+                  <EditIcon className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setPending({ kind: "sheet", id: sheet.id, title: sheet.title });
+                  }}
+                  title="Delete cheatsheet"
+                  className="ui-icon-btn ui-icon-btn-danger ui-reveal mr-1 h-5 w-5"
+                >
+                  <TrashIcon className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            );
+          })}
         </div>
       )}
 
       {pending && (
         <ConfirmModal
           title={
-            pending.kind === "folder"
-              ? "Delete folder"
-              : pending.kind === "quiz"
-              ? "Delete quiz"
-              : "Delete lesson"
+            pending.kind === "folder" ? "Delete folder" : `Delete ${DOC_NOUN[pending.kind]}`
           }
           message={
             pending.kind === "folder"
               ? `Delete folder "${folder.displayName}" and all its lessons? This cannot be undone.`
-              : `Delete ${pending.kind} "${pending.title}"? This cannot be undone.`
+              : `Delete ${DOC_NOUN[pending.kind]} "${pending.title}"? This cannot be undone.`
           }
           busy={busy}
           onConfirm={confirmDelete}
@@ -411,11 +468,7 @@ export default function FileTreeNode({
       {renaming && (
         <RenameModal
           title={
-            renaming.kind === "folder"
-              ? "Rename folder"
-              : renaming.kind === "quiz"
-              ? "Rename quiz"
-              : "Rename lesson"
+            renaming.kind === "folder" ? "Rename folder" : `Rename ${DOC_NOUN[renaming.kind]}`
           }
           label={renaming.kind === "folder" ? "Folder name" : "Title"}
           initialValue={renaming.kind === "folder" ? folder.displayName : renaming.title}

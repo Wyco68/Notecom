@@ -18,6 +18,29 @@ export interface SheetSpec {
   title: string;
 }
 
+/** How many review passes ran on the current version, what they found, and
+ *  anything still open when the rounds ran out. */
+export interface SheetReview {
+  passes: number;
+  found: number;
+  open: string[];
+}
+
+/** One turn of a sheet's edit conversation. */
+export interface SheetMessage {
+  role: "user" | "assistant";
+  text: string;
+  /** ISO time */
+  at: string;
+}
+
+/** What a stored sheet carries beside its HTML (notes_documents.meta). */
+export interface SheetMeta {
+  spec: SheetSpec;
+  review: SheetReview | null;
+  messages: SheetMessage[];
+}
+
 export interface LayoutSpec {
   /** paper size in mm */
   width: number;

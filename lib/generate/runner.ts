@@ -15,12 +15,12 @@
 
 import { spawn, type ChildProcess } from "child_process";
 import { randomUUID } from "crypto";
-import { existsSync, readFileSync } from "fs";
+import { existsSync, readFileSync, writeFileSync } from "fs";
 import { rm, writeFile } from "fs/promises";
 import path from "path";
 import { checkLesson, checkQuiz, checkSheet, extractHtml, extractSheet } from "./validate";
-import { saveGenerated, type SavedDoc } from "./save";
-import { LAYOUTS, visibleChars, type SheetSpec } from "../sheet/layout";
+import { saveGenerated, saveSheet, type SavedDoc } from "./save";
+import { LAYOUTS, visibleChars, type SheetMessage, type SheetReview, type SheetSpec } from "../sheet/layout";
 import { plainText, sourceIssues, type ChapterSource } from "../sheet/sources";
 
 export type JobKind = "lect" | "quiz" | "sheet";
@@ -32,30 +32,29 @@ interface SheetRun {
   sources: ChapterSource[];
   model: string;
   effort: string;
-  cleanup?: ReturnType<typeof setTimeout>;
 }
 
-/** Shown with the sheet: how many review passes ran, what they found, and
- *  anything still open when the rounds ran out. */
-export interface SheetReview {
-  passes: number;
-  found: number;
-  open: string[];
+/** An edit of a stored sheet: which one, and what the reader asked for. */
+export interface SheetEdit {
+  docKey: string;
+  request: string;
 }
 
 export interface Job {
   id: string;
   /** "ready": generated and contract-checked, waiting for the save request
-   *  (see saveJob) — the one step that needs the caller's session. A sheet is
-   *  never saved, so it goes straight to "done" holding its HTML. */
+   *  (see saveJob) — the one step that needs the caller's session. */
   status: "running" | "ready" | "done" | "error" | "aborted";
   folder: string;
   kind: JobKind;
   /** set on cheatsheet runs only */
   sheet?: SheetSpec;
-  /** the CLI session of the last writing round — a sheet the reader wants
-   *  changed (reviseSheet) goes back to it rather than starting over */
+  /** the CLI session of the last writing round; a fix round resumes it */
   sessionId?: string;
+  /** set when this sheet run edits a stored sheet rather than making one */
+  edit?: SheetEdit;
+  /** the writer's one-line account of what it did, shown in the conversation */
+  note?: string;
   /** a sheet's inputs: the temp dir holding the chapter files and slides, the
    *  chapters' text for the source check, the slide paths, and the model and
    *  effort it runs on. Server-side only — never listed. */
@@ -75,8 +74,7 @@ export interface Job {
    *  only thing standing between "list every job on the box" and "list mine" —
    *  every read/write below is scoped by it. */
   startedBy: string;
-  /** the checked document, held in memory until it is saved — or, for a
-   *  sheet, for as long as this server process runs */
+  /** the checked document, held in memory only until it is saved */
   html?: string;
   saving?: Promise<SavedDoc>;
   saved?: SavedDoc;
@@ -127,14 +125,16 @@ export function getJob(id: string, userId: string): Job | undefined {
  */
 export function listJobs(
   userId: string
-): Array<Pick<Job, "id" | "status" | "folder" | "kind" | "sheet" | "startedAt" | "tokens" | "needsAuth" | "saved">> {
+): Array<
+  Pick<Job, "id" | "status" | "folder" | "kind" | "sheet" | "edit" | "startedAt" | "tokens" | "needsAuth" | "saved">
+> {
   // Picked, not spread: a job carries server-side state (temp paths, source
   // text, the CLI session) that has no business leaving this process.
   return [...jobs.values()]
     .filter((j) => j.startedBy === userId)
     .sort((a, b) => b.startedAt - a.startedAt)
-    .map(({ id, status, folder, kind, sheet, startedAt, tokens, needsAuth, saved }) => ({
-      id, status, folder, kind, sheet, startedAt, tokens, needsAuth, saved,
+    .map(({ id, status, folder, kind, sheet, edit, startedAt, tokens, needsAuth, saved }) => ({
+      id, status, folder, kind, sheet, edit, startedAt, tokens, needsAuth, saved,
     }));
 }
 
@@ -199,11 +199,12 @@ export function startJob(
 }
 
 /**
- * A cheatsheet run. `dir` holds its inputs — one HTML file per chapter, read
- * from Supabase by the route as the caller, plus any uploaded slides. It
- * outlives the run (the review reads it, and so does a later revision) and is
- * removed a few hours after the sheet is done, or at once if the run fails.
- * No folder chain: a sheet takes no sequence number.
+ * A cheatsheet run: a new sheet, or — with `edit` — a new version of a stored
+ * one, written from the reader's message. `dir` holds the inputs: one HTML
+ * file per chapter, read from Supabase by the route as the caller, any
+ * uploaded slides, and for an edit the current sheet, the request and the
+ * conversation so far. It is removed when the run ends. Either way the result
+ * ends "ready" and is saved by the client's request (saveJob), like a lesson.
  */
 export function startSheetJob(
   folder: string,
@@ -211,7 +212,8 @@ export function startSheetJob(
   dir: string,
   chapters: Array<{ seq: number; path: string }>,
   extras: string[],
-  startedBy: string
+  startedBy: string,
+  edit?: SheetEdit & { current: string; history: SheetMessage[] }
 ): Job {
   const job: Job = {
     id: randomUUID(),
@@ -223,6 +225,7 @@ export function startSheetJob(
     startedAt: Date.now(),
     tokens: { input: 0, output: 0 },
     startedBy,
+    edit: edit && { docKey: edit.docKey, request: edit.request },
     sheetRun: {
       dir,
       chapters,
@@ -238,65 +241,47 @@ export function startSheetJob(
   if (!commandReady(job, repoRoot, [dir])) return job;
 
   const L = LAYOUTS[spec.layout];
-  const prompt =
-    `/sheet ` +
-    `Make one cheatsheet for chapters ${spec.from} to ${spec.to}. Do not create, write or edit any file; you only have read access, and the app lays out and prints the sheet itself. ` +
+  const sources =
     `Chapter files, in order: ${chapters.map((c) => oneLine(c.path)).join(", ")}. ` +
     (extras.length
       ? `Extra source files (slides) to check the notes against: ${extras.map(oneLine).join(", ")}; convert them with the markitdown tool. `
       : `There are no extra source files. `) +
     `Page limit: ${spec.pages} page(s), ${L.label}, body font ${L.font}pt. ` +
     `Character budget: about ${(L.budget * spec.pages).toLocaleString("en-US")} visible characters, whitespace excluded; aim for 90 to 100 percent of it. ` +
-    `Ground every fact strictly in these files; if a file cannot be read, stop and say so instead of guessing. ` +
-    `When the sheet is ready, reply with only its HTML fragment, starting at the first <h2>: no code fence, no summary, and no text before or after it.`;
+    `Ground every fact strictly in these files; if a file cannot be read, stop and say so instead of guessing. `;
 
-  generateSheet(job, repoRoot, prompt, `chapters ${spec.from}-${spec.to}, ${spec.pages} page(s)`);
+  let prompt: string;
+  if (edit) {
+    // Files, not the prompt, carry the reader's words: the prompt must be one
+    // line with quotes stripped (oneLine), and a request should arrive intact.
+    const current = path.join(dir, "current-sheet.html");
+    const request = path.join(dir, "request.txt");
+    const history = path.join(dir, "conversation.txt");
+    writeFileSync(current, edit.current.replace(/(<(?:h2|h3|p|li|tr|table|ul|ol|pre|svg)[\s>])/g, "\n$1"));
+    writeFileSync(request, edit.request);
+    writeFileSync(
+      history,
+      edit.history.slice(-12).map((m) => `${m.role === "user" ? "Reader" : "You"}: ${m.text}`).join("\n\n") || "(none)"
+    );
+    prompt =
+      `/sheet Edit mode. Do not create, write or edit any file; you only have read access. ` +
+      `The current cheatsheet for chapters ${spec.from} to ${spec.to} is at ${oneLine(current)}. ` +
+      `The reader's request is in ${oneLine(request)}, and the conversation so far is in ${oneLine(history)}. ` +
+      sources +
+      `Change what the request asks and keep everything else; every rule of the cheatsheet guidelines still applies, and nothing may come from outside the source files. ` +
+      `If the request asks for something the sources do not support, leave the sheet as it is for that part and say so. ` +
+      `Reply with one line starting "NOTE:" that tells the reader in plain words what you changed, then the complete fragment, starting at the first <h2>.`;
+  } else {
+    prompt =
+      `/sheet ` +
+      `Make one cheatsheet for chapters ${spec.from} to ${spec.to}. Do not create, write or edit any file; you only have read access, and the app lays out and prints the sheet itself. ` +
+      sources +
+      `When the sheet is ready, reply with one line starting "NOTE:" that tells the reader in plain words what the sheet covers and anything you had to leave out, then its HTML fragment, starting at the first <h2>: no code fence and nothing after it.`;
+  }
+
+  const label = edit ? `edit of ${edit.docKey}` : `chapters ${spec.from}-${spec.to}, ${spec.pages} page(s)`;
+  generateSheet(job, repoRoot, prompt, label);
   return job;
-}
-
-/**
- * Sends a finished sheet back to the session that wrote it, with what the
- * browser measured: the page count at the smallest font when it is over the
- * limit, and any layout problems the audit found (a block outside its column,
- * an overlap, a clipped block). The result goes through every check again,
- * the review included — a cut can drop or garble a fact.
- */
-export function reviseSheet(
-  id: string,
-  userId: string,
-  measured: { pages?: number; layout?: string[] }
-): "ok" | "nothing" | "expired" {
-  const job = getJob(id, userId);
-  if (!job || job.kind !== "sheet" || job.status !== "done" || !job.sheet || !job.sessionId || !job.sheetRun) {
-    return "nothing";
-  }
-  if (!existsSync(job.sheetRun.dir)) return "expired";
-  const limit = job.sheet.pages;
-  const over = measured.pages && measured.pages > limit ? measured.pages : 0;
-  const layout = (measured.layout ?? []).slice(0, 15);
-  if (!over && !layout.length) return "nothing";
-
-  const parts: string[] = [];
-  if (over) {
-    const cut = Math.min(60, Math.ceil((1 - limit / over) * 100) + 5);
-    parts.push(
-      `The app laid the sheet out at the smallest allowed font and it printed on ${over} pages; the limit is ${limit}. ` +
-        `Cut about ${cut} percent of the visible text, following the compression order in the cheatsheet guidelines, and keep every fact.`
-    );
-    job.log.push(`Printed on ${over} page(s) at the smallest font; the limit is ${limit}. Asking Claude to cut about ${cut}%.`);
-  }
-  if (layout.length) {
-    parts.push(
-      `The app's layout audit found these problems in the printed pages: ${oneLine(layout.map((l) => l.slice(0, 160)).join("; "))}. ` +
-        `Fix each one: split or narrow a table that is too wide, shorten a code line or diagram label that runs out of its box, move diagram labels that overlap.`
-    );
-    job.log.push(`Layout audit found ${layout.length} problem(s). Asking Claude to fix them.`);
-  }
-  if (job.sheetRun.cleanup) clearTimeout(job.sheetRun.cleanup);
-  job.status = "running";
-  const repoRoot = process.env.REPO_ROOT || process.cwd();
-  generateSheet(job, repoRoot, `${parts.join(" ")} Reply with only the complete fragment, starting at the first <h2>.`, "revise", job.sessionId);
-  return "ok";
 }
 
 // Without the command file, claude "succeeds" with a confused one-turn reply
@@ -420,8 +405,6 @@ const SHEET_EFFORT = "high";
 // round re-sends the whole sheet at full effort.
 const SHEET_MAX_ROUNDS = 5;
 const SHEET_MAX_REVIEWS = 3;
-// A finished sheet keeps its sources this long, for a revision.
-const SHEET_SOURCES_TTL_MS = 6 * 60 * 60_000;
 
 /**
  * Write → check → review → fix, until a sheet passes everything or the rounds
@@ -439,18 +422,12 @@ const SHEET_SOURCES_TTL_MS = 6 * 60 * 60_000;
  * last review's findings, if the rounds run out, are shown with the sheet
  * rather than hidden.
  */
-async function generateSheet(
-  job: Job,
-  repoRoot: string,
-  firstPrompt: string,
-  label: string,
-  resumeFrom?: string
-): Promise<void> {
+async function generateSheet(job: Job, repoRoot: string, firstPrompt: string, label: string): Promise<void> {
   const spec = job.sheet!;
   const run0 = job.sheetRun!;
   const room = LAYOUTS[spec.layout].budget * spec.pages;
   let prompt = firstPrompt;
-  let sessionId = resumeFrom;
+  let sessionId: string | undefined;
   let reviews = 0;
   job.review = { passes: 0, found: 0, open: [] };
   try {
@@ -473,6 +450,10 @@ async function generateSheet(
         job.status = "error";
         return;
       }
+      // The writer's "NOTE:" line, if it gave one; a fix round usually doesn't,
+      // so the first one stands.
+      const note = /NOTE:\s*([^\n]+)/i.exec(run.reply.slice(0, run.reply.search(/<h2[\s>]/)))?.[1]?.trim();
+      if (note && !job.note) job.note = note.slice(0, 600);
 
       const sources = sourceIssues(html, run0.sources, run0.extras.length > 0);
       const violations = [...checkSheet(html, spec, run0.sources.map((c) => c.text).join(" ")), ...sources.hard];
@@ -519,12 +500,11 @@ async function generateSheet(
 
       if (!fix) {
         job.html = html;
-        job.status = "done";
+        job.status = "ready";
         job.log.push(
           job.review.open.length
-            ? `The cheatsheet is ready with ${job.review.open.length} open point(s) from the review. Open it to see them.`
-            : "The cheatsheet passed every check and the review. Open it to see the pages and print.",
-          "Finished."
+            ? `The cheatsheet passed the checks with ${job.review.open.length} open point(s) from the review — saving it.`
+            : "The cheatsheet passed every check and the review — saving it."
         );
         return;
       }
@@ -537,14 +517,8 @@ async function generateSheet(
       prompt = fix;
     }
   } finally {
-    // Kept for a revision while the sheet is on screen; dropped otherwise.
-    const dir = run0.dir;
-    if (job.status === "done") {
-      run0.cleanup = setTimeout(() => rm(dir, { recursive: true, force: true }).catch(() => {}), SHEET_SOURCES_TTL_MS);
-      run0.cleanup.unref?.();
-    } else if (job.status !== "running") {
-      rm(dir, { recursive: true, force: true }).catch(() => {});
-    }
+    // The sheet is saved from here on; an edit reads its sources afresh.
+    if (job.status !== "running") rm(run0.dir, { recursive: true, force: true }).catch(() => {});
   }
 }
 
@@ -758,13 +732,12 @@ function explainFailure(job: Job) {
 export function saveJob(job: Job): Promise<SavedDoc> {
   if (job.saved) return Promise.resolve(job.saved);
   if (job.saving) return job.saving;
-  // A sheet never reaches "ready", but the kind check keeps the narrowing honest.
-  if (job.status !== "ready" || !job.html || job.kind === "sheet") {
-    return Promise.reject(new Error("nothing to save"));
-  }
+  if (job.status !== "ready" || !job.html) return Promise.reject(new Error("nothing to save"));
 
-  const noun = job.kind === "quiz" ? "quiz" : "lesson";
-  job.saving = saveGenerated(job.folder, job.kind, job.html)
+  const noun = job.kind === "quiz" ? "quiz" : job.kind === "sheet" ? "cheatsheet" : "lesson";
+  const saving =
+    job.kind === "sheet" ? saveSheetJob(job, job.html) : saveGenerated(job.folder, job.kind, job.html);
+  job.saving = saving
     .then((saved) => {
       job.saved = saved;
       job.html = undefined;
@@ -782,6 +755,19 @@ export function saveJob(job: Job): Promise<SavedDoc> {
       job.saving = undefined;
     });
   return job.saving;
+}
+
+function saveSheetJob(job: Job, html: string): Promise<SavedDoc> {
+  const at = new Date().toISOString();
+  const spec = job.sheet!;
+  const said =
+    job.note ||
+    (job.edit ? "Done." : `Made the sheet for chapters ${spec.from} to ${spec.to} on ${spec.pages} page(s).`);
+  const turns: SheetMessage[] = [
+    ...(job.edit ? [{ role: "user" as const, text: job.edit.request, at: new Date(job.startedAt).toISOString() }] : []),
+    { role: "assistant", text: said, at },
+  ];
+  return saveSheet(job.folder, html, spec, job.review ?? null, turns, job.edit?.docKey);
 }
 
 // stopJob force-kills a running job (the UI's Ctrl+C). shell:true means

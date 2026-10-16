@@ -82,8 +82,10 @@ what it acts on.**
   be icon-only buttons on the Folders row, which claimed a relationship to the
   folder tree that neither has.
 - **Folders row** — only what acts on folders: generate, cheatsheet and
-  new-folder, plus the read-only / CLI sign-in badge. A finished cheatsheet
-  opens in the content column (`SheetPanel`), like the other panels.
+  new-folder, plus the read-only / CLI sign-in badge. A cheatsheet is listed
+  in its folder under "Cheatsheets" and opens in the content column
+  (`SheetView`): the pages and checks, with a chat panel beside them that edits
+  the sheet.
 - **Account foot** — identity first, then the app-level chrome (refresh,
   theme) right-aligned. `AccountControl` renders its *contents* only; `AppShell`
   owns the bordered row, so the chrome survives on a build with no

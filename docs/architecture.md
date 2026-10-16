@@ -62,15 +62,23 @@ folder under the home directory (the snap build cannot see `/tmp`); without
 LibreOffice the upload is refused before the run, saying to save it as
 `.pptx`/`.docx`/`.xlsx` or PDF. Cheatsheet slides go through the same step.
 
-## Cheatsheets: printed, never saved (2026-10)
+## Cheatsheets: stored, edited by chat, printed (2026-10)
 
 `/sheet` is a third generation run, started from the sidebar's Cheatsheet
-dialog with a folder, a first and last chapter, and a page limit.
+dialog with a folder, a first and last chapter, and a page limit. A finished
+sheet is a document of `kind = 'sheet'` in that folder, so it shares, lists,
+renames and deletes like a lesson, under the same folder policies; its chapter
+range, page spec, review result and edit conversation live in
+`notes_documents.meta` (migration 0032). It has no search chunks: it restates
+lessons already indexed.
 
-1. `POST /api/sheet` reads those lessons as the caller (RLS decides, as for
-   any read) and writes them to a temp dir as files, one per chapter, with any
-   uploaded slides beside them. The CLI has no database access, so it can only
-   ever see what that request could read. The dir goes when the run ends.
+1. `POST /api/sheet` (new) and `POST /api/sheets/[folder]/[id]/edit` (a
+   message from the sheet's chat box) both read the lessons as the caller and
+   write them to a temp dir as files (`lib/sheet/inputs.ts`), with any
+   uploaded slides beside them; an edit adds the current sheet, the request
+   and the conversation. The CLI has no database access, so it can only ever
+   see what that request could read. Both need write access to the folder,
+   checked before the run; the dir goes when the run ends.
 2. `lib/generate/runner.ts` (`generateSheet`) runs `/sheet` with the same
    read-only tools, on Opus 5.5 at high effort for both writing and
    review (`SHEET_MODEL`, default `claude-opus-5-5`, pinned by full id;
@@ -84,9 +92,11 @@ dialog with a folder, a first and last chapter, and a page limit.
    unsupported, unclear or missing as JSON. Any failure goes back to the
    writer's session; rounds and review passes are bounded, and findings still
    open when they run out are shown with the sheet, not dropped. The job ends
-   `done` holding the fragment in memory. Nothing is saved: a sheet is a
-   print-out, and the lesson contract forbids the styling it needs. The
-   sources stay in the temp dir for six hours, for a revision.
+   `ready` and the client's save request files it (`saveSheet` in
+   `save.ts`): a new sheet, or the next version of the edited one with the
+   reader's message and the writer's `NOTE:` line added to the conversation.
+   An edit is a fresh session, not a resumed one, so a sheet can be changed
+   days later.
 3. The browser lays it out. `lib/sheet/layout.ts` owns the paper (two
    layouts, picked from the page limit) and the page document;
    `lib/sheet/paginate.ts` deals the fragment's blocks into fixed-size pages,
@@ -96,22 +106,23 @@ dialog with a folder, a first and last chapter, and a page limit.
 4. `auditLayout` then checks the laid-out pages: every box inside its own
    column, no block over another, nothing cut off, diagram labels inside
    their diagram and not on each other, no heading stranded at a column foot
-   (the paginator already pushes those over). The panel lists every check —
-   the server's and the browser's — and only offers Print as the main action
-   when all pass. Over the limit at the smallest font, or with layout
-   problems, the reader can send it back (`POST /api/sheet/[id]`), which
-   resumes the writer's session with the measurements and runs every check
-   and the review again. A button, not automatic, because it spends tokens.
+   (the paginator already pushes those over). `SheetView` lists every check —
+   the server's and the browser's — and only offers Save PDF as the main
+   action when all pass. Over the limit at the smallest font, or with layout
+   problems, "Ask Claude to fix these" sends the measurements as a chat
+   message, so the fix is an ordinary edit. A button, not automatic, because
+   it spends tokens.
 
-The preview iframe is sandboxed with no scripts; the panel reaches in from the
+The preview iframe is sandboxed with no scripts; the view reaches in from the
 parent to paginate and print. Model-written HTML never runs in the app's
 origin.
 
 **Save PDF is the one file the app writes** outside a run's temp dir, and it
-is narrow on purpose (`lib/sheet/pdf.ts`): a user-asked export of a sheet only
-its owner can reach, named by the server, written without overwriting into the
-Downloads folder of the machine the server runs on — which for a cheatsheet is
-always the reader's own, since sheets only exist where the CLI does. It prints
+is narrow on purpose (`lib/sheet/pdf.ts`): a user-asked export of a sheet the
+caller can read, named by the server, written without overwriting into the
+Downloads folder of the machine the server runs on — and only where the
+Claude Code CLI is installed, the app's signal for "the reader's own
+machine"; a hosted server falls back to the print dialog. It prints
 with a Chromium-family browser already installed (Chrome, Chromium, Edge,
 Brave; `SHEET_PDF_BROWSER` overrides) through the DevTools protocol, because
 the `--print-to-pdf` switch hangs on some builds. The renderer has file access,

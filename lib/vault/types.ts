@@ -26,6 +26,15 @@ export interface Folder {
 export interface FolderDocs {
   lessons: Lesson[];
   quizzes: Quiz[];
+  /** cheatsheets; absent from an older server's answer */
+  sheets?: Lesson[];
+}
+
+export type DocKind = "lesson" | "quiz" | "sheet";
+
+/** A folder's documents of one kind. */
+export function docsOfKind(d: FolderDocs, kind: DocKind): Lesson[] {
+  return kind === "quiz" ? d.quizzes : kind === "sheet" ? (d.sheets ?? []) : d.lessons;
 }
 
 export interface VaultTree {
@@ -39,7 +48,7 @@ export interface VaultTree {
 export interface LessonRef {
   folder: string;
   id: string;
-  kind: "lesson" | "quiz";
+  kind: DocKind;
   heading?: string;
   headingIndex?: number;
 }

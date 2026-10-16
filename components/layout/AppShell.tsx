@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { Folder, FolderDocs, LessonRef, VaultTree } from "@/lib/vault/types";
+import { docsOfKind, type DocKind, type Folder, type FolderDocs, type LessonRef, type VaultTree } from "@/lib/vault/types";
 import { pruneRecent, pushRecent, type RecentEntry } from "@/lib/vault/recent";
 import {
   pruneFavorites,
@@ -17,7 +17,7 @@ import LessonViewer from "../viewer/LessonViewer";
 import NewFolderModal from "../modals/NewFolderModal";
 import GenerateModal from "../modals/GenerateModal";
 import CheatsheetModal from "../modals/CheatsheetModal";
-import SheetPanel from "../sheet/SheetPanel";
+import SheetView from "../sheet/SheetView";
 import SignInModal from "../modals/SignInModal";
 import GenerateJobList from "../generate/GenerateJobList";
 import { useGenerateJobs } from "../generate/GenerateJobsProvider";
@@ -47,8 +47,7 @@ type Overlay =
   | { kind: "people" }
   | { kind: "user"; username: string }
   | { kind: "notifications" }
-  | { kind: "manage"; slug: string }
-  | { kind: "sheet"; jobId: string };
+  | { kind: "manage"; slug: string };
 
 export default function AppShell() {
   const [folders, setFolders] = useState<Folder[] | null>(null);
@@ -109,7 +108,7 @@ export default function AppShell() {
   const currentTitle = (() => {
     if (!selected) return null;
     const d = docs[selected.folder];
-    const list = selected.kind === "quiz" ? d?.quizzes : d?.lessons;
+    const list = d && docsOfKind(d, selected.kind);
     return list?.find((l) => l.id === selected.id)?.title ?? null;
   })();
 
@@ -155,7 +154,7 @@ export default function AppShell() {
       const data: FolderDocs = await res.json();
       docsRef.current = {
         ...docsRef.current,
-        [name]: { lessons: data.lessons ?? [], quizzes: data.quizzes ?? [] },
+        [name]: { lessons: data.lessons ?? [], quizzes: data.quizzes ?? [], sheets: data.sheets ?? [] },
       };
       setDocs(docsRef.current);
     } catch {
@@ -222,11 +221,11 @@ export default function AppShell() {
     // An entry in a folder that hasn't been fetched is kept: not knowing its
     // documents is not evidence that the file is gone, same rule the heavy
     // refresh below uses.
-    const stillExists = (e: { folder: string; id: string; kind: string }) => {
+    const stillExists = (e: { folder: string; id: string; kind: DocKind }) => {
       if (!names.has(e.folder)) return false;
       const d = docsRef.current[e.folder];
       if (!d) return true;
-      const inList = e.kind === "quiz" ? d.quizzes : d.lessons;
+      const inList = docsOfKind(d, e.kind);
       return inList.some((l) => l.id === e.id);
     };
     setRecent(pruneRecent(stillExists));
@@ -556,9 +555,13 @@ export default function AppShell() {
         <GenerateJobList
           onOpen={(jobId) => {
             const job = generateJobs.find((j) => j.id === jobId);
-            if (job?.kind !== "sheet") setShowGenerate(jobId);
-            // A finished sheet opens as its pages; one still running, as its log.
-            else if (job.status === "done") openOverlay({ kind: "sheet", jobId });
+            if (job?.kind !== "sheet") {
+              setShowGenerate(jobId);
+              return;
+            }
+            // A saved sheet opens as its pages; one still running, as its log.
+            const sheetId = job.saved?.id ?? job.edit?.docKey;
+            if (job.status === "done" && sheetId) onSelect({ folder: job.folder, id: sheetId, kind: "sheet" });
             else setShowSheet(jobId);
           }}
           folderNames={folderNames}
@@ -787,16 +790,13 @@ export default function AppShell() {
               refreshTree();
             }}
           />
-        ) : overlay?.kind === "sheet" ? (
-          <SheetPanel
-            key={overlay.jobId}
-            jobId={overlay.jobId}
-            folderName={(() => {
-              const slug = generateJobs.find((j) => j.id === overlay.jobId)?.folder ?? "";
-              return folderNames[slug] ?? slug.replace(/-/g, " ");
-            })()}
-            onClose={() => setOverlay(null)}
-            onShowLog={() => setShowSheet(overlay.jobId)}
+        ) : selected?.kind === "sheet" ? (
+          <SheetView
+            key={`${selected.folder}/${selected.id}`}
+            folder={selected.folder}
+            id={selected.id}
+            folderName={folderNames[selected.folder] ?? selected.folder.replace(/-/g, " ")}
+            onShowLog={(jobId) => setShowSheet(jobId)}
           />
         ) : selected ? (
           <LessonViewer lesson={selected} />
@@ -837,9 +837,9 @@ export default function AppShell() {
             setShowSheet(false);
             setShowSignIn(true);
           }}
-          onOpenSheet={(jobId) => {
+          onOpenSheet={(ref) => {
             setShowSheet(false);
-            openOverlay({ kind: "sheet", jobId });
+            onSelect({ ...ref, kind: "sheet" });
           }}
         />
       )}

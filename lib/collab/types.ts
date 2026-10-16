@@ -110,7 +110,7 @@ export type FeedItem =
   | {
       kind: "doc";
       at: string;
-      docKind: "lesson" | "quiz";
+      docKind: "lesson" | "quiz" | "sheet";
       docKey: string;
       title: string;
       /** The lesson's Overview section as HTML, or null (quizzes, no section). */

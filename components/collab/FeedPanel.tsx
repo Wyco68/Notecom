@@ -142,7 +142,7 @@ export default function FeedPanel({
                   tabIndex={0}
                   aria-label={
                     item.kind === "doc"
-                      ? `${item.docKind === "quiz" ? "Take quiz" : "Read lesson"}: ${item.title}`
+                      ? `${item.docKind === "quiz" ? "Take quiz" : item.docKind === "sheet" ? "Open cheatsheet" : "Read lesson"}: ${item.title}`
                       : `View ${item.folderName} on ${item.ownerUsername}'s profile`
                   }
                   onClick={() => open(item)}
@@ -185,7 +185,7 @@ export default function FeedPanel({
                       </p>
                       <p className="text-xs text-gray-500 dark:text-gray-400">
                         <time dateTime={item.at}>{ago(item.at)}</time>
-                        {item.kind === "doc" && ` · ${item.docKind}`}
+                        {item.kind === "doc" && ` · ${item.docKind === "sheet" ? "cheatsheet" : item.docKind}`}
                       </p>
                     </div>
                   </header>

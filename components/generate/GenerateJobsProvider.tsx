@@ -32,8 +32,9 @@ import type { SheetSpec } from "@/lib/sheet/layout";
 // held server-side, and this POSTs it into Supabase — the save must run as the
 // signed-in user, and only a request carries that session.
 //
-// A cheatsheet run is the same kind of job with no save: it ends "done" with
-// the sheet held server-side, and the sheet panel fetches and prints it.
+// A cheatsheet run is the same kind of job: it ends "ready" and is saved into
+// its folder the same way — as a new sheet, or, for an edit from the sheet's
+// chat box, as the next version of the sheet it edits.
 
 export type JobStatus = "running" | "done" | "error" | "aborted";
 
@@ -43,9 +44,11 @@ export interface GenerateJob {
   kind: "lect" | "quiz" | "sheet";
   /** what a cheatsheet run was asked for */
   sheet?: SheetSpec;
-  /** bumped each time a sheet is sent back to be shortened, so the panel
-   *  showing it knows to fetch the new one once it is done */
-  round?: number;
+  /** set when this run edits a stored sheet: which one, and the reader's
+   *  message, shown in the sheet's conversation while the run is going */
+  edit?: { docKey: string; request: string };
+  /** the document the run was saved as, once it has been */
+  saved?: { id: string; title: string };
   status: JobStatus;
   log: string[];
   tokens: { input: number; output: number };
@@ -80,9 +83,8 @@ interface GenerateJobsValue {
     pages: number;
     files: File[];
   }) => Promise<string | null>;
-  /** Sends a finished sheet back to be fixed: over its page limit at the
-   *  smallest font, or with layout problems the preview's audit found. */
-  revise: (id: string, measured: { pages?: number; layout?: string[] }) => Promise<boolean>;
+  /** Sends a message from a stored sheet's chat box: an edit run on it. */
+  editSheet: (input: { folder: string; id: string; message: string }) => Promise<string | null>;
   abort: (id: string) => void;
   /** Forget a finished job, removing it from the sidebar. */
   dismiss: (id: string) => void;
@@ -195,7 +197,11 @@ export default function GenerateJobsProvider({ children }: { children: React.Rea
           const res = await fetch(`/api/generate/${id}`, { method: "POST" });
           const data = await res.json().catch(() => ({}));
           if (!res.ok) throw new Error(data.error || "save failed");
-          patch(id, (j) => ({ ...j, log: [...j.log, `Saved "${data.title}".`, "Finished."] }));
+          patch(id, (j) => ({
+            ...j,
+            saved: { id: data.id, title: data.title },
+            log: [...j.log, `Saved "${data.title}".`, "Finished."],
+          }));
           status = "done";
         } catch (err: any) {
           patch(id, (j) => ({ ...j, log: [...j.log, `Save failed: ${err.message}`] }));
@@ -210,14 +216,16 @@ export default function GenerateJobsProvider({ children }: { children: React.Rea
       const job = jobsRef.current.find((j) => j.id === id);
       const where = job ? job.folder.replace(/-/g, " ") : "the folder";
       if (job?.kind === "sheet") {
-        // Nothing was added to the tree, so no refresh.
-        if (status === "done") toast.success(`Cheatsheet for "${where}" is ready — open it from the sidebar.`);
+        if (job.edit) {
+          if (status === "done") toast.success("Cheatsheet updated.");
+          else if (status === "error") toast.error("The cheatsheet edit failed — the sheet is unchanged.");
+        } else if (status === "done") toast.success(`Cheatsheet saved in "${where}".`);
         else if (status === "error") toast.error(`Cheatsheet for "${where}" failed — see the log.`);
-        return;
+      } else {
+        const noun = job?.kind === "quiz" ? "quiz" : "lesson";
+        if (status === "done") toast.success(`Generated ${noun} in "${where}".`);
+        else if (status === "error") toast.error(`Generation failed in "${where}" — see the log.`);
       }
-      const noun = job?.kind === "quiz" ? "quiz" : "lesson";
-      if (status === "done") toast.success(`Generated ${noun} in "${where}".`);
-      else if (status === "error") toast.error(`Generation failed in "${where}" — see the log.`);
       if (status === "done") setCompletedTick((n) => n + 1);
     },
     [patch, toast]
@@ -245,33 +253,18 @@ export default function GenerateJobsProvider({ children }: { children: React.Rea
           const running = (data.jobs ?? []).filter(
             (j: any) => j.status === "running" || j.status === "ready"
           );
-          // A finished sheet lives only on the server; list it again so the
-          // reader can still open and print it after a reload.
-          const sheets = (data.jobs ?? []).filter(
-            (j: any) => j.kind === "sheet" && j.status === "done"
-          );
-          if (!running.length && !sheets.length) return;
+          if (!running.length) return;
           setJobs([
             ...running.map((j: any) => ({
               id: j.id,
               folder: j.folder,
               kind: j.kind,
               sheet: j.sheet,
+              edit: j.edit,
               status: "running" as JobStatus,
               // The tail replays the whole log from the beginning, so starting
               // empty is correct — it fills in immediately.
               log: [],
-              tokens: j.tokens ?? { input: 0, output: 0 },
-              startedAt: j.startedAt ?? Date.now(),
-              lastActivity: Date.now(),
-            })),
-            ...sheets.map((j: any) => ({
-              id: j.id,
-              folder: j.folder,
-              kind: "sheet" as const,
-              sheet: j.sheet,
-              status: "done" as JobStatus,
-              log: ["Finished."],
               tokens: j.tokens ?? { input: 0, output: 0 },
               startedAt: j.startedAt ?? Date.now(),
               lastActivity: Date.now(),
@@ -354,7 +347,6 @@ export default function GenerateJobsProvider({ children }: { children: React.Rea
             folder,
             kind: "sheet",
             sheet: data.sheet,
-            round: 0,
             status: "running",
             log: [],
             tokens: { input: 0, output: 0 },
@@ -372,32 +364,46 @@ export default function GenerateJobsProvider({ children }: { children: React.Rea
     [activeCount, follow, toast]
   );
 
-  const revise = useCallback<GenerateJobsValue["revise"]>(
-    async (id, measured) => {
+  const editSheet = useCallback<GenerateJobsValue["editSheet"]>(
+    async ({ folder, id, message }) => {
+      if (activeCount >= MAX_CONCURRENT_JOBS) {
+        toast.error(`Already running ${activeCount} jobs — wait for one to finish.`);
+        return null;
+      }
       try {
-        const res = await fetch(`/api/sheet/${id}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(measured),
-        });
+        const res = await fetch(
+          `/api/sheets/${encodeURIComponent(folder)}/${encodeURIComponent(id)}/edit`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ message }),
+          }
+        );
         const data = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(data.error || "could not send the sheet back");
-        // The tail replays the whole log, so start it empty again.
-        patch(id, (j) => ({
-          ...j,
-          status: "running",
-          round: (j.round ?? 0) + 1,
-          log: [],
-          lastActivity: Date.now(),
-        }));
-        follow(id);
-        return true;
+        if (!res.ok) throw new Error(data.error || "could not start the edit");
+        setJobs((prev) => [
+          ...prev,
+          {
+            id: data.jobId,
+            folder,
+            kind: "sheet",
+            sheet: data.sheet,
+            edit: { docKey: id, request: message },
+            status: "running",
+            log: [],
+            tokens: { input: 0, output: 0 },
+            startedAt: Date.now(),
+            lastActivity: Date.now(),
+          },
+        ]);
+        follow(data.jobId);
+        return data.jobId as string;
       } catch (err: any) {
         toast.error(err.message);
-        return false;
+        return null;
       }
     },
-    [follow, patch, toast]
+    [activeCount, follow, toast]
   );
 
   const abort = useCallback((id: string) => {
@@ -412,7 +418,7 @@ export default function GenerateJobsProvider({ children }: { children: React.Rea
 
   return (
     <Ctx.Provider
-      value={{ jobs, activeCount, now, completedTick, start, startSheet, revise, abort, dismiss }}
+      value={{ jobs, activeCount, now, completedTick, start, startSheet, editSheet, abort, dismiss }}
     >
       {children}
     </Ctx.Provider>

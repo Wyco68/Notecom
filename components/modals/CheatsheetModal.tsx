@@ -13,7 +13,8 @@ import { MAX_CONCURRENT_JOBS, useGenerateJobs } from "../generate/GenerateJobsPr
 // which ones (a first and last chapter) and how many pages it may take; slides
 // are optional, for checking the notes against. Like Generate, the run belongs
 // to GenerateJobsProvider, so closing this leaves it going. When it is done the
-// sheet opens in the content column, where it is laid out and printed.
+// sheet is saved in the folder and opens in the content column, where it is
+// laid out, printed and edited through its chat box.
 export default function CheatsheetModal({
   folders,
   onClose,
@@ -24,7 +25,8 @@ export default function CheatsheetModal({
   folders: Folder[];
   onClose: () => void;
   onSignIn: () => void;
-  onOpenSheet: (jobId: string) => void;
+  /** open the saved sheet */
+  onOpenSheet: (ref: { folder: string; id: string }) => void;
   watchJobId?: string;
 }) {
   const { jobs, activeCount, startSheet, abort } = useGenerateJobs();
@@ -76,13 +78,17 @@ export default function CheatsheetModal({
   }
 
   if (job) {
-    const done = job.status === "done";
+    const savedId = job.saved?.id ?? job.edit?.docKey;
+    const done = job.status === "done" && !!savedId;
     return (
       <Modal title="Cheatsheet" onClose={onClose}>
         <JobLog job={job} onAbort={() => abort(job.id)} onSignIn={onSignIn} />
         <div className="mt-3 flex gap-2">
           {done ? (
-            <button onClick={() => onOpenSheet(job.id)} className="ui-btn ui-btn-sm ui-btn-primary flex-1">
+            <button
+              onClick={() => onOpenSheet({ folder: job.folder, id: savedId! })}
+              className="ui-btn ui-btn-sm ui-btn-primary flex-1"
+            >
               Open cheatsheet
             </button>
           ) : (
