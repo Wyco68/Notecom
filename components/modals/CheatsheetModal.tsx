@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { Folder, Lesson } from "@/lib/vault/types";
-import { LAYOUTS, PAGE_LIMITS, layoutFor } from "@/lib/sheet/layout";
+import { LAYOUTS, MAX_COLUMNS, MAX_PAGES, MIN_COLUMNS, layoutFor } from "@/lib/sheet/layout";
 import Modal from "./Modal";
 import { JobLog } from "./GenerateModal";
 import { MAX_CONCURRENT_JOBS, useGenerateJobs } from "../generate/GenerateJobsProvider";
@@ -34,7 +34,11 @@ export default function CheatsheetModal({
   const [lessons, setLessons] = useState<Lesson[] | null>(null);
   const [from, setFrom] = useState(1);
   const [to, setTo] = useState(1);
-  const [pages, setPages] = useState(2);
+  // Kept as typed, so the field can be cleared and retyped; parsed below.
+  const [pagesText, setPagesText] = useState("2");
+  const [noLimit, setNoLimit] = useState(false);
+  // "" = the page size's own column count.
+  const [columns, setColumns] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const [starting, setStarting] = useState(false);
   const [watching, setWatching] = useState<string | null>(watchJobId ?? null);
@@ -66,11 +70,16 @@ export default function CheatsheetModal({
     if (watching && !job) onClose();
   }, [watching, job, onClose]);
 
+  const pagesNum = Number(pagesText);
+  const pagesValid = noLimit || (Number.isInteger(pagesNum) && pagesNum >= 1 && pagesNum <= MAX_PAGES);
+  // 0 = no page limit.
+  const pages = noLimit ? 0 : pagesValid ? pagesNum : 1;
+
   async function begin() {
-    if (!folder || starting || !lessons?.length || from > to) return;
+    if (!folder || starting || !lessons?.length || from > to || !pagesValid) return;
     setStarting(true);
     try {
-      const id = await startSheet({ folder, from, to, pages, files });
+      const id = await startSheet({ folder, from, to, pages, columns: columns ? Number(columns) : undefined, files });
       if (id) setWatching(id);
     } finally {
       setStarting(false);
@@ -181,24 +190,64 @@ export default function CheatsheetModal({
         </div>
       )}
 
-      <label htmlFor="sheet-pages" className={label}>
-        Page limit
+      <div className="mb-1.5 grid grid-cols-2 gap-2">
+        <div className="min-w-0">
+          <label htmlFor="sheet-pages" className={label}>
+            Page limit
+          </label>
+          <input
+            id="sheet-pages"
+            type="number"
+            inputMode="numeric"
+            min={1}
+            max={MAX_PAGES}
+            step={1}
+            value={noLimit ? "" : pagesText}
+            placeholder={noLimit ? "No limit" : undefined}
+            disabled={noLimit}
+            onChange={(e) => setPagesText(e.target.value)}
+            aria-invalid={!pagesValid}
+            aria-describedby="sheet-pages-hint"
+            className="ui-field"
+          />
+        </div>
+        <div className="min-w-0">
+          <label htmlFor="sheet-columns" className={label}>
+            Columns
+          </label>
+          <select
+            id="sheet-columns"
+            value={columns}
+            onChange={(e) => setColumns(e.target.value)}
+            className="ui-field"
+          >
+            <option value="">Default ({layout.columns})</option>
+            {Array.from({ length: MAX_COLUMNS - MIN_COLUMNS + 1 }, (_, i) => MIN_COLUMNS + i).map((n) => (
+              <option key={n} value={n}>
+                {n}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+      <label className="mb-1.5 flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
+        <input type="checkbox" checked={noLimit} onChange={(e) => setNoLimit(e.target.checked)} className="ui-focus" />
+        No page limit — cover everything, as many pages as it takes
       </label>
-      <select
-        id="sheet-pages"
-        value={pages}
-        onChange={(e) => setPages(Number(e.target.value))}
-        className="ui-field mb-1.5"
+      <p
+        id="sheet-pages-hint"
+        className={`mb-4 text-xs ${pagesValid ? "text-gray-500" : "text-red-600 dark:text-red-400"}`}
+        data-numeric
       >
-        {PAGE_LIMITS.map((n) => (
-          <option key={n} value={n}>
-            {n} {n === 1 ? "page" : "pages"}
-          </option>
-        ))}
-      </select>
-      <p className="mb-4 text-xs text-gray-500" data-numeric>
-        {layout.label}, {layout.font}pt
-        {range ? ` · ${range} ${range === 1 ? "chapter" : "chapters"}` : ""}
+        {pagesValid ? (
+          <>
+            {noLimit ? "No page limit" : `${pages} ${pages === 1 ? "page" : "pages"}`} · {layout.label},{" "}
+            {columns || layout.columns} columns, {layout.font}pt
+            {range ? ` · ${range} ${range === 1 ? "chapter" : "chapters"}` : ""}
+          </>
+        ) : (
+          `Enter a whole number of pages from 1 to ${MAX_PAGES}, or tick No page limit.`
+        )}
       </p>
 
       <label htmlFor="sheet-files" className={label}>
@@ -214,7 +263,7 @@ export default function CheatsheetModal({
 
       <button
         onClick={begin}
-        disabled={!lessons?.length || from > to || starting || atCapacity}
+        disabled={!lessons?.length || from > to || !pagesValid || starting || atCapacity}
         className="ui-btn ui-btn-primary w-full"
       >
         {starting ? "Starting..." : "Make cheatsheet with Claude Code"}

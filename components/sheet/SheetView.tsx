@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { LAYOUTS, sheetDocument, type SheetMeta } from "@/lib/sheet/layout";
+import { LAYOUTS, layoutLabel, pageLimitText, sheetDocument, type SheetMeta } from "@/lib/sheet/layout";
 import { auditLayout, describeIssue, paginate, type LayoutIssue } from "@/lib/sheet/paginate";
 import SpinnerIcon from "../icons/SpinnerIcon";
 import { useGenerateJobs, type GenerateJob } from "../generate/GenerateJobsProvider";
@@ -75,7 +75,7 @@ export default function SheetView({
 
   const spec = doc?.meta?.spec ?? null;
   const srcDoc = useMemo(
-    () => (doc && spec ? sheetDocument(doc.html, spec.layout, doc.title) : ""),
+    () => (doc && spec ? sheetDocument(doc.html, spec.layout, doc.title, spec.columns) : ""),
     [doc, spec]
   );
 
@@ -87,7 +87,8 @@ export default function SheetView({
     const numbered = spec.layout === "roomy";
     let font = L.font;
     let pages = paginate(d, font, numbered);
-    while (pages > spec.pages && font - 0.25 >= L.minFont - 1e-6) {
+    // No page limit (0): the sheet keeps the layout's own font.
+    while (spec.pages && pages > spec.pages && font - 0.25 >= L.minFont - 1e-6) {
       font = Math.round((font - 0.25) * 100) / 100;
       pages = paginate(d, font, numbered);
     }
@@ -137,7 +138,7 @@ export default function SheetView({
     }
   }
 
-  const over = !!fit && !!spec && fit.pages > spec.pages;
+  const over = !!fit && !!spec && spec.pages > 0 && fit.pages > spec.pages;
   const review = doc?.meta?.review ?? null;
   const reviewOpen = review?.open ?? [];
   const checks: Array<{ ok: boolean; label: string; detail?: string[] }> =
@@ -153,9 +154,11 @@ export default function SheetView({
           },
           {
             ok: !over,
-            label: over
-              ? `Page limit: ${fit.pages} pages at the smallest font (${fit.font}pt), limit ${spec.pages}`
-              : `Page limit: ${fit.pages} of ${spec.pages} at ${fit.font}pt`,
+            label: !spec.pages
+              ? `No page limit: ${pageLimitText(fit.pages).replace("no page limit", "")} at ${fit.font}pt`
+              : over
+                ? `Page limit: ${fit.pages} pages at the smallest font (${fit.font}pt), limit ${spec.pages}`
+                : `Page limit: ${fit.pages} of ${spec.pages} at ${fit.font}pt`,
           },
           {
             ok: !fit.issues.length,
@@ -195,10 +198,12 @@ export default function SheetView({
             <h1 className="text-xl font-semibold text-gray-900 dark:text-gray-100">{doc?.title ?? "Cheatsheet"}</h1>
             {spec && (
               <p className="mt-0.5 text-sm text-gray-500">
-                {folderName} · chapters {spec.from}–{spec.to} · {LAYOUTS[spec.layout].label}
+                {folderName} · chapters {spec.from}–{spec.to} · {layoutLabel(spec.layout, spec.columns)}
                 {fit && (
                   <span data-numeric className={`ui-badge ml-2 ${allPass ? "text-emerald-700 dark:text-emerald-400" : "text-amber-700 dark:text-amber-400"}`}>
-                    {fit.pages} / {spec.pages} {spec.pages === 1 ? "page" : "pages"}
+                    {spec.pages
+                      ? `${fit.pages} / ${pageLimitText(spec.pages)}`
+                      : `${pageLimitText(fit.pages)}, no limit`}
                   </span>
                 )}
               </p>

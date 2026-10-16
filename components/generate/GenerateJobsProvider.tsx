@@ -80,7 +80,10 @@ interface GenerateJobsValue {
     folder: string;
     from: number;
     to: number;
+    /** 0 = no page limit */
     pages: number;
+    /** 2–8; undefined = the page size's own */
+    columns?: number;
     files: File[];
   }) => Promise<string | null>;
   /** Sends a message from a stored sheet's chat box: an edit run on it. */
@@ -323,7 +326,7 @@ export default function GenerateJobsProvider({ children }: { children: React.Rea
   );
 
   const startSheet = useCallback<GenerateJobsValue["startSheet"]>(
-    async ({ folder, from, to, pages, files }) => {
+    async ({ folder, from, to, pages, columns, files }) => {
       if (activeCount >= MAX_CONCURRENT_JOBS) {
         toast.error(`Already running ${activeCount} jobs — wait for one to finish.`);
         return null;
@@ -334,6 +337,7 @@ export default function GenerateJobsProvider({ children }: { children: React.Rea
         form.set("from", String(from));
         form.set("to", String(to));
         form.set("pages", String(pages));
+        if (columns) form.set("columns", String(columns));
         for (const f of files) form.append("files", f);
         const res = await fetch("/api/sheet", { method: "POST", body: form });
         // An error page from in front of the route is not JSON; say what failed

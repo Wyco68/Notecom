@@ -12,8 +12,11 @@ export interface SheetSpec {
   /** first and last chapter (lesson seq) actually found in the range */
   from: number;
   to: number;
+  /** the page limit; 0 means none — the sheet covers everything in full */
   pages: number;
   layout: SheetLayout;
+  /** columns per page, 2–8, when the reader chose; absent → the layout's own */
+  columns?: number;
   /** file name for the printed sheet, without extension */
   title: string;
 }
@@ -70,7 +73,7 @@ export const LAYOUTS: Record<SheetLayout, LayoutSpec> = {
     minFont: 4.5,
     family: `"Arial Narrow", "Liberation Sans Narrow", "Nimbus Sans Narrow", Arial, sans-serif`,
     budget: 25000,
-    label: "A4 landscape, 6 columns",
+    label: "A4 landscape",
   },
   roomy: {
     width: 210,
@@ -82,15 +85,36 @@ export const LAYOUTS: Record<SheetLayout, LayoutSpec> = {
     minFont: 5,
     family: `Arial, "Liberation Sans", Helvetica, sans-serif`,
     budget: 12000,
-    label: "A4 portrait, 5 columns",
+    label: "A4 portrait",
   },
 };
 
-export const PAGE_LIMITS = [1, 2, 3, 4, 6, 8] as const;
-export const MAX_PAGES = 12;
+/** The highest page limit a sheet may set. Not a matter of taste: past about
+ *  this many pages one reply can't hold the sheet. Above it, choose no limit. */
+export const MAX_PAGES = 30;
 
+/** Short limits get the dense landscape layout; longer ones, and no limit at
+ *  all (0), the roomier portrait one. */
 export function layoutFor(pages: number): SheetLayout {
-  return pages <= 2 ? "dense" : "roomy";
+  return pages >= 1 && pages <= 2 ? "dense" : "roomy";
+}
+
+export const MIN_COLUMNS = 2;
+export const MAX_COLUMNS = 8;
+
+/** The columns a sheet uses: the reader's choice, else its layout's default. */
+export function columnsOf(layout: SheetLayout, columns?: number): number {
+  return columns && columns >= MIN_COLUMNS && columns <= MAX_COLUMNS ? columns : LAYOUTS[layout].columns;
+}
+
+/** "A4 landscape, 6 columns" — the paper and the columns actually used. */
+export function layoutLabel(layout: SheetLayout, columns?: number): string {
+  return `${LAYOUTS[layout].label}, ${columnsOf(layout, columns)} columns`;
+}
+
+/** "2 pages", "1 page", or "no page limit". */
+export function pageLimitText(pages: number): string {
+  return pages ? `${pages} ${pages === 1 ? "page" : "pages"}` : "no page limit";
 }
 
 /** Visible characters, whitespace excluded — the unit `budget` is in. */
@@ -108,13 +132,13 @@ export function visibleChars(html: string): number {
  * each page is one plain multi-column box, never a column flow the print
  * engine has to fragment across sheets of paper.
  */
-export function sheetDocument(body: string, layout: SheetLayout, title: string): string {
+export function sheetDocument(body: string, layout: SheetLayout, title: string, columns?: number): string {
   return `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <title>${esc(title)}</title>
-<style>${sheetCss(layout)}</style>
+<style>${sheetCss(layout, columns)}</style>
 </head>
 <body>
 <div id="pages"></div>
@@ -129,14 +153,20 @@ export function sheetDocument(body: string, layout: SheetLayout, title: string):
  * font or stylesheet fetch — so the renderer can only draw what is inline,
  * whatever the markup says (it is also allowlisted: checkSheetPages).
  */
-export function printDocument(pages: string, layout: SheetLayout, title: string, fontPt: number): string {
+export function printDocument(
+  pages: string,
+  layout: SheetLayout,
+  title: string,
+  fontPt: number,
+  columns?: number
+): string {
   return `<!doctype html>
 <html lang="en" style="--fs: ${Number(fontPt)}pt">
 <head>
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'">
 <meta charset="utf-8">
 <title>${esc(title)}</title>
-<style>${sheetCss(layout)}</style>
+<style>${sheetCss(layout, columns)}</style>
 </head>
 <body>
 <div id="pages">${pages}</div>
@@ -146,7 +176,7 @@ export function printDocument(pages: string, layout: SheetLayout, title: string,
 
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
 
-function sheetCss(layout: SheetLayout): string {
+function sheetCss(layout: SheetLayout, columns?: number): string {
   const L = LAYOUTS[layout];
   return `
 :root {
@@ -163,7 +193,7 @@ body { color: var(--ink); font-family: ${L.family}; font-size: var(--fs); line-h
 .page { position: relative; width: ${L.width}mm; height: ${L.height}mm; padding: ${L.margin}mm;
   background: #fff; overflow: hidden; break-after: page; }
 .page:last-child { break-after: auto; }
-.cols { height: 100%; overflow: hidden; column-count: ${L.columns}; column-gap: ${L.gap}pt;
+.cols { height: 100%; overflow: hidden; column-count: ${columnsOf(layout, columns)}; column-gap: ${L.gap}pt;
   column-rule: 0.4pt solid var(--rule); column-fill: auto; }
 .pno { position: absolute; top: 0.6mm; right: ${L.margin}mm; font-size: 5pt; color: #666; }
 @media screen {

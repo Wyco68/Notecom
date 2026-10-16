@@ -98,7 +98,10 @@ lessons already indexed.
    An edit is a fresh session, not a resumed one, so a sheet can be changed
    days later.
 3. The browser lays it out. `lib/sheet/layout.ts` owns the paper (two
-   layouts, picked from the page limit) and the page document;
+   layouts, picked from the page limit: landscape for one or two pages,
+   portrait for more or for no limit) and the page document; the reader may
+   override the column count, 2 to 8, and the choice is kept in the sheet's
+   spec so print and PDF match;
    `lib/sheet/paginate.ts` deals the fragment's blocks into fixed-size pages,
    shrinking the font to the layout's floor until it fits. Pages are counted
    exactly because each is its own box, and print gets one box per sheet of

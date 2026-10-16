@@ -6,7 +6,7 @@ import { convertLegacyOffice, isLegacyOffice } from "@/lib/generate/convert";
 import { cliInstalled } from "@/lib/auth/cli";
 import { resolveWritableFolderId } from "@/lib/vault/store";
 import { writeChapters } from "@/lib/sheet/inputs";
-import { layoutFor, MAX_PAGES } from "@/lib/sheet/layout";
+import { layoutFor, MAX_COLUMNS, MAX_PAGES, MIN_COLUMNS } from "@/lib/sheet/layout";
 import { VERIFIED_USER_HEADER } from "@/middleware";
 
 // A folder slug, never free text — the shape every folder slug has.
@@ -48,11 +48,18 @@ export async function POST(req: NextRequest) {
   const from = Number(form.get("from"));
   const to = Number(form.get("to"));
   const pages = Number(form.get("pages"));
+  // Optional: absent or empty means the page size's own column count.
+  const columnsRaw = String(form.get("columns") ?? "").trim();
+  const columns = columnsRaw ? Number(columnsRaw) : undefined;
   const files = form.getAll("files").filter((f): f is File => f instanceof File && f.size > 0);
 
   if (!SAFE.test(folder)) return NextResponse.json({ error: "invalid folder" }, { status: 400 });
-  if (![from, to, pages].every(Number.isInteger) || from < 1 || to < from || pages < 1 || pages > MAX_PAGES) {
+  // pages 0 = no page limit.
+  if (![from, to, pages].every(Number.isInteger) || from < 1 || to < from || pages < 0 || pages > MAX_PAGES) {
     return NextResponse.json({ error: "invalid chapter range or page limit" }, { status: 400 });
+  }
+  if (columns !== undefined && !(Number.isInteger(columns) && columns >= MIN_COLUMNS && columns <= MAX_COLUMNS)) {
+    return NextResponse.json({ error: `columns must be ${MIN_COLUMNS} to ${MAX_COLUMNS}` }, { status: 400 });
   }
   if (to - from + 1 > MAX_CHAPTERS) {
     return NextResponse.json({ error: `at most ${MAX_CHAPTERS} chapters per sheet` }, { status: 400 });
@@ -88,7 +95,14 @@ export async function POST(req: NextRequest) {
 
   const job = startSheetJob(
     folder,
-    { from: first, to: last, pages, layout: layoutFor(pages), title: `${folder}-cheatsheet-ch${first}-${last}` },
+    {
+      from: first,
+      to: last,
+      pages,
+      layout: layoutFor(pages),
+      ...(columns ? { columns } : {}),
+      title: `${folder}-cheatsheet-ch${first}-${last}`,
+    },
     dir,
     chapters,
     extras,

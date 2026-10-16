@@ -20,7 +20,7 @@ import { rm, writeFile } from "fs/promises";
 import path from "path";
 import { checkLesson, checkQuiz, checkSheet, extractHtml, extractSheet } from "./validate";
 import { saveGenerated, saveSheet, type SavedDoc } from "./save";
-import { LAYOUTS, visibleChars, type SheetMessage, type SheetReview, type SheetSpec } from "../sheet/layout";
+import { LAYOUTS, layoutLabel, pageLimitText, visibleChars, type SheetMessage, type SheetReview, type SheetSpec } from "../sheet/layout";
 import { plainText, sourceIssues, type ChapterSource } from "../sheet/sources";
 
 export type JobKind = "lect" | "quiz" | "sheet";
@@ -246,8 +246,10 @@ export function startSheetJob(
     (extras.length
       ? `Extra source files (slides) to check the notes against: ${extras.map(oneLine).join(", ")}; convert them with the markitdown tool. `
       : `There are no extra source files. `) +
-    `Page limit: ${spec.pages} page(s), ${L.label}, body font ${L.font}pt. ` +
-    `Character budget: about ${(L.budget * spec.pages).toLocaleString("en-US")} visible characters, whitespace excluded; aim for 90 to 100 percent of it. ` +
+    (spec.pages
+      ? `Page limit: ${pageLimitText(spec.pages)}, ${layoutLabel(spec.layout, spec.columns)}, body font ${L.font}pt. ` +
+        `Character budget: about ${(L.budget * spec.pages).toLocaleString("en-US")} visible characters, whitespace excluded; aim for 90 to 100 percent of it. `
+      : `No page limit: ${layoutLabel(spec.layout, spec.columns)}, body font ${L.font}pt. Cover every fact of the chapters in full, as many pages as that takes, still in the compressed note style of the guidelines and without padding. `) +
     `Ground every fact strictly in these files; if a file cannot be read, stop and say so instead of guessing. `;
 
   let prompt: string;
@@ -279,7 +281,7 @@ export function startSheetJob(
       `When the sheet is ready, reply with one line starting "NOTE:" that tells the reader in plain words what the sheet covers and anything you had to leave out, then its HTML fragment, starting at the first <h2>: no code fence and nothing after it.`;
   }
 
-  const label = edit ? `edit of ${edit.docKey}` : `chapters ${spec.from}-${spec.to}, ${spec.pages} page(s)`;
+  const label = edit ? `edit of ${edit.docKey}` : `chapters ${spec.from}-${spec.to}, ${pageLimitText(spec.pages)}`;
   generateSheet(job, repoRoot, prompt, label);
   return job;
 }
@@ -425,7 +427,8 @@ const SHEET_MAX_REVIEWS = 3;
 async function generateSheet(job: Job, repoRoot: string, firstPrompt: string, label: string): Promise<void> {
   const spec = job.sheet!;
   const run0 = job.sheetRun!;
-  const room = LAYOUTS[spec.layout].budget * spec.pages;
+  // No page limit (0): nothing is too long.
+  const room = spec.pages ? LAYOUTS[spec.layout].budget * spec.pages : Infinity;
   let prompt = firstPrompt;
   let sessionId: string | undefined;
   let reviews = 0;
@@ -460,7 +463,7 @@ async function generateSheet(job: Job, repoRoot: string, firstPrompt: string, la
       const chars = visibleChars(html);
       if (chars > room * 1.25) {
         violations.push(
-          `too long: about ${chars} visible characters for ${spec.pages} page(s), room for about ${room}; ` +
+          `too long: about ${chars} visible characters for ${pageLimitText(spec.pages)}, room for about ${room}; ` +
             `cut about ${Math.ceil((1 - room / chars) * 100)} percent`
         );
       }
@@ -547,7 +550,7 @@ async function reviewSheet(
     `/sheet Review mode. Do not create, write or edit any file. ` +
     `The cheatsheet to review is at ${oneLine(file)}. Its only sources are the chapter files ${r.chapters.map((c) => oneLine(c.path)).join(", ")}` +
     (r.extras.length ? ` and the slides ${r.extras.map(oneLine).join(", ")} (convert them with the markitdown tool)` : "") +
-    `. It covers chapters ${spec.from} to ${spec.to} within a ${spec.pages}-page limit. ` +
+    `. It covers chapters ${spec.from} to ${spec.to}, ${spec.pages ? `within a ${spec.pages}-page limit` : "with no page limit, so nothing should be missing"}. ` +
     (unverified.length
       ? `These numbers on the sheet are not in the chapter notes, so confirm each against the slides: ${unverified.slice(0, 30).join(", ")}. `
       : "") +
@@ -762,7 +765,7 @@ function saveSheetJob(job: Job, html: string): Promise<SavedDoc> {
   const spec = job.sheet!;
   const said =
     job.note ||
-    (job.edit ? "Done." : `Made the sheet for chapters ${spec.from} to ${spec.to} on ${spec.pages} page(s).`);
+    (job.edit ? "Done." : `Made the sheet for chapters ${spec.from} to ${spec.to}, ${pageLimitText(spec.pages)}.`);
   const turns: SheetMessage[] = [
     ...(job.edit ? [{ role: "user" as const, text: job.edit.request, at: new Date(job.startedAt).toISOString() }] : []),
     { role: "assistant", text: said, at },

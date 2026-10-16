@@ -50,7 +50,7 @@ which the app checks against the contract and files in Supabase.
 | `/api/generate/[id]` | GET | — | SSE tail: `line`, `tokens`, then `end` with `{ status, tokens, needsAuth }`. `status` is `ready` when the document passed the contract check and waits for the save below. Replays the log from the beginning, so attaching late loses nothing |
 | `/api/generate/[id]` | POST | — | `{ ok, id, title }` — names the `ready` document and saves it to Supabase as the caller (RLS). Idempotent; 409 when there is nothing to save. The client calls it as soon as the tail ends `ready`, and on reload for any job still `ready` |
 | `/api/generate/[id]` | DELETE | — | `{ ok }` — force-stop (the log view's Ctrl+C) |
-| `/api/sheet` | POST | multipart `folder`, `from`, `to`, `pages` (1–12), optional `files` | `{ jobId, sheet }` — reads lessons `from`..`to` as the caller, hands them to the CLI as files and runs `/sheet`. Followed and stopped through `/api/generate/[id]` like any job; ends `done`, never `ready` |
+| `/api/sheet` | POST | multipart `folder`, `from`, `to`, `pages` (0–30, 0 = no page limit), optional `columns` (2–8; absent = the page size's own), optional `files` | `{ jobId, sheet }` — reads lessons `from`..`to` as the caller, hands them to the CLI as files and runs `/sheet`. Followed and stopped through `/api/generate/[id]` like any job; ends `done`, never `ready` |
 | `/api/sheets/[folder]/[id]` | GET | — | `{ html, title, meta }` — a stored sheet; `meta` is `{ spec, review: { passes, found, open }, messages: [{ role, text, at }] }` |
 | `/api/sheets/[folder]/[id]` | DELETE | — | `{ ok }` |
 | `/api/sheets/[folder]/[id]` | POST | `{ newTitle }` | `{ ok }` (rename) |

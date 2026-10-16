@@ -55,7 +55,7 @@ export async function POST(
   }
   const name = `${folder}-${id}`;
   try {
-    const file = await savePdf(browser, printDocument(pages, meta.spec.layout, doc.title, font), name);
+    const file = await savePdf(browser, printDocument(pages, meta.spec.layout, doc.title, font, meta.spec.columns), name);
     return Response.json({ ok: true, path: file });
   } catch (err: any) {
     console.error("[sheet pdf]", err?.message);
