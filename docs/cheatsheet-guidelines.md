@@ -114,6 +114,14 @@ Too long? Compress in this order, and never drop a fact silently:
 Too short? Add the sources' worked examples, tables and diagrams. Never pad
 with general knowledge.
 
+**No page limit.** The prompt may say there is none. Then there is no budget:
+cover every fact of the chapters in full, in the same compressed note style,
+as many pages as that takes. Still no padding and nothing from outside the
+sources.
+
+The paper and the number of columns are the app's (the reader may pick 2 to 8
+columns); the prompt states them so you can judge how wide a table may be.
+
 ## What the app checks
 
 Every reply is checked before anyone sees it, and a failure comes back to you
