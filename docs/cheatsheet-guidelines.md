@@ -21,7 +21,9 @@ paper, columns and font, splits it into pages and prints it. So:
 - No `<html>`, `<head>`, `<body>`, `<style>`, `<script>`, `<h1>`, no inline
   `style=` and no wrapper `<div>` or `<section>`. Every block sits at the top
   level, one after another; the app breaks pages between blocks.
-- Start at the first `<h2>`.
+- Before the fragment, one line starting `NOTE:` for the reader (what the
+  sheet covers, or what an edit changed). It is shown in the sheet's
+  conversation and never printed. The fragment starts at the first `<h2>`.
 
 ### Allowed tags
 

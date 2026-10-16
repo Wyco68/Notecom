@@ -26,8 +26,8 @@ that — the split below still says which docs belong to which kind of work.
   Quiz creation and maintenance only. Loads only `docs/quiz-guidelines.md`.
 - **`/sheet`** — [.claude/commands/sheet.md](.claude/commands/sheet.md).
   Cheatsheet creation only, from a range of a folder's lessons. Loads only
-  `docs/cheatsheet-guidelines.md`. Run by the app's Cheatsheet dialog; the
-  reply is printed, never saved.
+  `docs/cheatsheet-guidelines.md`. Run by the app's Cheatsheet dialog and by
+  a sheet's chat box (edit mode).
 - **`/feat`** — [.claude/commands/feat.md](.claude/commands/feat.md).
   Application development only. Loads only `docs/architecture.md`,
   `docs/coding-style.md`, `docs/ui-guidelines.md`, `docs/api-contract.md`,
@@ -43,8 +43,8 @@ about what the vault is — split them.
 Generated lessons and quizzes are rows in Supabase (`notes_documents`) —
 **application data**, not application source. `/lect` and `/quiz` only reply
 with HTML; the app checks, names and saves it, and nothing writes local files.
-`/sheet` replies with HTML too; the app checks it, lays it out into pages and
-prints it, and saves nothing.
+`/sheet` replies with HTML too; the app checks it, saves it in the folder as
+a `sheet` document, and lays it out into pages to print.
 Application work never edits generated content except for an explicit,
 requested migration or format conversion.
 

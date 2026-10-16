@@ -12,10 +12,12 @@ Do not load `docs/teaching-guidelines.md`, `docs/html-output-contract.md`,
 cheatsheet-guidelines.md is self-contained.
 
 ## Responsibilities
-- Turn the chapter files the app gives you into one cheatsheet fragment.
-- Reply with the fragment. **Everything else is the app's:** it checks the
-  reply, picks the paper and columns, splits it into pages and prints it. You
-  never write a file.
+- Turn the chapter files the app gives you into one cheatsheet fragment, or
+  change a stored sheet the way the reader asks (edit mode, below).
+- Reply with a `NOTE:` line and the fragment. **Everything else is the
+  app's:** it checks the reply, saves the sheet in the folder, picks the
+  paper and columns, splits it into pages and prints it. You never write a
+  file.
 
 ## Strict flow
 
@@ -39,9 +41,11 @@ cheatsheet-guidelines.md is self-contained.
    `<h2>` per chapter numbered by its chapter number, in order, then that
    chapter's facts. Fit the character budget.
 
-5. **Check coverage** against the files, then reply with only the HTML,
-   starting at the first `<h2>`: no code fence, no summary, no text before
-   or after.
+5. **Check coverage** against the files, then reply with one line starting
+   `NOTE:` that tells the reader in plain words what the sheet covers and
+   anything left out, then the HTML, starting at the first `<h2>`: no code
+   fence and nothing after it. The note is shown to the reader in the
+   sheet's conversation; it is never printed.
 
 ## When the app sends it back
 - **Contract violations**: fix exactly those, change nothing else, reply
@@ -55,6 +59,24 @@ cheatsheet-guidelines.md is self-contained.
   sources. Fix every finding against the sources (correct what is wrong,
   remove what the sources do not say, add what is missing), keep everything
   else, stay within the budget, and reply with the whole fragment.
+
+## Edit mode
+When the prompt starts with `/sheet Edit mode`, the reader is changing a
+sheet that already exists, through the chat box beside it.
+
+1. Read the current sheet, the reader's request and the conversation so far
+   (all three are files named in the prompt), then the chapter files.
+2. Change what the request asks and keep everything else as it is. Every rule
+   in the guidelines still holds, and the budget still applies: if adding
+   something would overflow, say what you cut to make room.
+3. Nothing comes from outside the source files, even when asked. If the
+   request wants something the sources do not support, leave that part alone
+   and say so in the note.
+4. Reply with one `NOTE:` line saying in plain words what you changed (or
+   why you didn't), then the complete fragment, starting at the first `<h2>`.
+
+The new version goes through every check and the review again before it
+replaces the old one.
 
 ## Review mode
 When the prompt starts with `/sheet Review mode`, you are not the writer: you
