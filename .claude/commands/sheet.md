@@ -30,7 +30,9 @@ cheatsheet-guidelines.md is self-contained.
    files in PDF, PPTX, DOCX or image form go through the `markitdown` MCP
    server first; if it isn't connected, say so and stop. Read slide pages
    with diagrams, tables or code with Read as well, since text extraction
-   drops those.
+   drops those. A chapter file that shows slide pictures starts with a
+   comment pairing each picture's `src` with a file: open one with Read only
+   to judge whether it goes on the sheet (guidelines, "Pictures").
 
 3. **Build the fact list in your head, chapter by chapter**: every
    definition, list item, number, formula, command, table row, worked
@@ -39,7 +41,9 @@ cheatsheet-guidelines.md is self-contained.
 4. **Write the fragment** per
    [cheatsheet-guidelines.md](../../docs/cheatsheet-guidelines.md): one
    `<h2>` per chapter numbered by its chapter number, in order, then that
-   chapter's facts. Fit the character budget.
+   chapter's facts, with the pictures that carry facts the text doesn't,
+   copied with the lesson's exact `src`, `width` and `height`. Fit the
+   character budget.
 
 5. **Check coverage** against the files, then reply with one line starting
    `NOTE:` that tells the reader in plain words what the sheet covers and
@@ -105,7 +109,8 @@ and write nothing.
    - `unsupported`: the sources do not say it at all;
    - `unclear`: so compressed it now reads as something else;
    - `missing`: a definition, list item, number, formula, command, table
-     row, worked example or comparison in the sources that is not on the sheet.
+     row, worked example or comparison in the sources that is not on the
+     sheet, or a lesson picture whose facts are nowhere on it.
 3. Check every number the prompt lists against the sources.
 4. Reply with only the JSON object the prompt asks for. Quote the sheet
    exactly in `where`, and say in `fix` what the sources say and in which

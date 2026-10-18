@@ -40,11 +40,14 @@ paper, columns and font, splits it into pages and prints it. So:
 | `hr` | the dashed rule between the two halves of a comparison box |
 | `b`, `strong`, `i`, `em`, `sup`, `sub`, `span`, `br` | inline marks |
 | `svg` and `g`, `rect`, `line`, `path`, `polyline`, `polygon`, `circle`, `ellipse`, `text`, `tspan` | small diagrams the source draws |
+| `img` | a slide picture a chapter already shows (see Pictures below) |
 
 Attributes: `class` (values below), `colspan`, `rowspan`, `start` on `ol`,
-and the geometry of SVG shapes (`viewBox`, `x`, `y`, `x1`…`y2`, `width`,
+the geometry of SVG shapes (`viewBox`, `x`, `y`, `x1`…`y2`, `width`,
 `height`, `cx`, `cy`, `r`, `rx`, `ry`, `d`, `points`, `transform`,
-`text-anchor`). Nothing else: no `id`, `href`, `src`, `style`, event handlers.
+`text-anchor`), and on `img` only `src`, `alt`, `width`, `height`. Nothing
+else: no `id`, `href`, `style`, event handlers, and `src` on nothing but an
+`img`.
 
 ### Classes
 
@@ -91,6 +94,37 @@ and the geometry of SVG shapes (`viewBox`, `x`, `y`, `x1`…`y2`, `width`,
   plain rectangles with a `box-*` fill, lines, short labels, port names on
   links. Keep it under a third of the viewBox height per row of boxes. No
   icons, no caption.
+- **Picture**, the slide's own figure, where the chapter shows one (below).
+
+## Pictures
+
+The lessons carry the slides' real pictures: a `<figure>` with an
+`<img src="/api/media/…">` and a caption. When a chapter file has any, it
+starts with a comment that pairs each picture's `src` with a file you can
+look at.
+
+- **Put one on the sheet when it carries facts the text does not**: a
+  figure the notes only point at (a disk's structure, a memory layout, a
+  protocol exchange, a screenshot of output), or one that says in a glance
+  what would take several lines. Never as decoration, never two that show
+  the same thing.
+- **A simple box-and-line figure is drawn instead**, as a small SVG: it
+  costs less space and prints sharper. A picture is for what an SVG can't
+  say cheaply (photos, dense diagrams, real output).
+- **Copy the lesson's tag exactly** — `src`, `width`, `height` — and give
+  it a short `alt`: `<img src="/api/media/…/….jpg" width="1087" height="1061"
+  alt="Paging hardware: page table maps p to f">`. Never invent or change a
+  `src`; the app rejects any other address. The picture fills its column's
+  width; follow it with one fact line that says what to read off it, not a
+  caption.
+- **Open the file only to decide.** The comment's file is there so you can
+  judge a picture; the facts still come from the chapter's text.
+- A picture takes real space: count it as about four lines of the budget
+  per column-width, and it is the first thing to drop when the sheet is
+  too long.
+- Never write that a slide "is only a picture" or "shows a figure": either
+  the picture goes on the sheet, or what it says goes on as text, or it
+  stays off.
 
 ## Wording
 
@@ -127,9 +161,10 @@ Too long? Compress in this order, and never drop a fact silently:
 3. Join short facts about the same thing on one line with `;`.
 4. Merge the same fact said in notes and slides.
 5. Shrink or drop a diagram a table already covers.
+6. Drop a picture whose facts are already on the sheet as text.
 
-Too short? Add the sources' worked examples, tables and diagrams. Never pad
-with general knowledge.
+Too short? Add the sources' worked examples, tables, diagrams and the
+pictures that carry facts. Never pad with general knowledge.
 
 **No page limit.** The prompt may say there is none. Then there is no budget:
 cover every fact of the chapters in full, in the same compressed note style,
@@ -151,8 +186,8 @@ already there: no repeating them, no "see chapter 2".
 Every reply is checked before anyone sees it, and a failure comes back to you
 as a list:
 
-1. **Contract**: the tag, attribute and class allowlist and the banned
-   wording above. Markup outside the allowlist is never saved; anything else
+1. **Contract**: the tag, attribute and class allowlist, a picture's `src`
+   being one a lesson uses, and the banned wording above. Markup outside the allowlist is never saved; anything else
    that fails is saved with the sheet as an open check the reader can send
    back to you.
 2. **Sources**: every chapter in the range has its `<h2>`, and every number
@@ -171,4 +206,5 @@ as a list:
 
 Before replying, walk every chapter file top to bottom and confirm each
 definition, list item, number, formula, command, table row, worked example and
-comparison is on the sheet.
+comparison is on the sheet, and that each picture you left off says nothing
+the sheet lacks.
