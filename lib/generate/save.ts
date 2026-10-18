@@ -7,10 +7,11 @@
 // name and number from what Supabase already holds, then saves through the
 // data layer like every other write (RLS decides whether it lands).
 
-import { listFolderDocs, loadDoc, resequenceFolder, saveDoc } from "@/lib/vault/store";
+import { listFolderDocs, loadDoc, resequenceFolder, saveDoc, saveMedia } from "@/lib/vault/store";
 import { reviewOf, type SheetMeta, type SheetSpec } from "@/lib/sheet/layout";
 import { slugify } from "@/lib/vault/slug";
 import { titleOf } from "./validate";
+import type { Picture } from "./runner";
 
 export interface SavedDoc {
   id: string;
@@ -20,9 +21,11 @@ export interface SavedDoc {
 export async function saveGenerated(
   folder: string,
   kind: "lect" | "quiz",
-  html: string
+  generated: string,
+  pictures: Map<string, Picture> = new Map()
 ): Promise<SavedDoc> {
   const docKind = kind === "quiz" ? "quiz" : "lesson";
+  const html = await attachPictures(folder, generated, pictures);
   const title = titleOf(html) || "Untitled";
   // Document slugs are lowercase, unlike folder slugs — the rule /lect and
   // /quiz always used, kept so new ids read like the existing ones.
@@ -42,6 +45,40 @@ export async function saveGenerated(
 
   await saveDoc({ folder, kind: docKind, docKey: id, slug, title, seq, html });
   return { id, title };
+}
+
+/**
+ * Saves a lesson that a picture-mode run added slide pictures to: same key,
+ * number, name and title, new HTML.
+ */
+export async function savePictures(
+  folder: string,
+  docKey: string,
+  placed: string,
+  pictures: Map<string, Picture>
+): Promise<SavedDoc> {
+  const { lessons } = await listFolderDocs(folder);
+  const entry = lessons.find((d) => d.id === docKey);
+  if (!entry) throw new Error("lesson not found");
+  const current = await loadDoc(folder, docKey, "lesson");
+  const html = await attachPictures(folder, placed, pictures);
+  await saveDoc({ folder, kind: "lesson", docKey, slug: entry.slug, title: current.title, seq: entry.seq, html });
+  return { id: docKey, title: current.title };
+}
+
+/**
+ * Uploads the pictures a document uses and points each <img> at its stored
+ * copy, with its size — so a page reserves the space before it loads, and
+ * a cheatsheet can be laid out before every picture has arrived. A run names
+ * a picture by its file name only; this is where it gets an address.
+ */
+async function attachPictures(folder: string, html: string, pictures: Map<string, Picture>): Promise<string> {
+  let out = html;
+  for (const [name, pic] of pictures) {
+    const src = await saveMedia(folder, pic.data, pic.ext);
+    out = out.split(`src="${name}"`).join(`src="${src}" width="${pic.width}" height="${pic.height}"`);
+  }
+  return out;
 }
 
 /**

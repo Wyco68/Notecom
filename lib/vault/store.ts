@@ -17,6 +17,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { chunkHTML } from "@/lib/search/chunker";
+import { MEDIA_SRC } from "./media-src";
 
 export interface LessonEntry {
   id: string;
@@ -595,4 +596,49 @@ export async function reindexStale(limit = 25): Promise<number> {
     done++;
   }
   return done;
+}
+
+// --- pictures -----------------------------------------------------------------
+
+// Slide pictures used by lessons and cheatsheets (migration 0033): the private
+// `notes-media` bucket, one object per picture at `<folder_id>/<sha256>.<ext>`.
+// The folder segment is what the bucket's policies check, with the same
+// functions as the documents, so a picture is readable exactly where the
+// lesson that shows it is. A document refers to one by the app path
+// `/api/media/<folder_id>/<file>`, which streams it as the reader.
+
+const MEDIA_BUCKET = "notes-media";
+
+const MEDIA_TYPES: Record<string, string> = {
+  png: "image/png",
+  jpg: "image/jpeg",
+  gif: "image/gif",
+  webp: "image/webp",
+};
+
+/**
+ * Stores a picture in a folder and returns the path a document uses for it.
+ * Named by its content, so saving the same picture again is a no-op — the
+ * "already exists" answer is that, not a failure.
+ */
+export async function saveMedia(folder: string, data: Buffer, ext: string): Promise<string> {
+  const { createHash } = await import("crypto");
+  const supabase = await createClient();
+  const folderId = await requireFolderId(folder);
+  const file = `${createHash("sha256").update(data).digest("hex")}.${ext}`;
+  const { error } = await supabase.storage
+    .from(MEDIA_BUCKET)
+    .upload(`${folderId}/${file}`, data, { contentType: MEDIA_TYPES[ext], upsert: false });
+  if (error && !/exists|duplicate/i.test(error.message)) fail("picture upload failed", error);
+  return `/api/media/${folderId}/${file}`;
+}
+
+/** A picture by its document path, as the caller; null when it is not theirs to read. */
+export async function readMedia(src: string): Promise<{ data: Buffer; type: string } | null> {
+  const m = MEDIA_SRC.exec(src);
+  if (!m) return null;
+  const supabase = await createClient();
+  const { data, error } = await supabase.storage.from(MEDIA_BUCKET).download(`${m[1]}/${m[2]}`);
+  if (error || !data) return null;
+  return { data: Buffer.from(await data.arrayBuffer()), type: MEDIA_TYPES[m[2].split(".").pop()!] };
 }

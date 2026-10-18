@@ -7,14 +7,17 @@
 // Rules: docs/html-output-contract.md (lessons), docs/quiz-guidelines.md
 // (quizzes).
 
+import { MEDIA_SRC } from "@/lib/vault/media-src";
+
 const LESSON_TAGS = new Set([
   "h1", "h2", "h3",
   "p", "ul", "ol", "li",
   "table", "thead", "tbody", "tr", "td", "th",
   "pre", "code", "blockquote",
   "strong", "em", "div",
+  "figure", "img", "figcaption",
 ]);
-const QUIZ_TAGS = new Set([...LESSON_TAGS].filter((t) => t !== "h3"));
+const QUIZ_TAGS = new Set([...LESSON_TAGS].filter((t) => !["h3", "figure", "img", "figcaption"].includes(t)));
 
 const FORBIDDEN_H2 = new Set(["Concept", "Exam Tips", "Remember", "Diagram", "Self Check"]);
 const CALLOUT_LABELS = ["Key Idea", "Common Mistake", "Exam Tip", "Remember"];
@@ -39,10 +42,16 @@ function oneH1(html: string, what: string): string[] {
   return n === 1 ? [] : [`expected exactly one <h1> (${what} title), found ${n}`];
 }
 
-export function checkLesson(html: string): string[] {
+/**
+ * `pictures`: the names of the slide pictures the run was offered. A picture
+ * is either one of those (a run's reply) or an app path to one already saved
+ * (a stored lesson) — never a URL from anywhere else.
+ */
+export function checkLesson(html: string, pictures: ReadonlySet<string> = new Set()): string[] {
   const errors = [
     ...disallowedTags(html, LESSON_TAGS, "html-output-contract"),
     ...oneH1(html, "lesson"),
+    ...figureIssues(html, pictures),
   ];
   if (/<h[4-6]>/.test(html)) {
     errors.push("found a heading deeper than h3 — contract caps headings at h3");
@@ -63,6 +72,26 @@ export function checkLesson(html: string): string[] {
         `callout doesn't start with one of ${CALLOUT_LABELS.join(", ")}: "${text.slice(0, 60)}..."`
       );
     }
+  }
+  return errors;
+}
+
+const FIGURE = /<figure>\s*<img\s[^>]*>\s*<figcaption>[^<]*(?:<(?:strong|em|code)>[^<]*<\/(?:strong|em|code)>[^<]*)*<\/figcaption>\s*<\/figure>/g;
+
+function figureIssues(html: string, pictures: ReadonlySet<string>): string[] {
+  const errors: string[] = [];
+  const imgs = [...html.matchAll(/<img\s([^>]*)>/g)];
+  const figures = (html.match(FIGURE) ?? []).length;
+  if (imgs.length !== figures || (html.match(/<figure>/g) ?? []).length !== figures) {
+    errors.push("every picture must be exactly <figure><img src=\"...\" alt=\"...\"><figcaption>...</figcaption></figure>, and a <figure> holds nothing else");
+  }
+  for (const [, attrs] of imgs) {
+    const src = /\bsrc="([^"]*)"/.exec(attrs)?.[1] ?? "";
+    const alt = /\balt="([^"]*)"/.exec(attrs)?.[1] ?? "";
+    if (!pictures.has(src) && !MEDIA_SRC.test(src)) {
+      errors.push(`<img src="${src.slice(0, 60)}"> is not one of the slide pictures offered (${pictures.size ? [...pictures].slice(0, 3).join(", ") + ", ..." : "none were offered"})`);
+    }
+    if (!alt.trim()) errors.push(`<img src="${src.slice(0, 60)}"> has no alt text — say what the picture shows`);
   }
   return errors;
 }
@@ -147,9 +176,11 @@ const SHEET_TAGS = new Set([
   // inside a comparison box
   "div", "hr",
   "svg", "g", "rect", "line", "path", "polyline", "polygon", "circle", "ellipse", "text", "tspan",
+  // a slide picture a lesson already shows, by the same app path
+  "img",
 ]);
 const SHEET_ATTRS = new Set([
-  "class", "colspan", "rowspan", "start",
+  "class", "colspan", "rowspan", "start", "src", "alt",
   "viewbox", "x", "y", "x1", "y1", "x2", "y2", "dx", "dy", "width", "height",
   "cx", "cy", "r", "rx", "ry", "d", "points", "transform", "text-anchor", "xmlns",
 ]);
@@ -279,6 +310,16 @@ function markupIssues(
     }
   }
   const errors = [...badTags].map((t) => `disallowed tag <${t}> — not in the ${contract} allowlist`);
+  // A picture loads only from the app's own picture path, and src/alt mean
+  // nothing anywhere else.
+  for (const t of tags) {
+    const src = t.attrs.find((a) => a.name === "src");
+    if (t.name === "img" && (!src || !MEDIA_SRC.test(src.value))) {
+      errors.push(`<img src="${(src?.value ?? "").slice(0, 60)}"> — a picture's src is the /api/media/... path its lesson uses, copied exactly`);
+    } else if (t.name !== "img" && t.attrs.some((a) => a.name === "src" || a.name === "alt")) {
+      badAttrs.add(t.attrs.some((a) => a.name === "src") ? "src" : "alt");
+    }
+  }
   if (badAttrs.size) errors.push(`disallowed attribute(s): ${[...badAttrs].join(", ")}`);
   if (badClasses.size) errors.push(`unknown class(es): ${[...badClasses].join(", ")}`);
   return errors;

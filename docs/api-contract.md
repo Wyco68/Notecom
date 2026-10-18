@@ -22,6 +22,8 @@ Loaded by `/feat` only. Source of truth is the route files themselves
 | `/api/search` | GET | `?q&folder&kind&limit` | `{ mode: "keyword", results: [chunk hits] }` — `notes_search_chunks` |
 | `/api/related/[folder]/[id]` | GET | `?kind` | `{ results: [{folder,id,kind,title,score}] }` — `notes_related_docs` |
 | `/api/generate` | POST | multipart `file, folder, kind(lect\|quiz)` | `{ jobId }` — spawns local Claude Code CLI (read-only) on the upload; a `.ppt`/`.doc`/`.xls` is converted with LibreOffice first, or refused with a 400 saying how to save it when LibreOffice is missing |
+| `/api/generate/images` | POST | multipart `file, folder, lesson` | `{ jobId }` — picture mode: the slides of a saved lesson; a `/lect` run adds their pictures to it without rewriting it. Own rate budget (30/hour) |
+| `/api/media/[folder]/[file]` | GET | — | a slide picture's bytes, read as the caller from the private `notes-media` bucket; 404 when missing or not theirs. `Cache-Control: private, immutable` (the name is the content's hash). Own rate budget (600/minute) |
 | `/api/generate/[id]` | GET | — | SSE job log (`line` events, then `end` with status) |
 | `/api/generate/[id]` | POST | — | `{ ok, id, title }` — saves a `ready` job's document to Supabase |
 
@@ -46,7 +48,8 @@ which the app checks against the contract and files in Supabase.
 | Route | Method | Body/params | Response |
 |---|---|---|---|
 | `/api/generate` | GET | — | `{ jobs }` — every job this server process knows, newest first, without log bodies. Lets a reloaded client find a run still in flight and re-attach instead of orphaning it |
-| `/api/generate` | POST | multipart `file`, `folder`, `kind` | `{ jobId }` — spawns the CLI and returns immediately |
+| `/api/generate` | POST | multipart `file`, `folder`, `kind` | `{ jobId }` — spawns the CLI and returns immediately. For a lesson, the upload's pictures are pulled out first and offered to the run (`lib/generate/media.ts`); the save uploads the ones the lesson uses |
+| `/api/generate/images` | POST | multipart `file`, `folder`, `lesson` (doc key) | `{ jobId }` — picture mode on a saved lesson: the run replies with placements (`lib/generate/place.ts`), the app inserts them, checks the lesson and, on save, keeps its key, number and title |
 | `/api/generate/[id]` | GET | — | SSE tail: `line`, `tokens`, then `end` with `{ status, tokens, needsAuth }`. `status` is `ready` when the document passed the contract check and waits for the save below. Replays the log from the beginning, so attaching late loses nothing |
 | `/api/generate/[id]` | POST | — | `{ ok, id, title }` — names the `ready` document and saves it to Supabase as the caller (RLS). Idempotent; 409 when there is nothing to save. The client calls it as soon as the tail ends `ready`, and on reload for any job still `ready` |
 | `/api/generate/[id]` | DELETE | — | `{ ok }` — force-stop (the log view's Ctrl+C) |

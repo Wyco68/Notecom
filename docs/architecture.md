@@ -55,6 +55,31 @@ is the document. Then, in the app:
 The upload is the one file on disk, in the OS temp dir, deleted when the run
 ends — the CLI needs a path to read it from.
 
+**Slide pictures (2026-10).** markitdown reads slides as text and drops every
+picture, so lessons used to say "the slide is only a picture".
+`lib/generate/media.ts` now pulls the pictures out first (a `.pptx`/`.docx`
+is a zip with them under `*/media`, mapped to slides through each slide's
+relationships; a PDF's via poppler's `pdfimages`; logos and template
+pictures repeated on many slides are skipped) and writes them beside the
+upload as `slide-07-1.png`, with a list the prompt names. The run places the
+ones that teach by file name (`<figure><img><figcaption>`, see
+html-output-contract.md); the job keeps only those, read into memory before
+the temp dir goes, and the save uploads them to the private `notes-media`
+bucket (migration 0033) at `<folder_id>/<sha256>.<ext>` and rewrites each
+`src` to `/api/media/<folder_id>/<file>` with the picture's size. The bucket's
+policies are the folder's (`notes_can_read_folder` / `notes_can_write_folder`
+on the first path segment), so a picture is visible exactly where its lesson
+is; `/api/media` streams it as the reader. No image library: pictures keep
+their format, sizes come from the file headers.
+
+**Picture mode** adds pictures to a lesson already saved
+(`POST /api/generate/images`). Rewriting it would cost the whole lesson in
+tokens and change wording the reader learned from, so the run replies with
+placements only — picture, a sentence of the lesson to place it after (or a
+"only a picture" sentence it replaces), alt and caption — and
+`lib/generate/place.ts` inserts them; a sentence it can't find goes back to
+the run like a contract violation.
+
 An old binary Office upload (`.ppt`, `.doc`, `.xls`) is converted to its XML
 successor first (`lib/generate/convert.ts`), since markitdown reads only those.
 The converter is the machine's own LibreOffice, run headless in a throwaway
@@ -97,8 +122,9 @@ Saving needs the reader's session, so a step that has something to save goes
 applies the step's change) and, when there is more, sets the job running
 again and answers `continued`, and the client follows on. Every step reads
 its sources afresh as the caller (`lib/sheet/inputs.ts`): chapters, added
-documents and uploads go to a temp dir as files; the CLI has no database
-access. Each needs folder write access, and one step runs per sheet at a time.
+documents and uploads go to a temp dir as files, and so do the slide
+pictures the chapters show, named in a comment atop each chapter file; the
+CLI has no database access. Each needs folder write access, and one step runs per sheet at a time.
 
 **What blocks a save, and what doesn't.** Only markup outside the allowlist
 (`sheetMarkupIssues`) is never saved. Everything else the app checks —
@@ -134,8 +160,10 @@ with a Chromium-family browser already installed (Chrome, Chromium, Edge,
 Brave; `SHEET_PDF_BROWSER` overrides) through the DevTools protocol, because
 the `--print-to-pdf` switch hangs on some builds. The renderer has file access,
 so its input is filtered twice: the pages must pass `checkSheetPages` (a
-browser-faithful tokenizer, not a regex, against the sheet allowlist), and the
-document they are printed in carries a policy that forbids every load. No
+browser-faithful tokenizer, not a regex, against the sheet allowlist; a
+picture only by its `/api/media` path), and the document they are printed in
+carries a policy that forbids every load but `data:` images — the route
+swaps each picture for a `data:` URL it read as the caller. No
 browser installed: the print dialog, with "Save as PDF".
 
 ## No broad read-only mode — but a capability signal (2026-08)
@@ -182,7 +210,7 @@ permissions; a second copy of the rules would only be a weaker one. Contract:
 Don't move logic across the layers when fixing or extending the app:
 
 - Don't add persistence to a React component or API route directly — always
-  through `lib/vault/store.ts` (documents and folders) or `lib/collab/*`
+  through `lib/vault/store.ts` (documents, folders and their slide pictures) or `lib/collab/*`
   (membership, invitations, join requests, tags, folder search). Those two are
   the only places that touch the `notes_*` tables.
 - Don't write files — not from the app, and not from the generation run. A

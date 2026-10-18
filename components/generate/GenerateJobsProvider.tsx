@@ -79,7 +79,9 @@ interface GenerateJobsValue {
   /** Increments whenever a job finishes successfully — the tree's cue to refresh. */
   completedTick: number;
   /** Starts a run and returns its job id, or null when it could not start. */
-  start: (input: { file: File; folder: string; kind: "lect" | "quiz" }) => Promise<string | null>;
+  /** With `lesson`: picture mode — the slides of that saved lesson, whose
+   *  pictures are added to it without rewriting it. */
+  start: (input: { file: File; folder: string; kind: "lect" | "quiz"; lesson?: string }) => Promise<string | null>;
   /** Starts a cheatsheet run over lessons `from`..`to` of a folder. */
   startSheet: (input: {
     folder: string;
@@ -331,7 +333,7 @@ export default function GenerateJobsProvider({ children }: { children: React.Rea
   }, [follow]);
 
   const start = useCallback<GenerateJobsValue["start"]>(
-    async ({ file, folder, kind }) => {
+    async ({ file, folder, kind, lesson }) => {
       if (activeCount >= MAX_CONCURRENT_JOBS) {
         toast.error(`Already generating ${activeCount} files — wait for one to finish.`);
         return null;
@@ -341,7 +343,8 @@ export default function GenerateJobsProvider({ children }: { children: React.Rea
         form.set("file", file);
         form.set("folder", folder);
         form.set("kind", kind);
-        const res = await fetch("/api/generate", { method: "POST", body: form });
+        if (lesson) form.set("lesson", lesson);
+        const res = await fetch(lesson ? "/api/generate/images" : "/api/generate", { method: "POST", body: form });
         // An error page from in front of the route is not JSON; say what failed
         // instead of the browser's parse error.
         const data = await res.json().catch(() => ({}));

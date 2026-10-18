@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { checkSheetPages } from "@/lib/generate/validate";
 import { cliInstalled } from "@/lib/auth/cli";
-import { loadDoc } from "@/lib/vault/store";
+import { loadDoc, readMedia } from "@/lib/vault/store";
 import { LAYOUTS, MAX_COLUMNS, MIN_COLUMNS, printDocument, type SheetMeta } from "@/lib/sheet/layout";
 import { findBrowser, savePdf } from "@/lib/sheet/pdf";
 
@@ -62,10 +62,27 @@ export async function POST(
   }
   const name = `${folder}-${id}`;
   try {
-    const file = await savePdf(browser, printDocument(pages, meta.spec.layout, doc.title, font, columns), name);
+    const file = await savePdf(browser, printDocument(await inlinePictures(pages), meta.spec.layout, doc.title, font, columns), name);
     return Response.json({ ok: true, path: file });
   } catch (err: any) {
     console.error("[sheet pdf]", err?.message);
     return Response.json({ error: "printing to PDF failed", fallback: "print" }, { status: 502 });
   }
+}
+
+/**
+ * The printer loads nothing (its document's policy forbids it) and has no
+ * session to load with anyway, so each picture goes in as a data: URL, read
+ * as the caller — a picture they may not read prints as nothing. Only the
+ * /api/media paths checkSheetPages already let through are touched.
+ */
+async function inlinePictures(pages: string): Promise<string> {
+  const srcs = new Set([...pages.matchAll(/\bsrc="(\/api\/media\/[^"]+)"/g)].map((m) => m[1]));
+  let out = pages;
+  for (const src of srcs) {
+    const media = await readMedia(src);
+    const data = media ? `data:${media.type};base64,${media.data.toString("base64")}` : "";
+    out = out.split(`src="${src}"`).join(`src="${data}"`);
+  }
+  return out;
 }

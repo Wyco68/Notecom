@@ -183,8 +183,9 @@ export function sheetDocument(body: string, layout: SheetLayout, title: string):
 
 /**
  * The same pages, already laid out by the browser, as a document to print to
- * PDF on the server. The policy forbids every load — no script, frame, image,
- * font or stylesheet fetch — so the renderer can only draw what is inline,
+ * PDF on the server. The policy forbids every load — no script, frame, font or
+ * stylesheet fetch, and an image only as a data: URL, which is how the route
+ * hands it the pictures — so the renderer can only draw what is inline,
  * whatever the markup says (it is also allowlisted: checkSheetPages).
  */
 export function printDocument(
@@ -197,7 +198,7 @@ export function printDocument(
   return `<!doctype html>
 <html lang="en" style="--fs: ${Number(fontPt)}pt; --cols: ${Number(columns)}">
 <head>
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:">
 <meta charset="utf-8">
 <title>${esc(title)}</title>
 <style>${sheetCss(layout)}</style>
@@ -254,6 +255,11 @@ b, strong { color: var(--navy); }
 .warn { color: var(--pink); font-weight: bold; }
 .key { color: var(--key); font-weight: bold; }
 .f { color: var(--key); font-weight: bold; margin: 0.6pt 0; }
+/* A slide picture: the column's width, its own shape, never taller than about
+   a fifth of a portrait page. Its width/height attributes give the shape
+   before it loads, so the paginator measures it right on the first pass. */
+img { display: block; width: 100%; height: auto; max-height: 55mm; object-fit: contain;
+  margin: 0.8pt 0; break-inside: avoid; }
 
 ol, ul { margin: 0 0 0.8pt 7pt; }
 ul { list-style: none; margin-left: 5pt; }

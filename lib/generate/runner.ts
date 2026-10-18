@@ -15,11 +15,13 @@
 
 import { spawn, type ChildProcess } from "child_process";
 import { randomUUID } from "crypto";
-import { existsSync } from "fs";
-import { rm } from "fs/promises";
+import { existsSync, readFileSync } from "fs";
+import { rm, writeFile } from "fs/promises";
 import path from "path";
 import { checkLesson, checkQuiz, extractHtml } from "./validate";
-import { saveGenerated, type SavedDoc } from "./save";
+import { saveGenerated, savePictures, type SavedDoc } from "./save";
+import { extractSlideImages, imageIndex, IMAGE_EXT, type SlideImage } from "./media";
+import { placePictures, parsePlacements } from "./place";
 import type { SheetSpec } from "../sheet/layout";
 
 export type JobKind = "lect" | "quiz" | "sheet";
@@ -40,6 +42,8 @@ export interface Job {
   edit?: { docKey: string; request: string };
   /** a sheet step's own state; server-side only, never listed */
   task?: unknown;
+  /** the slide pictures offered to the run, by the name it uses for them */
+  offered?: Map<string, SlideImage>;
   /** how a "ready" job is saved, when not the lesson/quiz way. May leave the
    *  job running again, for a step that saves as it goes (continued: true). */
   onSave?: () => Promise<SavedDoc & { continued?: boolean }>;
@@ -58,6 +62,12 @@ export interface Job {
   startedBy: string;
   /** the checked document, held in memory only until it is saved */
   html?: string;
+  /** the slide pictures the document uses, read out of the run's temp dir
+   *  before it is deleted; uploaded with the document on save */
+  pictures?: Map<string, Picture>;
+  /** set on a run that adds slide pictures to a lesson already saved: the
+   *  reply is a list of placements, not a lesson (see ./place.ts) */
+  target?: { docKey: string; title: string; html: string };
   saving?: Promise<SavedDoc>;
   saved?: SavedDoc;
 }
@@ -138,12 +148,21 @@ export function listJobs(
     }));
 }
 
+export interface Picture {
+  data: Buffer;
+  ext: string;
+  width: number;
+  height: number;
+}
+
 export function startJob(
   folder: string,
   kind: "lect" | "quiz",
   filePath: string,
   originalName: string,
-  startedBy: string
+  startedBy: string,
+  /** add pictures to this saved lesson instead of writing a new one */
+  target?: Job["target"]
 ): Job {
   const job: Job = {
     id: randomUUID(),
@@ -154,6 +173,7 @@ export function startJob(
     startedAt: Date.now(),
     tokens: { input: 0, output: 0 },
     startedBy,
+    target,
   };
   jobs.set(job.id, job);
 
@@ -167,6 +187,39 @@ export function startJob(
 
   const safeOriginal = oneLine(originalName);
   const noun = kind === "quiz" ? "quiz" : "lesson";
+  const mediaDir = `${filePath}.media`;
+  const inputs = [filePath, mediaDir];
+
+  // The pictures are pulled out before the run, so the prompt can say where
+  // they are; a quiz has no use for them.
+  const prepare = async (): Promise<string> => {
+    if (kind === "quiz") return prompt;
+    const images = await extractSlideImages(filePath, mediaDir);
+    job.offered = new Map(images.map((i) => [i.name, i]));
+    const index = path.join(mediaDir, "pictures.txt");
+    await writeFile(index, imageIndex(images) + "\n");
+    if (images.length) job.log.push(`Found ${images.length} slide picture(s) the ${noun} can use.`);
+    if (target) {
+      const lessonFile = path.join(mediaDir, "lesson.html");
+      await writeFile(lessonFile, blockPerLine(target.html));
+      return (
+        `/lect Picture mode: add slide pictures to a lesson that is already saved — do not rewrite it, and do not create, write or edit any file. ` +
+        `The lesson is at ${lessonFile}. The slides it was written from are at ${filePath} (original name: ${safeOriginal}); convert them with the markitdown tool to see what each slide says. ` +
+        (images.length
+          ? `The pictures taken from those slides are in ${mediaDir}, and ${index} lists each with its slide number and size. `
+          : `The slides have no pictures to add, so reply with an empty JSON array. `) +
+        `Follow the /lect command's Picture mode and its slide-picture rules exactly. ` +
+        `Reply with only the JSON array of placements — no code fence and no text before or after it.`
+      );
+    }
+    return (
+      prompt +
+      (images.length
+        ? ` The pictures taken from the upload are in ${mediaDir}, and ${index} lists each with its slide number and size; place the ones the lesson needs by file name, following the /lect command's slide-picture rules.`
+        : ` The upload has no pictures to place.`)
+    );
+  };
+
   const prompt =
     `/${kind} ` +
     // The destination is the app's business, not the CLI's: it was chosen in
@@ -192,7 +245,17 @@ export function startJob(
     job.log.push(`Queued — waiting for another generation in "${folder}" to finish first.`);
   }
   const priorInFolder = folderChains.get(folder) ?? Promise.resolve();
-  const thisRun = priorInFolder.then(() => generate(job, repoRoot, [filePath], prompt, safeOriginal));
+  const thisRun = priorInFolder.then(async () => {
+    if (job.status !== "running") return;
+    let first: string;
+    try {
+      first = await prepare();
+    } catch {
+      // A picture step that fails costs the lesson its pictures, not the run.
+      first = prompt;
+    }
+    return generate(job, repoRoot, inputs, first, safeOriginal);
+  });
   folderChains.set(folder, thisRun.catch(() => {}));
 
   return job;
@@ -225,13 +288,60 @@ interface Contract {
 
 function contractFor(job: Job): Contract {
   const noun = job.kind === "quiz" ? "quiz" : "lesson";
+  const offered = job.offered ?? new Map<string, SlideImage>();
+  const names = new Set(offered.keys());
+  // Read now: the temp dir goes when the run ends, and the save comes after.
+  const keep = (html: string) => {
+    const used = new Map<string, Picture>();
+    for (const m of html.matchAll(/<img\s[^>]*\bsrc="([^"]+)"/g)) {
+      const img = offered.get(m[1]);
+      if (img && !used.has(img.name)) {
+        used.set(img.name, { data: readFileSync(img.path), ext: IMAGE_EXT[img.mime], width: img.width, height: img.height });
+      }
+    }
+    return used;
+  };
+
+  if (job.target) {
+    const target = job.target;
+    // A placement that can't be applied comes back as a violation, through
+    // the same fix round as a lesson that breaks the contract.
+    let placed = "";
+    return {
+      noun: "list of picture placements",
+      startsAt: "the [",
+      extract: (reply) => {
+        const parsed = parsePlacements(reply);
+        if (!parsed) return null;
+        const { html, errors } = placePictures(target.html, parsed, names);
+        placed = errors.length ? "" : html;
+        // The fix prompt quotes `check`, so errors travel through it.
+        return JSON.stringify({ errors, count: parsed.length });
+      },
+      check: (out) => {
+        const { errors } = JSON.parse(out) as { errors: string[] };
+        return errors.length ? errors : checkLesson(placed, names);
+      },
+      accept: (out) => {
+        const { count } = JSON.parse(out) as { count: number };
+        job.html = placed;
+        job.pictures = keep(placed);
+        job.status = "ready";
+        job.log.push(
+          count ? `Placed ${count} picture(s) — saving the lesson.` : "No picture was worth adding — the lesson stays as it was."
+        );
+      },
+    };
+  }
+
   return {
     noun,
     startsAt: "the <h1>",
     extract: extractHtml,
-    check: job.kind === "quiz" ? checkQuiz : checkLesson,
+    check: job.kind === "quiz" ? checkQuiz : (html) => checkLesson(html, names),
     accept: (html) => {
       job.html = html;
+      job.pictures = keep(html);
       job.status = "ready";
       job.log.push(`The ${noun} passed the contract check — saving it.`);
     },
@@ -297,7 +407,9 @@ async function generate(
       prompt =
         `The app rejected that ${noun} against its output contract: ` +
         oneLine(violations.slice(0, 10).map((v) => v.slice(0, 200)).join("; ")) +
-        `. Fix exactly these problems without changing anything else, and reply with only the complete corrected HTML, starting at ${startsAt}.`;
+        (job.target
+          ? `. Fix exactly these problems and reply with only the complete corrected JSON array of placements.`
+          : `. Fix exactly these problems without changing anything else, and reply with only the complete corrected HTML, starting at ${startsAt}.`);
     }
   } finally {
     // The upload is input for this run only — it never outlives it.
@@ -495,10 +607,16 @@ export function saveJob(job: Job): Promise<SavedDoc & { continued?: boolean }> {
   }
 
   const noun = job.kind === "quiz" ? "quiz" : "lesson";
-  job.saving = saveGenerated(job.folder, job.kind, job.html)
+  const pictures = job.pictures ?? new Map();
+  job.saving = (
+    job.target
+      ? savePictures(job.folder, job.target.docKey, job.html, pictures)
+      : saveGenerated(job.folder, job.kind, job.html, pictures)
+  )
     .then((saved) => {
       job.saved = saved;
       job.html = undefined;
+      job.pictures = undefined;
       job.status = "done";
       job.log.push(`Saved ${noun} "${saved.title}" to ${job.folder}.`, "Finished.");
       return saved;
@@ -535,4 +653,10 @@ export function stopJob(id: string, userId: string): boolean {
   // own status check skips spawning it once its turn comes, so there is no
   // process to kill yet, just the queue slot to give up.
   return true;
+}
+
+// One block per line: Read cuts very long lines, and a lesson is often stored
+// as one.
+function blockPerLine(html: string): string {
+  return html.replace(/(<(?:h[1-6]|p|li|tr|table|ul|ol|pre|blockquote|div|figure)[\s>])/g, "\n$1");
 }

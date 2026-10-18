@@ -8,7 +8,7 @@ import { mkdir, writeFile } from "fs/promises";
 import { tmpdir } from "os";
 import path from "path";
 import { randomUUID } from "crypto";
-import { listFolderDocs, loadDoc } from "@/lib/vault/store";
+import { listFolderDocs, loadDoc, readMedia } from "@/lib/vault/store";
 import type { SourceRef } from "./layout";
 
 export interface SheetInputs {
@@ -41,7 +41,8 @@ export async function writeSheetInputs(
   for (const l of chosen) {
     const { html, title } = await loadDoc(folder, l.id, "lesson");
     const file = path.join(dir, `ch${String(l.seq).padStart(2, "0")}.html`);
-    await writeFile(file, `<!-- chapter ${l.seq} -->\n<h1>${l.seq}. ${escapeText(title)}</h1>\n${blockPerLine(html)}\n`);
+    const pictures = await writePictures(dir, html);
+    await writeFile(file, `<!-- chapter ${l.seq} -->\n${pictures}<h1>${l.seq}. ${escapeText(title)}</h1>\n${blockPerLine(html)}\n`);
     chapters.push({ seq: l.seq, path: file });
   }
 
@@ -65,7 +66,28 @@ export const writeChapters = (folder: string, from: number, to: number) => write
 // One block per line: Read cuts very long lines, and a lesson is often stored
 // as one.
 function blockPerLine(html: string): string {
-  return html.replace(/(<(?:h[1-6]|p|li|tr|table|ul|ol|pre|blockquote|div)[\s>])/g, "\n$1");
+  return html.replace(/(<(?:h[1-6]|p|li|tr|table|ul|ol|pre|blockquote|div|figure)[\s>])/g, "\n$1");
+}
+
+/**
+ * The slide pictures a chapter shows, as files the run can look at, and a
+ * comment for the chapter file saying which file is which picture. The run
+ * places a picture on the sheet by the lesson's own src; it only opens the
+ * file to judge whether the picture earns its space.
+ */
+async function writePictures(dir: string, html: string): Promise<string> {
+  const srcs = new Set([...html.matchAll(/<img\s[^>]*\bsrc="(\/api\/media\/[^"]+)"/g)].map((m) => m[1]));
+  if (!srcs.size) return "";
+  const lines: string[] = [];
+  await mkdir(path.join(dir, "pictures"), { recursive: true });
+  for (const src of srcs) {
+    const media = await readMedia(src);
+    if (!media) continue;
+    const file = path.join(dir, "pictures", src.split("/").pop()!);
+    await writeFile(file, media.data);
+    lines.push(`${src} = ${file}`);
+  }
+  return lines.length ? `<!-- slide pictures (src = file to look at):\n${lines.join("\n")}\n-->\n` : "";
 }
 
 function escapeText(s: string): string {

@@ -8,6 +8,7 @@ import Timeline, { type TimelineData } from "./visualizations/Timeline";
 import LayerStack, { type LayerStackData } from "./visualizations/LayerStack";
 import BlockDiagram, { type BlockDiagramData } from "./visualizations/BlockDiagram";
 import VizRenderer from "./VizRenderer";
+import { MEDIA_SRC } from "@/lib/vault/media-src";
 
 // Renders Claude's sanitized HTML into React. The HTML is already structured
 // and styling-free; this component owns all presentation, intercepting element
@@ -16,6 +17,7 @@ import VizRenderer from "./VizRenderer";
 //   - <div class="mermaid">                          -> client-side Mermaid SVG
 //   - <div class="viz">  JSON {type,title?,data}     -> VizRenderer + registry dispatch
 //   - <div class="viz-*"> legacy JSON                -> legacy viz component (backward compat)
+//   - <figure><img><figcaption>                      -> a slide picture, only from /api/media
 
 // Tags we render as plain elements. Anything else is skipped (its text kept).
 const PASS_THROUGH = new Set([
@@ -149,6 +151,42 @@ function nodeToReact(node: Node, key: number): ReactNode {
       >
         {childrenToReact(el)}
       </pre>
+    );
+  }
+
+  // A slide picture. Only the app's own picture path is ever loaded — a src
+  // from anywhere else is dropped with its figure, so stored HTML can't make
+  // the reader's browser fetch a third-party URL. width/height are the
+  // picture's own, stored with it, so the page keeps its place while it loads.
+  if (tag === "figure") {
+    const img = el.querySelector("img");
+    const src = img?.getAttribute("src") ?? "";
+    if (!img || !MEDIA_SRC.test(src)) return null;
+    const size = (name: string) => {
+      const n = Number(img.getAttribute(name));
+      return Number.isFinite(n) && n > 0 ? n : undefined;
+    };
+    const caption = el.querySelector("figcaption");
+    return (
+      <figure key={key} className="!my-8">
+        <a href={src} target="_blank" rel="noopener" className="block">
+          {/* eslint-disable-next-line @next/next/no-img-element -- private, session-bound picture; next/image can't fetch it */}
+          <img
+            src={src}
+            alt={img.getAttribute("alt") ?? ""}
+            width={size("width")}
+            height={size("height")}
+            loading="lazy"
+            decoding="async"
+            className="!my-0 mx-auto h-auto max-h-[70vh] w-auto max-w-full rounded-lg border border-gray-200 bg-white object-contain dark:border-gray-700"
+          />
+        </a>
+        {caption && (
+          <figcaption className="!mt-2 text-center text-sm text-gray-500 dark:text-gray-400">
+            {childrenToReact(caption)}
+          </figcaption>
+        )}
+      </figure>
     );
   }
 

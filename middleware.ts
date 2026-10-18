@@ -178,6 +178,8 @@ const GENERATE_WINDOW_MS = 60 * 60_000;
 // every turn is a full run — and still on its own bucket so chatting can't
 // use up the budget for generating.
 const SHEET_EDIT_LIMIT = 30;
+const IMAGES_LIMIT = 30;
+const MEDIA_LIMIT = 600;
 
 // The blanket budget for everything else this middleware matches, pages
 // included. Generous enough for real interactive use — the busiest route in
@@ -273,7 +275,21 @@ export async function middleware(req: NextRequest) {
     if (retryAfter !== null) return withCsp(tooManyRequests(retryAfter));
   }
 
-  const retryAfter = rateLimit(`api:${userId}`, GENERAL_LIMIT, GENERAL_WINDOW_MS);
+  // Adding slide pictures to a lesson already saved is a run per lesson, and a
+  // course is a dozen of them: its own bucket, like the sheet steps, so it
+  // neither waits on nor uses up the budget for generating.
+  if (req.method === "POST" && path === "/api/generate/images") {
+    const retryAfter = rateLimit(`images:${userId}`, IMAGES_LIMIT, GENERATE_WINDOW_MS);
+    if (retryAfter !== null) return withCsp(tooManyRequests(retryAfter));
+  }
+
+  // One lesson page asks for every picture it shows, and a cheatsheet for
+  // every one on every page: on the general budget, a picture-rich sheet
+  // would lock the reader out of the app for a minute. Its own, larger one.
+  const media = req.method === "GET" && path.startsWith("/api/media/");
+  const retryAfter = media
+    ? rateLimit(`media:${userId}`, MEDIA_LIMIT, GENERAL_WINDOW_MS)
+    : rateLimit(`api:${userId}`, GENERAL_LIMIT, GENERAL_WINDOW_MS);
   if (retryAfter !== null) return withCsp(tooManyRequests(retryAfter));
 
   // Route handlers under app/api/collab/ would otherwise call

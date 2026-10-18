@@ -45,7 +45,11 @@ export default function GenerateModal({
 }) {
   const { jobs, activeCount, start, abort } = useGenerateJobs();
   const [folder, setFolder] = useState(() => initialFolder(folders));
-  const [kind, setKind] = useState<"lect" | "quiz">("lect");
+  const [kind, setKind] = useState<"lect" | "quiz" | "pictures">("lect");
+  // Picture mode adds a saved lesson's slide pictures to it; it needs that
+  // lesson, picked from the chosen folder.
+  const [lessons, setLessons] = useState<Array<{ id: string; title: string; seq: number }> | null>(null);
+  const [lesson, setLesson] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [starting, setStarting] = useState(false);
   // The job this dialog is showing: the one it was opened on, or the one it
@@ -64,12 +68,32 @@ export default function GenerateModal({
       // Not remembered this time; the run is unaffected.
     }
     try {
-      const id = await start({ file, folder, kind });
+      const id = await start(
+        kind === "pictures" ? { file, folder, kind: "lect", lesson } : { file, folder, kind }
+      );
       if (id) setWatching(id);
     } finally {
       setStarting(false);
     }
   }
+
+  useEffect(() => {
+    if (kind !== "pictures" || !folder) return;
+    let cancelled = false;
+    setLessons(null);
+    setLesson("");
+    fetch(`/api/folders/${encodeURIComponent(folder)}`)
+      .then((r) => (r.ok ? r.json() : { lessons: [] }))
+      .then((d) => {
+        if (!cancelled) setLessons(d.lessons ?? []);
+      })
+      .catch(() => {
+        if (!cancelled) setLessons([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [kind, folder]);
 
   // A job that finished and was dismissed from the sidebar takes its row with
   // it; there is nothing left to show, so close rather than sit on a blank panel.
@@ -124,7 +148,7 @@ export default function GenerateModal({
         Type
       </label>
       <div className="mb-4 flex gap-2">
-        {(["lect", "quiz"] as const).map((k) => (
+        {(["lect", "quiz", "pictures"] as const).map((k) => (
           <button
             key={k}
             onClick={() => setKind(k)}
@@ -134,10 +158,34 @@ export default function GenerateModal({
                 : "ui-btn-secondary font-normal"
             }`}
           >
-            {k === "lect" ? "Lesson" : "Quiz"}
+            {k === "lect" ? "Lesson" : k === "quiz" ? "Quiz" : "Pictures"}
           </button>
         ))}
       </div>
+
+      {kind === "pictures" && (
+        <>
+          <label className="mb-1.5 block text-xs font-medium text-gray-500 dark:text-gray-400">
+            Lesson to add slide pictures to
+          </label>
+          <select
+            value={lesson}
+            onChange={(e) => setLesson(e.target.value)}
+            disabled={!lessons?.length}
+            className="ui-field mb-1.5"
+          >
+            <option value="">{lessons === null ? "Loading lessons…" : lessons.length ? "Choose a lesson" : "No lessons in this subject"}</option>
+            {lessons?.map((l) => (
+              <option key={l.id} value={l.id}>
+                {l.seq}. {l.title}
+              </option>
+            ))}
+          </select>
+          <p className="mb-4 text-xs leading-snug text-gray-500">
+            Upload the slides that lesson was made from. Only pictures are added where they help; the text stays as it is.
+          </p>
+        </>
+      )}
 
       <label className="mb-1.5 block text-xs font-medium text-gray-500 dark:text-gray-400">
         Lecture file (PDF, slides, image, markdown)
@@ -150,15 +198,15 @@ export default function GenerateModal({
 
       <button
         onClick={begin}
-        disabled={!file || !folder || starting || atCapacity}
+        disabled={!file || !folder || starting || atCapacity || (kind === "pictures" && !lesson)}
         className="ui-btn ui-btn-primary w-full"
       >
-        {starting ? "Starting..." : "Generate with Claude Code"}
+        {starting ? "Starting..." : kind === "pictures" ? "Add pictures with Claude Code" : "Generate with Claude Code"}
       </button>
       <p className="mt-2.5 text-xs leading-snug text-gray-500">
         {atCapacity
           ? `Already generating ${activeCount} files — wait for one to finish.`
-          : `Runs your local Claude Code CLI on your existing subscription — same as /${kind} in a terminal. Takes a few minutes, and runs in the background so you can keep reading.`}
+          : `Runs your local Claude Code CLI on your existing subscription — same as /${kind === "quiz" ? "quiz" : "lect"} in a terminal. Takes a few minutes, and runs in the background so you can keep reading.`}
       </p>
     </Modal>
   );
