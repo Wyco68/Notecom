@@ -60,8 +60,12 @@ picture, so lessons used to say "the slide is only a picture".
 `lib/generate/media.ts` now pulls the pictures out first (a `.pptx`/`.docx`
 is a zip with them under `*/media`, mapped to slides through each slide's
 relationships; a PDF's via poppler's `pdfimages`; logos and template
-pictures repeated on many slides are skipped) and writes them beside the
-upload as `slide-07-1.png`, with a list the prompt names. The run places the
+pictures repeated on many slides are skipped; diagrams stored as Windows
+vector pictures, `.emf`/`.wmf`, go through LibreOffice to PDF and are cut to
+the drawing with Ghostscript's bounding box and poppler's `pdftocairo`, in
+`lib/generate/convert.ts`) and writes them beside the
+upload as `slide-07-1.png`, with a list the prompt names. In picture mode a picture the lesson already shows (same hash) is not
+offered again. The run places the
 ones that teach by file name (`<figure><img><figcaption>`, see
 html-output-contract.md); the job keeps only those, read into memory before
 the temp dir goes, and the save uploads them to the private `notes-media`

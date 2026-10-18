@@ -17,6 +17,7 @@ import { execFile } from "child_process";
 import { mkdir, readFile, readdir, rm, writeFile } from "fs/promises";
 import path from "path";
 import { inflateRawSync } from "zlib";
+import { rasterizeVectors } from "./convert";
 
 export interface SlideImage {
   /** the name the run uses for it, e.g. slide-07-1.png */
@@ -58,8 +59,8 @@ export async function extractSlideImages(file: string, dir: string): Promise<Sli
   const ext = path.extname(file).toLowerCase();
   let found: Array<{ slide: number; data: Buffer }> = [];
   try {
-    if (ext === ".pptx") found = officeImages(await readFile(file), "ppt");
-    else if (ext === ".docx") found = officeImages(await readFile(file), "word");
+    if (ext === ".pptx") found = await officeImages(await readFile(file), "ppt");
+    else if (ext === ".docx") found = await officeImages(await readFile(file), "word");
     else if (ext === ".pdf") found = await pdfImages(file, dir);
     else if (/^\.(png|jpe?g|gif|webp)$/.test(ext)) found = [{ slide: 1, data: await readFile(file) }];
   } catch {
@@ -130,12 +131,28 @@ export function imageInfo(b: Buffer): { mime: ImageMime; width: number; height: 
 /**
  * The pictures of an Office file, each with the slide it is on: a slide's
  * relationships file names the media it uses. A Word document has no slides,
- * so its pictures are numbered in order instead.
+ * so its pictures are numbered in order instead. Diagrams saved as Windows
+ * vector pictures (.emf/.wmf) — common in textbook decks — are turned into
+ * PNGs when the machine can (./convert.ts).
  */
-function officeImages(zipData: Buffer, root: "ppt" | "word"): Array<{ slide: number; data: Buffer }> {
+async function officeImages(zipData: Buffer, root: "ppt" | "word"): Promise<Array<{ slide: number; data: Buffer }>> {
   const zip = readZip(zipData);
   const media = new Map<string, Buffer>();
-  for (const [name, read] of zip) if (name.startsWith(`${root}/media/`)) media.set(name, read());
+  const vectors: Array<{ key: string; data: Buffer; ext: string }> = [];
+  for (const [name, read] of zip) {
+    if (!name.startsWith(`${root}/media/`)) continue;
+    const ext = path.extname(name).slice(1).toLowerCase();
+    if (ext === "emf" || ext === "wmf") vectors.push({ key: name, data: read(), ext });
+    else media.set(name, read());
+  }
+  // Only the vectors a slide actually uses, at most a deck's worth.
+  const used = new Set<string>();
+  for (const [name, read] of zip) {
+    if (!/^ppt\/slides\/_rels\/slide\d+\.xml\.rels$/.test(name)) continue;
+    for (const t of read().toString("utf8").matchAll(/Target="\.\.\/media\/([^"]+)"/g)) used.add(`ppt/media/${t[1]}`);
+  }
+  const wanted = vectors.filter((v) => root === "word" || used.has(v.key)).slice(0, MAX_IMAGES);
+  for (const [key, png] of await rasterizeVectors(wanted)) media.set(key, png);
 
   if (root === "word") {
     return [...media.keys()]

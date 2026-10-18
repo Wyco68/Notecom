@@ -14,7 +14,7 @@
 // verification never burns tokens or writes a real lesson.
 
 import { spawn, type ChildProcess } from "child_process";
-import { randomUUID } from "crypto";
+import { createHash, randomUUID } from "crypto";
 import { existsSync, readFileSync } from "fs";
 import { rm, writeFile } from "fs/promises";
 import path from "path";
@@ -194,7 +194,13 @@ export function startJob(
   // they are; a quiz has no use for them.
   const prepare = async (): Promise<string> => {
     if (kind === "quiz") return prompt;
-    const images = await extractSlideImages(filePath, mediaDir);
+    let images = await extractSlideImages(filePath, mediaDir);
+    if (target) {
+      // A stored picture is named by its content's hash, so one the lesson
+      // already shows is known exactly — and not offered again.
+      const shown = new Set([...target.html.matchAll(/\/api\/media\/[0-9a-f-]{36}\/([0-9a-f]{64})\./g)].map((m) => m[1]));
+      images = images.filter((i) => !shown.has(createHash("sha256").update(readFileSync(i.path)).digest("hex")));
+    }
     job.offered = new Map(images.map((i) => [i.name, i]));
     const index = path.join(mediaDir, "pictures.txt");
     await writeFile(index, imageIndex(images) + "\n");
