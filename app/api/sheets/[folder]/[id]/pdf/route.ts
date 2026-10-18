@@ -78,9 +78,9 @@ export async function POST(
  */
 async function inlinePictures(pages: string): Promise<string> {
   const srcs = new Set([...pages.matchAll(/\bsrc="(\/api\/media\/[^"]+)"/g)].map((m) => m[1]));
+  const read = await Promise.all([...srcs].map(async (src) => [src, await readMedia(src)] as const));
   let out = pages;
-  for (const src of srcs) {
-    const media = await readMedia(src);
+  for (const [src, media] of read) {
     const data = media ? `data:${media.type};base64,${media.data.toString("base64")}` : "";
     out = out.split(`src="${src}"`).join(`src="${data}"`);
   }

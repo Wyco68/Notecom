@@ -78,16 +78,20 @@ function blockPerLine(html: string): string {
 async function writePictures(dir: string, html: string): Promise<string> {
   const srcs = new Set([...html.matchAll(/<img\s[^>]*\bsrc="(\/api\/media\/[^"]+)"/g)].map((m) => m[1]));
   if (!srcs.size) return "";
-  const lines: string[] = [];
   await mkdir(path.join(dir, "pictures"), { recursive: true });
-  for (const src of srcs) {
-    const media = await readMedia(src);
-    if (!media) continue;
-    const file = path.join(dir, "pictures", src.split("/").pop()!);
-    await writeFile(file, media.data);
-    lines.push(`${src} = ${file}`);
-  }
-  return lines.length ? `<!-- slide pictures (src = file to look at):\n${lines.join("\n")}\n-->\n` : "";
+  // All at once: one by one, a picture-rich chapter took a minute to fetch
+  // before the run could even start.
+  const lines = await Promise.all(
+    [...srcs].map(async (src) => {
+      const media = await readMedia(src);
+      if (!media) return null;
+      const file = path.join(dir, "pictures", src.split("/").pop()!);
+      await writeFile(file, media.data);
+      return `${src} = ${file}`;
+    })
+  );
+  const found = lines.filter((l): l is string => l !== null);
+  return found.length ? `<!-- slide pictures (src = file to look at):\n${found.join("\n")}\n-->\n` : "";
 }
 
 function escapeText(s: string): string {
