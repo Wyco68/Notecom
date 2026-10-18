@@ -60,6 +60,18 @@ cheatsheet-guidelines.md is self-contained.
   remove what the sources do not say, add what is missing), keep everything
   else, stay within the budget, and reply with the whole fragment.
 
+## Chapter mode
+When the prompt starts with `/sheet Chapter mode`, you write one chapter of a
+sheet; the app writes the others in their own runs and saves each as it
+comes, so a run that stops part-way keeps what is done.
+
+1. Read that chapter's file and the other sources the prompt names; use
+   only what belongs to this chapter.
+2. Write only its section: `<h2>N. Title</h2>` and its content, no other
+   `<h2>`, within this chapter's share of the budget (the prompt gives it).
+3. Reply with one `NOTE:` line on what the chapter covers or had to leave
+   out, then the section.
+
 ## Edit mode
 When the prompt starts with `/sheet Edit mode`, the reader is changing a
 sheet that already exists, through the chat box beside it.
@@ -80,10 +92,12 @@ replaces the old one.
 
 ## Review mode
 When the prompt starts with `/sheet Review mode`, you are not the writer: you
-check someone else's sheet. Change nothing and write nothing.
+check someone else's work, one chapter's section at a time. Change nothing
+and write nothing.
 
-1. Read the sheet file and every source file named in the prompt (slides
-   through `markitdown`).
+1. Read the section file and every source file named in the prompt (slides
+   through `markitdown`); from added documents use only what belongs to
+   this chapter.
 2. Go through the sheet line by line. For each line, find where the sources
    say it. Report:
    - `wrong`: the sources say something different (a number, a term, a
@@ -92,7 +106,7 @@ check someone else's sheet. Change nothing and write nothing.
    - `unclear`: so compressed it now reads as something else;
    - `missing`: a definition, list item, number, formula, command, table
      row, worked example or comparison in the sources that is not on the sheet.
-3. Check every number the prompt lists against the slides.
+3. Check every number the prompt lists against the sources.
 4. Reply with only the JSON object the prompt asks for. Quote the sheet
    exactly in `where`, and say in `fix` what the sources say and in which
    chapter. Report nothing about style or layout — only facts. An empty

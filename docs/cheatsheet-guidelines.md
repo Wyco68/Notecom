@@ -19,8 +19,9 @@ Reply with the sheet body only. The app wraps it in its own page, picks the
 paper, columns and font, splits it into pages and prints it. So:
 
 - No `<html>`, `<head>`, `<body>`, `<style>`, `<script>`, `<h1>`, no inline
-  `style=` and no wrapper `<div>` or `<section>`. Every block sits at the top
-  level, one after another; the app breaks pages between blocks.
+  `style=` and no `<section>`. A `<div>` only ever as one of the boxes below.
+  Every block sits at the top level, one after another; the app breaks pages
+  between blocks, and a box moves as one block.
 - Before the fragment, one line starting `NOTE:` for the reader (what the
   sheet covers, or what an edit changed). It is shown in the sheet's
   conversation and never printed. The fragment starts at the first `<h2>`.
@@ -34,7 +35,9 @@ paper, columns and font, splits it into pages and prints it. So:
 | `p` | one fact, one sentence |
 | `ul`, `ol`, `li` | parallel items; steps in order |
 | `table`, `thead`, `tbody`, `tr`, `th`, `td` | every comparison, attribute list, command list, mode list |
-| `pre`, `code` | commands, code and config, copied exactly |
+| `pre`, `code` | commands, code and config, copied exactly; `code` also inline for a command, file or keyword |
+| `div` | a box, only with one of the box classes below |
+| `hr` | the dashed rule between the two halves of a comparison box |
 | `b`, `strong`, `i`, `em`, `sup`, `sub`, `span`, `br` | inline marks |
 | `svg` and `g`, `rect`, `line`, `path`, `polyline`, `polygon`, `circle`, `ellipse`, `text`, `tspan` | small diagrams the source draws |
 
@@ -54,6 +57,11 @@ and the geometry of SVG shapes (`viewBox`, `x`, `y`, `x1`…`y2`, `width`,
 | `c` | `span` inside `pre` | a code comment; grey |
 | `d` | `svg` | a diagram (required on every `svg`) |
 | `box-b`, `box-g`, `box-y`, `box-r`, `box-w` | `rect` | blue, green, yellow, red, white fill |
+| `box` | `div` | a group of related facts: light blue, blue edge |
+| `cmp` | `div` | a comparison of two to four things: teal frame, ▸ bullets |
+| `bt` | `p` | the title of a `cmp` box, its first child: `Interrupt vs Trap vs Syscall` |
+| `box-warn` | `div` | a mix-up to avoid: light red, red edge, no label |
+| `box-key` | `div` | a rule of thumb or a fact to remember: light violet, violet edge |
 
 ## Elements
 
@@ -70,6 +78,15 @@ and the geometry of SVG shapes (`viewBox`, `x`, `y`, `x1`…`y2`, `width`,
 - **Memory hook,** only if the source gives one: `"Switch cuts collisions, router cuts broadcasts."`
 - **Table** first column names the thing. Common shapes: `Aspect | IPv4 | IPv6`,
   `Command | Shows`, `Field | Bytes`, `Concept | Caused by | Example`.
+- **Boxes** make the sheet scannable, as in the reader's reference sheet.
+  Use them where the sources group things, not on every fact — most of the
+  sheet stays plain lines and tables:
+  `<div class="box"><ul><li><b>Process Mgmt:</b> create, delete, suspend, resume processes.</li>…</ul></div>`
+  `<div class="cmp"><p class="bt">Interrupt vs Trap</p><ul><li>Caused by hardware → <b>interrupt</b>.</li>…</ul><hr><ul><li><b>Interrupt = asynchronous.</b></li></ul></div>`
+  `<div class="box-warn"><p>Protection (inside, access control) ≠ security (outside threats).</p></div>`
+  `<div class="box-key"><p>A blocking call always means Running → <b>Waiting</b>.</p></div>`
+  A box holds a few lines; never nest boxes. The wording rules apply inside
+  them too: no "Ask:", "Mistake:", "Rule of thumb:" labels — the colour says it.
 - **Diagram** only where the source draws one: `<svg class="d" viewBox="0 0 100 30">`,
   plain rectangles with a `box-*` fill, lines, short labels, port names on
   links. Keep it under a third of the viewBox height per row of boxes. No
@@ -119,8 +136,15 @@ cover every fact of the chapters in full, in the same compressed note style,
 as many pages as that takes. Still no padding and nothing from outside the
 sources.
 
-The paper and the number of columns are the app's (the reader may pick 2 to 8
-columns); the prompt states them so you can judge how wide a table may be.
+The paper, the columns and the font are the app's. For a page-limited sheet
+it tries 2 to 8 columns and every font in range, and keeps the largest
+readable font that fills the pages; so aim for the budget and it will fit.
+Keep tables to three or four short columns, since a column may be narrow.
+
+**Chapter by chapter.** A new sheet is written one chapter per run (chapter
+mode, see `/sheet`), each with its own share of the budget, so a run that
+stops part-way keeps what is done. Write each chapter as if the others were
+already there: no repeating them, no "see chapter 2".
 
 ## What the app checks
 
@@ -128,12 +152,15 @@ Every reply is checked before anyone sees it, and a failure comes back to you
 as a list:
 
 1. **Contract**: the tag, attribute and class allowlist and the banned
-   wording above.
+   wording above. Markup outside the allowlist is never saved; anything else
+   that fails is saved with the sheet as an open check the reader can send
+   back to you.
 2. **Sources**: every chapter in the range has its `<h2>`, and every number
    on the sheet appears somewhere in the chapter files (with slides, numbers
    not in the notes are passed to the review instead).
-3. **Review**: a separate session reads the sheet and the sources and lists
-   anything wrong, unsupported, unclear or missing (see `/sheet` review mode).
+3. **Review**, when the reader runs it: a separate session reads one
+   chapter's section and its sources and lists anything wrong, unsupported,
+   unclear or missing (see `/sheet` review mode).
 4. **Layout**, in the browser after layout: the page limit at the smallest
    font, every box inside its column, no overlaps, nothing cut off, diagram
    labels inside their diagram and apart from each other, no heading stranded
