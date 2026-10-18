@@ -130,12 +130,23 @@ look at.
 
 Terse class notes, never an assistant's voice.
 
+- **One sentence per line.** Every sentence is its own `<p>` or `<li>`;
+  never two sentences run together on one line. A line that needs a
+  second sentence becomes two lines.
+- **Simple words, simple explanations.** Everyday English a high-school
+  student knows, around the technical terms. Explain a term in a few plain
+  words, not a textbook sentence: `Thrashing = more time paging than
+  working.` If an explanation needs a clause inside a clause, split it.
 - Short English a tired student reads in two seconds. Drop "the", "is",
   "that" when the meaning survives.
 - Every technical term exactly as the source spells it. Numbers, ranges,
   defaults and units always stay.
 - `=`, `→`, `/`, `+`, `vs`, `e.g.`, `i.e.` replace phrases.
-- Questions or quiz items in the source become plain facts or `Ex:` lines.
+- Questions or quiz items in the source become plain facts or `Ex:` lines,
+  stated with their correct answer: "Ring 0 (centre) = most power." A
+  question the reader added as a source (a question bank, with answers)
+  goes into its own chapter, merged with the fact already there instead of
+  repeated; one that adds nothing new is left out.
 - Where notes and slides disagree, one short `warn` line says so. Never fix
   a slide silently.
 
