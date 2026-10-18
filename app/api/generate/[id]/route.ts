@@ -77,7 +77,9 @@ export async function POST(
   }
   try {
     const saved = await saveJob(job);
-    return Response.json({ ok: true, id: saved.id, title: saved.title });
+    // continued: a cheatsheet step saved part of its work and runs on — the
+    // client follows the job again.
+    return Response.json({ ok: true, id: saved.id, title: saved.title, continued: !!saved.continued });
   } catch (err: any) {
     return Response.json({ error: err.message }, { status: 502 });
   }

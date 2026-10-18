@@ -8,7 +8,7 @@
 // data layer like every other write (RLS decides whether it lands).
 
 import { listFolderDocs, loadDoc, resequenceFolder, saveDoc } from "@/lib/vault/store";
-import type { SheetMessage, SheetMeta, SheetReview, SheetSpec } from "@/lib/sheet/layout";
+import { reviewOf, type SheetMeta, type SheetSpec } from "@/lib/sheet/layout";
 import { slugify } from "@/lib/vault/slug";
 import { titleOf } from "./validate";
 
@@ -45,22 +45,25 @@ export async function saveGenerated(
 }
 
 /**
- * Files a cheatsheet: a new one numbered after the folder's other sheets, or —
- * for an edit — a new version of `docKey`, its conversation extended by
- * `append`. The conversation is read back at save time, so two edits saved
- * one after the other both keep their turns.
+ * Saves one version of a cheatsheet: a new sheet, numbered after the folder's
+ * other sheets, or — with `docKey` — the next version of that one. `html` null
+ * keeps the stored fragment (a review only changes the meta). `update` gets
+ * the stored meta, read at save time so steps that save one after another
+ * never drop each other's changes, and returns the new one.
  */
-export async function saveSheet(
+export async function saveSheetVersion(
   folder: string,
-  html: string,
+  docKey: string | undefined,
+  html: string | null,
   spec: SheetSpec,
-  review: SheetReview | null,
-  append: SheetMessage[],
-  docKey?: string
+  update: (meta: SheetMeta) => SheetMeta
 ): Promise<SavedDoc> {
+  const fresh = (): SheetMeta => ({ spec, review: { reviewed: [], issues: {} }, checks: [], pending: [], messages: [] });
+
   if (docKey) {
     const current = await loadDoc(folder, docKey, "sheet");
-    const meta = (current.meta ?? {}) as Partial<SheetMeta>;
+    const stored = (current.meta ?? {}) as Partial<SheetMeta>;
+    const meta: SheetMeta = { ...fresh(), ...stored, spec: stored.spec ?? spec, review: reviewOf(stored as SheetMeta) };
     const { sheets } = await listFolderDocs(folder);
     const entry = sheets.find((d) => d.id === docKey);
     if (!entry) throw new Error("cheatsheet not found");
@@ -71,12 +74,13 @@ export async function saveSheet(
       slug: entry.slug,
       title: current.title,
       seq: entry.seq,
-      html,
-      meta: { spec: meta.spec ?? spec, review, messages: [...(meta.messages ?? []), ...append] },
+      html: html ?? current.html,
+      meta: update(meta),
     });
     return { id: docKey, title: current.title };
   }
 
+  if (html === null) throw new Error("nothing to save");
   const title = `Cheatsheet: chapters ${spec.from}-${spec.to}`;
   const slug = slugify(title).toLowerCase();
   await resequenceFolder(folder, "sheet");
@@ -86,6 +90,6 @@ export async function saveSheet(
   const base = `${String(seq).padStart(2, "0")}-${slug}`;
   let id = base;
   for (let n = 2; taken.has(id); n++) id = `${base}-${n}`;
-  await saveDoc({ folder, kind: "sheet", docKey: id, slug, title, seq, html, meta: { spec, review, messages: append } });
+  await saveDoc({ folder, kind: "sheet", docKey: id, slug, title, seq, html, meta: update(fresh()) });
   return { id, title };
 }

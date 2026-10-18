@@ -559,9 +559,10 @@ export default function AppShell() {
               setShowGenerate(jobId);
               return;
             }
-            // A saved sheet opens as its pages; one still running, as its log.
-            const sheetId = job.saved?.id ?? job.edit?.docKey;
-            if (job.status === "done" && sheetId) onSelect({ folder: job.folder, id: sheetId, kind: "sheet" });
+            // A sheet with anything saved opens as its pages (its steps show
+            // there too); one with nothing saved yet, as its log.
+            const sheetId = job.saved?.id ?? (job.edit?.docKey || undefined);
+            if (sheetId) onSelect({ folder: job.folder, id: sheetId, kind: "sheet" });
             else setShowSheet(jobId);
           }}
           folderNames={folderNames}

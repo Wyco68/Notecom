@@ -42,7 +42,7 @@ export default function GenerateJobList({
               onClick={() => onOpen(job.id)}
               title={
                 job.kind === "sheet"
-                  ? `Cheatsheet for ${folderLabel}${job.sheet ? `, chapters ${job.sheet.from}-${job.sheet.to}` : ""} — ${job.status === "done" ? "open it" : "open the log"}`
+                  ? `Cheatsheet for ${folderLabel}${job.sheet ? `, chapters ${job.sheet.from}-${job.sheet.to}` : ""} — ${job.saved || job.edit?.docKey ? "open it" : "open the log"}`
                   : `${job.kind === "quiz" ? "Quiz" : "Lesson"} in ${folderLabel} — open the log`
               }
               className="ui-row flex min-w-0 flex-1 items-center gap-1.5 px-2 py-1 text-left text-sm"

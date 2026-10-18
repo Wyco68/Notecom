@@ -54,14 +54,17 @@ which the app checks against the contract and files in Supabase.
 | `/api/sheets/[folder]/[id]` | GET | — | `{ html, title, meta }` — a stored sheet; `meta` is `{ spec, review: { passes, found, open }, messages: [{ role, text, at }] }` |
 | `/api/sheets/[folder]/[id]` | DELETE | — | `{ ok }` |
 | `/api/sheets/[folder]/[id]` | POST | `{ newTitle }` | `{ ok }` (rename) |
+| `/api/sheets/[folder]/[id]/continue` | POST | — | `{ jobId, sheet, step }` — writes the chapters still pending (`meta.pending`), one run and one save each |
+| `/api/sheets/[folder]/[id]/review` | POST | `{ all? }` | `{ jobId, sheet, step }` — reviews the chapters not yet reviewed (all with `all: true`), one fresh session and one save per chapter |
+| `/api/sheets/[folder]/[id]/sources` | POST | multipart `refs` (JSON `[{ kind, id }]` of folder lessons/quizzes), `files`, `note` | `{ jobId, sheet, step }` — an edit run that folds new sources in; refs are kept in `meta.spec.extra` for later steps, uploads are used once |
 | `/api/sheets/[folder]/[id]/edit` | POST | `{ message }` (≤ 4000 chars) | `{ jobId, sheet }` — a message from the sheet's chat box: an edit run on Opus with every check and the review; saved over the sheet through `/api/generate/[id]` like any job. Needs folder write access; its own rate limit, 30 an hour |
-| `/api/sheets/[folder]/[id]/pdf` | POST | `{ pages, font }` | `{ ok, path }` — prints the pages the browser laid out (checked by `checkSheetPages`) with a Chromium-family browser via the DevTools protocol and saves the PDF in Downloads. Only where the CLI is installed; otherwise 501 `{ fallback: "print" }` and the client opens the print dialog |
+| `/api/sheets/[folder]/[id]/pdf` | POST | `{ pages, font, columns }` | `{ ok, path }` — prints the pages the browser laid out (checked by `checkSheetPages`) with a Chromium-family browser via the DevTools protocol and saves the PDF in Downloads. Only where the CLI is installed; otherwise 501 `{ fallback: "print" }` and the client opens the print dialog |
 
 **Cheatsheets are generation jobs that are saved as documents.** `/api/sheet`
 and a sheet's `/edit` start one in the same job map, so the sidebar row, the
 log, abort, the concurrency cap and the save step all come for free. A sheet
 is a `kind = 'sheet'` row in its folder, listed by `GET /api/folders/[name]`
-as `sheets`. A new sheet shares the generate rate limit; edits have their own (30 an hour), since a conversation needs more turns than a batch of uploads.
+as `sheets`. A new sheet shares the generate rate limit; the steps on a stored sheet (edit, continue, review, sources) have their own (30 an hour). A sheet step saves through `POST /api/generate/[id]` like any job, but may save several times: the answer then carries `continued: true` and the job runs on. Only one step runs per sheet at a time (409 otherwise).
 
 **Generation is a background job.** The run belongs to the server process, not to
 the dialog: `GenerateJobsProvider` (mounted above `AppShell` in

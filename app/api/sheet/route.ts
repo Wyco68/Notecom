@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { rm, writeFile } from "fs/promises";
 import path from "path";
-import { startSheetJob } from "@/lib/generate/runner";
+import { startSheetWrite } from "@/lib/generate/sheet";
 import { convertLegacyOffice, isLegacyOffice } from "@/lib/generate/convert";
 import { cliInstalled } from "@/lib/auth/cli";
 import { resolveWritableFolderId } from "@/lib/vault/store";
@@ -93,20 +93,21 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  const job = startSheetJob(
+  const job = startSheetWrite({
     folder,
-    {
+    spec: {
       from: first,
       to: last,
       pages,
       layout: layoutFor(pages),
-      ...(columns ? { columns } : {}),
+      // Columns are a choice only without a page limit; a limited sheet's are fitted.
+      ...(columns && !pages ? { columns } : {}),
       title: `${folder}-cheatsheet-ch${first}-${last}`,
     },
-    dir,
-    chapters,
-    extras,
-    userId
-  );
-  return NextResponse.json({ jobId: job.id, sheet: job.sheet });
+    inputs,
+    uploads: extras,
+    userId,
+    order: chapters.map((c) => c.seq),
+  });
+  return NextResponse.json({ jobId: job.id, sheet: job.sheet, step: job.step });
 }

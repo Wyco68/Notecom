@@ -62,59 +62,63 @@ folder under the home directory (the snap build cannot see `/tmp`); without
 LibreOffice the upload is refused before the run, saying to save it as
 `.pptx`/`.docx`/`.xlsx` or PDF. Cheatsheet slides go through the same step.
 
-## Cheatsheets: stored, edited by chat, printed (2026-10)
+## Cheatsheets: stored, built in steps that save as they go (2026-10)
 
 `/sheet` is a third generation run, started from the sidebar's Cheatsheet
-dialog with a folder, a first and last chapter, and a page limit. A finished
-sheet is a document of `kind = 'sheet'` in that folder, so it shares, lists,
-renames and deletes like a lesson, under the same folder policies; its chapter
-range, page spec, review result and edit conversation live in
+dialog with a folder, a first and last chapter, and a page limit (or none).
+A sheet is a document of `kind = 'sheet'` in that folder, so it shares,
+lists, renames and deletes like a lesson, under the same folder policies; its
+spec (range, page limit, added sources), the app's check results, its
+per-chapter review, the chapters still to write and its conversation live in
 `notes_documents.meta` (migration 0032). It has no search chunks: it restates
 lessons already indexed.
 
-1. `POST /api/sheet` (new) and `POST /api/sheets/[folder]/[id]/edit` (a
-   message from the sheet's chat box) both read the lessons as the caller and
-   write them to a temp dir as files (`lib/sheet/inputs.ts`), with any
-   uploaded slides beside them; an edit adds the current sheet, the request
-   and the conversation. The CLI has no database access, so it can only ever
-   see what that request could read. Both need write access to the folder,
-   checked before the run; the dir goes when the run ends.
-2. `lib/generate/runner.ts` (`generateSheet`) runs `/sheet` with the same
-   read-only tools, on Opus 5.5 at high effort for both writing and
-   review (`SHEET_MODEL`, default `claude-opus-5-5`, pinned by full id;
-   `SHEET_EFFORT`, default `high`; no fallback to another model). Every
-   reply then has to pass, in order: the contract
-   (`checkSheet` in `validate.ts`: tag, attribute and class allowlist, numbered
-   chapter headings, banned wording, a coarse length cap); the source check
-   (`lib/sheet/sources.ts`: every chapter present, every number found in the
-   notes); and an independent review, a fresh CLI session in `/sheet` review
-   mode that reads the sheet and the same sources and returns what is wrong,
-   unsupported, unclear or missing as JSON. Any failure goes back to the
-   writer's session; rounds and review passes are bounded, and findings still
-   open when they run out are shown with the sheet, not dropped. The job ends
-   `ready` and the client's save request files it (`saveSheet` in
-   `save.ts`): a new sheet, or the next version of the edited one with the
-   reader's message and the writer's `NOTE:` line added to the conversation.
-   An edit is a fresh session, not a resumed one, so a sheet can be changed
-   days later.
-3. The browser lays it out. `lib/sheet/layout.ts` owns the paper (two
-   layouts, picked from the page limit: landscape for one or two pages,
-   portrait for more or for no limit) and the page document; the reader may
-   override the column count, 2 to 8, and the choice is kept in the sheet's
-   spec so print and PDF match;
-   `lib/sheet/paginate.ts` deals the fragment's blocks into fixed-size pages,
-   shrinking the font to the layout's floor until it fits. Pages are counted
-   exactly because each is its own box, and print gets one box per sheet of
-   paper instead of a column flow each engine fragments differently.
-4. `auditLayout` then checks the laid-out pages: every box inside its own
-   column, no block over another, nothing cut off, diagram labels inside
-   their diagram and not on each other, no heading stranded at a column foot
-   (the paginator already pushes those over). `SheetView` lists every check —
-   the server's and the browser's — and only offers Save PDF as the main
-   action when all pass. Over the limit at the smallest font, or with layout
-   problems, "Ask Claude to fix these" sends the measurements as a chat
-   message, so the fix is an ordinary edit. A button, not automatic, because
-   it spends tokens.
+**Steps, not one long run.** A sheet used to be written, checked, reviewed and
+fixed in one run, and a usage limit near the end lost all of it. Now
+`lib/generate/sheet.ts` runs three kinds of step, each saving before the next
+part costs anything:
+
+- **write**: one chapter per CLI run (chapter mode), each with its share of
+  the budget by how long its notes are. The sheet is saved after every
+  chapter — the first save creates it, so it can be opened and saved as a PDF
+  from then on — and a write that stops leaves `meta.pending`, which
+  "Continue writing" (`POST /api/sheets/…/continue`) picks up.
+- **edit**: one run over the whole sheet, from the chat box, the "fix these"
+  buttons (their findings sent as a message) or "Add sources"
+  (`…/sources`: folder documents, kept with the sheet, and uploads, used
+  once).
+- **review**: a fresh session per chapter checks that chapter's section
+  against its sources (`…/review`); each chapter's findings are saved as they
+  come, and an edit that changes a chapter clears its review.
+
+Saving needs the reader's session, so a step that has something to save goes
+`ready` and waits; the client's `POST /api/generate/[id]` saves it through
+`saveSheetVersion` (`save.ts`, which reads the stored meta at save time and
+applies the step's change) and, when there is more, sets the job running
+again and answers `continued`, and the client follows on. Every step reads
+its sources afresh as the caller (`lib/sheet/inputs.ts`): chapters, added
+documents and uploads go to a temp dir as files; the CLI has no database
+access. Each needs folder write access, and one step runs per sheet at a time.
+
+**What blocks a save, and what doesn't.** Only markup outside the allowlist
+(`sheetMarkupIssues`) is never saved. Everything else the app checks —
+wording, chapter headings, numbers not in the sources (`lib/sheet/sources.ts`),
+length — gets up to two fix rounds inside the run, then is saved with the
+sheet as `meta.checks` for the reader to send back. Writing and review run on
+Opus 5.5 (`SHEET_MODEL`, default `claude-opus-5-5`; `SHEET_EFFORT`, default
+`high`; no fallback).
+
+**Layout.** The browser lays the fragment into pages
+(`lib/sheet/layout.ts`, `lib/sheet/paginate.ts`): A4 landscape for one or two
+pages, portrait for more or none. For a page-limited sheet `lib/sheet/fit.ts`
+tries 2 to 8 columns and, for each, the largest font that still fits the
+limit; the largest readable font wins, which is also what fills the pages,
+and a close runner-up replaces it if the winner has layout problems. Only a
+sheet with no page limit has reader-chosen columns. `auditLayout` then checks
+every box stays in its column, nothing overlaps or is cut off, and no heading
+is stranded. The look follows the reader's reference sheet: navy headings
+under a red chapter bar, navy table heads with striped rows, blue, teal,
+pink and violet boxes, green code.
 
 The preview iframe is sandboxed with no scripts; the view reaches in from the
 parent to paginate and print. Model-written HTML never runs in the app's
@@ -122,7 +126,7 @@ origin.
 
 **Save PDF is the one file the app writes** outside a run's temp dir, and it
 is narrow on purpose (`lib/sheet/pdf.ts`): a user-asked export of a sheet the
-caller can read, named by the server, written without overwriting into the
+caller can read, printed with the font and columns the browser fitted, named by the server, written without overwriting into the
 Downloads folder of the machine the server runs on — and only where the
 Claude Code CLI is installed, the app's signal for "the reader's own
 machine"; a hosted server falls back to the print dialog. It prints

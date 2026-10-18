@@ -143,6 +143,9 @@ const SHEET_TAGS = new Set([
   "h2", "h3", "p", "ul", "ol", "li",
   "table", "thead", "tbody", "tr", "th", "td",
   "pre", "code", "b", "strong", "i", "em", "sup", "sub", "span", "br",
+  // a tinted box (only with one of the box classes) and the dashed rule
+  // inside a comparison box
+  "div", "hr",
   "svg", "g", "rect", "line", "path", "polyline", "polygon", "circle", "ellipse", "text", "tspan",
 ]);
 const SHEET_ATTRS = new Set([
@@ -152,6 +155,7 @@ const SHEET_ATTRS = new Set([
 ]);
 const SHEET_CLASSES = new Set([
   "ex", "warn", "key", "f", "c", "d", "box-b", "box-g", "box-y", "box-r", "box-w",
+  "box", "cmp", "bt", "box-warn", "box-key",
 ]);
 // Study talk and assistant voice. Case-insensitive, whole words where it matters.
 // A rule marked `source` gives way when the chapters themselves use the word:
@@ -290,7 +294,7 @@ export function checkSheetPages(html: string): string[] {
   return markupIssues(
     html,
     {
-      tags: new Set([...SHEET_TAGS, "div"]),
+      tags: SHEET_TAGS,
       attrs: SHEET_ATTRS,
       classes: new Set([...SHEET_CLASSES, "page", "cols", "pno"]),
       // The paginator's one inline style: a heading pushed to the next column.
@@ -301,16 +305,34 @@ export function checkSheetPages(html: string): string[] {
 }
 
 /** `sourceText`: the chapters' plain text, for the rules a source term may override. */
-export function checkSheet(
-  html: string,
-  chapters: { from: number; to: number },
-  sourceText = ""
-): string[] {
+const BOX_CLASSES = new Set(["box", "cmp", "box-warn", "box-key"]);
+
+/**
+ * The part of the sheet contract that guards the page rather than the
+ * wording: allowlisted tags, attributes and classes, and a <div> only as one
+ * of the boxes. A reply that fails this is never saved; one that passes is
+ * saved even with other problems open, so a run that runs out of tokens
+ * later still leaves a sheet behind (see lib/generate/sheet.ts).
+ */
+export function sheetMarkupIssues(html: string): string[] {
   const errors = markupIssues(
     html,
     { tags: SHEET_TAGS, attrs: SHEET_ATTRS, classes: SHEET_CLASSES },
     "cheatsheet-guidelines"
   );
+  const tags = scanTags(html) ?? [];
+  if (tags.some((t) => t.name === "div" && !t.attrs.some((a) => a.name === "class" && a.value.split(/\s+/).some((c) => BOX_CLASSES.has(c))))) {
+    errors.push(`a <div> without a box class — a div is only ever one of: ${[...BOX_CLASSES].join(", ")}`);
+  }
+  return errors;
+}
+
+export function checkSheet(
+  html: string,
+  chapters: { from: number; to: number },
+  sourceText = ""
+): string[] {
+  const errors = sheetMarkupIssues(html);
 
   const heads = [...html.matchAll(/<h2[^>]*>([\s\S]*?)<\/h2>/g)].map((m) =>
     m[1].replace(/<[^>]+>/g, "").trim()

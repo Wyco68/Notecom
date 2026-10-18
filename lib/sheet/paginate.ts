@@ -12,12 +12,13 @@
 
 const HEADING = /^H[23]$/;
 
-export function paginate(doc: Document, fontPt: number, numbered: boolean): number {
+export function paginate(doc: Document, fontPt: number, numbered: boolean, columns: number): number {
   const root = doc.getElementById("pages");
   const src = doc.getElementById("src") as HTMLTemplateElement | null;
   if (!root || !src) return 0;
   root.textContent = "";
   doc.documentElement.style.setProperty("--fs", `${fontPt}pt`);
+  doc.documentElement.style.setProperty("--cols", String(columns));
 
   const queue: Element[] = [...(src.content.cloneNode(true) as DocumentFragment).children];
   let cols = newPage(doc, root, numbered);
@@ -104,6 +105,31 @@ function gridOf(cols: HTMLElement) {
       return { left, right: left + width };
     },
   };
+}
+
+/** How full the last page is, 0..1: its used columns plus the last column's
+ *  share of the page height, over the page's columns. */
+export function lastPageFill(doc: Document): number {
+  const pages = doc.querySelectorAll<HTMLElement>("#pages > .page");
+  const cols = pages[pages.length - 1]?.querySelector<HTMLElement>(".cols");
+  if (!cols || !cols.lastElementChild) return 0;
+  const grid = gridOf(cols);
+  const n = parseInt(cols.ownerDocument.defaultView!.getComputedStyle(cols).columnCount, 10) || 1;
+  let lastCol = 0;
+  let bottom = grid.top;
+  for (const el of cols.children) {
+    for (const r of el.getClientRects()) {
+      const c = grid.columnOf(r);
+      if (c > lastCol) {
+        lastCol = c;
+        bottom = r.bottom;
+      } else if (c === lastCol) {
+        bottom = Math.max(bottom, r.bottom);
+      }
+    }
+  }
+  const height = grid.bottom - grid.top || 1;
+  return Math.min(1, (lastCol + (bottom - grid.top) / height) / n);
 }
 
 export interface LayoutIssue {

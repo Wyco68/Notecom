@@ -39,7 +39,9 @@ export function numberTokens(text: string): Set<string> {
 export function sourceIssues(
   sheetHtml: string,
   chapters: ChapterSource[],
-  hasExtras: boolean
+  hasExtras: boolean,
+  /** text of added documents (quizzes, other lessons): their numbers count */
+  extraTexts: string[] = []
 ): { hard: string[]; unverified: string[] } {
   const hard: string[] = [];
 
@@ -51,7 +53,7 @@ export function sourceIssues(
   }
 
   const known = new Set<string>();
-  for (const c of chapters) for (const n of numberTokens(c.text)) known.add(n);
+  for (const t of [...chapters.map((c) => c.text), ...extraTexts]) for (const n of numberTokens(t)) known.add(n);
   // The chapter number that opens each heading is the app's numbering, not a fact.
   const body = sheetHtml.replace(/<h2[^>]*>\s*\d+\./g, "<h2>");
   const strays = [...numberTokens(plainText(body))].filter((n) => !known.has(n));

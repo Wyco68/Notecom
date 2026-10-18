@@ -79,7 +79,14 @@ export default function CheatsheetModal({
     if (!folder || starting || !lessons?.length || from > to || !pagesValid) return;
     setStarting(true);
     try {
-      const id = await startSheet({ folder, from, to, pages, columns: columns ? Number(columns) : undefined, files });
+      const id = await startSheet({
+        folder,
+        from,
+        to,
+        pages,
+        columns: noLimit && columns ? Number(columns) : undefined,
+        files,
+      });
       if (id) setWatching(id);
     } finally {
       setStarting(false);
@@ -87,8 +94,10 @@ export default function CheatsheetModal({
   }
 
   if (job) {
-    const savedId = job.saved?.id ?? job.edit?.docKey;
-    const done = job.status === "done" && !!savedId;
+    // Saved as soon as its first chapter is: open (and print) it from then on,
+    // while the rest is still being written.
+    const savedId = job.saved?.id ?? (job.edit?.docKey || undefined);
+    const done = !!savedId;
     return (
       <Modal title="Cheatsheet" onClose={onClose}>
         <JobLog job={job} onAbort={() => abort(job.id)} onSignIn={onSignIn} />
@@ -211,24 +220,28 @@ export default function CheatsheetModal({
             className="ui-field"
           />
         </div>
-        <div className="min-w-0">
-          <label htmlFor="sheet-columns" className={label}>
-            Columns
-          </label>
-          <select
-            id="sheet-columns"
-            value={columns}
-            onChange={(e) => setColumns(e.target.value)}
-            className="ui-field"
-          >
-            <option value="">Default ({layout.columns})</option>
-            {Array.from({ length: MAX_COLUMNS - MIN_COLUMNS + 1 }, (_, i) => MIN_COLUMNS + i).map((n) => (
-              <option key={n} value={n}>
-                {n}
-              </option>
-            ))}
-          </select>
-        </div>
+        {/* A limited sheet's columns and font are fitted to fill its pages
+            (lib/sheet/fit.ts); only an unlimited one has columns to choose. */}
+        {noLimit && (
+          <div className="min-w-0">
+            <label htmlFor="sheet-columns" className={label}>
+              Columns
+            </label>
+            <select
+              id="sheet-columns"
+              value={columns}
+              onChange={(e) => setColumns(e.target.value)}
+              className="ui-field"
+            >
+              <option value="">Default ({layout.columns})</option>
+              {Array.from({ length: MAX_COLUMNS - MIN_COLUMNS + 1 }, (_, i) => MIN_COLUMNS + i).map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
       <label className="mb-1.5 flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
         <input type="checkbox" checked={noLimit} onChange={(e) => setNoLimit(e.target.checked)} className="ui-focus" />
@@ -241,8 +254,9 @@ export default function CheatsheetModal({
       >
         {pagesValid ? (
           <>
-            {noLimit ? "No page limit" : `${pages} ${pages === 1 ? "page" : "pages"}`} · {layout.label},{" "}
-            {columns || layout.columns} columns, {layout.font}pt
+            {noLimit
+              ? `No page limit · ${layout.label}, ${columns || layout.columns} columns, ${layout.font}pt`
+              : `${pages} ${pages === 1 ? "page" : "pages"} · ${layout.label}, columns and font fitted to fill the pages`}
             {range ? ` · ${range} ${range === 1 ? "chapter" : "chapters"}` : ""}
           </>
         ) : (

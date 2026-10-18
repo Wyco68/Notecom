@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import { checkSheetPages } from "@/lib/generate/validate";
 import { cliInstalled } from "@/lib/auth/cli";
 import { loadDoc } from "@/lib/vault/store";
-import { LAYOUTS, printDocument, type SheetMeta } from "@/lib/sheet/layout";
+import { LAYOUTS, MAX_COLUMNS, MIN_COLUMNS, printDocument, type SheetMeta } from "@/lib/sheet/layout";
 import { findBrowser, savePdf } from "@/lib/sheet/pdf";
 
 // The laid-out pages, as the preview shows them, can't be bigger than this.
@@ -36,10 +36,17 @@ export async function POST(
   }
   const body = await req.json().catch(() => null);
   const pages = typeof body?.pages === "string" ? body.pages : "";
+  // The font and columns the browser fitted the pages with.
   const font = Number(body?.font);
+  const columns = Number(body?.columns);
   const L = LAYOUTS[meta.spec.layout];
-  if (!pages || pages.length > MAX_PAGES_BYTES || !(font >= L.minFont - 1e-6 && font <= L.font + 1e-6)) {
-    return Response.json({ error: "invalid pages or font" }, { status: 400 });
+  if (
+    !pages ||
+    pages.length > MAX_PAGES_BYTES ||
+    !(font >= L.minFont - 1e-6 && font <= L.maxFont + 1e-6) ||
+    !(Number.isInteger(columns) && columns >= MIN_COLUMNS && columns <= MAX_COLUMNS)
+  ) {
+    return Response.json({ error: "invalid pages, font or columns" }, { status: 400 });
   }
   const problems = checkSheetPages(pages);
   if (problems.length) {
@@ -55,7 +62,7 @@ export async function POST(
   }
   const name = `${folder}-${id}`;
   try {
-    const file = await savePdf(browser, printDocument(pages, meta.spec.layout, doc.title, font, meta.spec.columns), name);
+    const file = await savePdf(browser, printDocument(pages, meta.spec.layout, doc.title, font, columns), name);
     return Response.json({ ok: true, path: file });
   } catch (err: any) {
     console.error("[sheet pdf]", err?.message);

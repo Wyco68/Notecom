@@ -261,13 +261,14 @@ export async function middleware(req: NextRequest) {
   }
 
   // A new cheatsheet spends the same tokens as a generation and shares its
-  // budget; an edit from a sheet's chat box has its own (saving a PDF or
-  // renaming spends no tokens and stays on the general budget).
+  // budget; the steps on a stored sheet — an edit from its chat box, the rest
+  // of its chapters, its review, new sources — have their own (saving a PDF
+  // or renaming spends no tokens and stays on the general budget).
   if (req.method === "POST" && (path === "/api/generate" || path === "/api/sheet")) {
     const retryAfter = rateLimit(`generate:${userId}`, GENERATE_LIMIT, GENERATE_WINDOW_MS);
     if (retryAfter !== null) return withCsp(tooManyRequests(retryAfter));
   }
-  if (req.method === "POST" && path.startsWith("/api/sheets/") && path.endsWith("/edit")) {
+  if (req.method === "POST" && path.startsWith("/api/sheets/") && /\/(edit|continue|review|sources)$/.test(path)) {
     const retryAfter = rateLimit(`sheet-edit:${userId}`, SHEET_EDIT_LIMIT, GENERATE_WINDOW_MS);
     if (retryAfter !== null) return withCsp(tooManyRequests(retryAfter));
   }

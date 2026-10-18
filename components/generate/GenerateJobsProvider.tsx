@@ -47,6 +47,11 @@ export interface GenerateJob {
   /** set when this run edits a stored sheet: which one, and the reader's
    *  message, shown in the sheet's conversation while the run is going */
   edit?: { docKey: string; request: string };
+  /** which cheatsheet step: writing chapters, an edit, or the review */
+  step?: "write" | "edit" | "review";
+  /** how many times this run has saved — a sheet step saves after each
+   *  chapter, and the sheet's view reloads on each */
+  saves?: number;
   /** the document the run was saved as, once it has been */
   saved?: { id: string; title: string };
   status: JobStatus;
@@ -86,8 +91,16 @@ interface GenerateJobsValue {
     columns?: number;
     files: File[];
   }) => Promise<string | null>;
-  /** Sends a message from a stored sheet's chat box: an edit run on it. */
-  editSheet: (input: { folder: string; id: string; message: string }) => Promise<string | null>;
+  /** Starts a step on a stored sheet: an edit (the chat box, "fix these"),
+   *  the rest of its chapters, its review, or new sources (multipart). */
+  sheetStep: (input: {
+    folder: string;
+    id: string;
+    action: "edit" | "continue" | "review" | "sources";
+    body?: Record<string, unknown> | FormData;
+    /** shown as the reader's turn while it runs */
+    request?: string;
+  }) => Promise<string | null>;
   abort: (id: string) => void;
   /** Forget a finished job, removing it from the sidebar. */
   dismiss: (id: string) => void;
@@ -200,9 +213,28 @@ export default function GenerateJobsProvider({ children }: { children: React.Rea
           const res = await fetch(`/api/generate/${id}`, { method: "POST" });
           const data = await res.json().catch(() => ({}));
           if (!res.ok) throw new Error(data.error || "save failed");
+          if (data.continued) {
+            // A step that saves as it goes: this part is in Supabase, and the
+            // run has gone on to the next. The tail replays the whole log, so
+            // start it empty and follow again.
+            patch(id, (j) => ({
+              ...j,
+              saved: { id: data.id, title: data.title },
+              edit: j.edit ?? { docKey: data.id, request: "" },
+              saves: (j.saves ?? 0) + 1,
+              status: "running",
+              log: [],
+              lastActivity: Date.now(),
+            }));
+            setCompletedTick((n) => n + 1);
+            follow(id);
+            return;
+          }
           patch(id, (j) => ({
             ...j,
             saved: { id: data.id, title: data.title },
+            edit: j.kind === "sheet" ? (j.edit ?? { docKey: data.id, request: "" }) : j.edit,
+            saves: (j.saves ?? 0) + 1,
             log: [...j.log, `Saved "${data.title}".`, "Finished."],
           }));
           status = "done";
@@ -219,11 +251,22 @@ export default function GenerateJobsProvider({ children }: { children: React.Rea
       const job = jobsRef.current.find((j) => j.id === id);
       const where = job ? job.folder.replace(/-/g, " ") : "the folder";
       if (job?.kind === "sheet") {
-        if (job.edit) {
-          if (status === "done") toast.success("Cheatsheet updated.");
-          else if (status === "error") toast.error("The cheatsheet edit failed — the sheet is unchanged.");
-        } else if (status === "done") toast.success(`Cheatsheet saved in "${where}".`);
-        else if (status === "error") toast.error(`Cheatsheet for "${where}" failed — see the log.`);
+        const what = job.step === "review" ? "review" : job.step === "edit" ? "edit" : "writing";
+        if (status === "done") {
+          toast.success(
+            job.step === "review"
+              ? "Review finished — findings are with the sheet."
+              : job.step === "edit"
+                ? "Cheatsheet updated."
+                : `Cheatsheet written in "${where}".`
+          );
+        } else if (status === "error") {
+          toast.error(
+            job.saves
+              ? `The ${what} stopped part-way; what was done is saved — continue from the sheet.`
+              : `The cheatsheet ${what} failed — see the log.`
+          );
+        }
       } else {
         const noun = job?.kind === "quiz" ? "quiz" : "lesson";
         if (status === "done") toast.success(`Generated ${noun} in "${where}".`);
@@ -264,6 +307,7 @@ export default function GenerateJobsProvider({ children }: { children: React.Rea
               kind: j.kind,
               sheet: j.sheet,
               edit: j.edit,
+              step: j.step,
               status: "running" as JobStatus,
               // The tail replays the whole log from the beginning, so starting
               // empty is correct — it fills in immediately.
@@ -351,6 +395,7 @@ export default function GenerateJobsProvider({ children }: { children: React.Rea
             folder,
             kind: "sheet",
             sheet: data.sheet,
+            step: "write",
             status: "running",
             log: [],
             tokens: { input: 0, output: 0 },
@@ -368,23 +413,25 @@ export default function GenerateJobsProvider({ children }: { children: React.Rea
     [activeCount, follow, toast]
   );
 
-  const editSheet = useCallback<GenerateJobsValue["editSheet"]>(
-    async ({ folder, id, message }) => {
+  const sheetStep = useCallback<GenerateJobsValue["sheetStep"]>(
+    async ({ folder, id, action, body, request }) => {
       if (activeCount >= MAX_CONCURRENT_JOBS) {
         toast.error(`Already running ${activeCount} jobs — wait for one to finish.`);
         return null;
       }
       try {
+        const multipart = body instanceof FormData;
         const res = await fetch(
-          `/api/sheets/${encodeURIComponent(folder)}/${encodeURIComponent(id)}/edit`,
+          `/api/sheets/${encodeURIComponent(folder)}/${encodeURIComponent(id)}/${action}`,
           {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ message }),
+            ...(multipart
+              ? { body }
+              : { headers: { "Content-Type": "application/json" }, body: JSON.stringify(body ?? {}) }),
           }
         );
         const data = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(data.error || "could not start the edit");
+        if (!res.ok) throw new Error(data.error || "could not start it");
         setJobs((prev) => [
           ...prev,
           {
@@ -392,7 +439,8 @@ export default function GenerateJobsProvider({ children }: { children: React.Rea
             folder,
             kind: "sheet",
             sheet: data.sheet,
-            edit: { docKey: id, request: message },
+            step: data.step,
+            edit: { docKey: id, request: request ?? "" },
             status: "running",
             log: [],
             tokens: { input: 0, output: 0 },
@@ -422,7 +470,7 @@ export default function GenerateJobsProvider({ children }: { children: React.Rea
 
   return (
     <Ctx.Provider
-      value={{ jobs, activeCount, now, completedTick, start, startSheet, editSheet, abort, dismiss }}
+      value={{ jobs, activeCount, now, completedTick, start, startSheet, sheetStep, abort, dismiss }}
     >
       {children}
     </Ctx.Provider>
