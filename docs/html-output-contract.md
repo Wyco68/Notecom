@@ -2,8 +2,9 @@
 
 Loaded by `/lect` only. Enforced two ways — keep all three in sync when
 this contract changes:
-- [lib/vault/sanitize.ts](../lib/vault/sanitize.ts) strips anything
-  outside the tag allowlist before a lesson is ever rendered.
+- [components/viewer/HtmlRenderer.tsx](../components/viewer/HtmlRenderer.tsx)
+  renders only the tag allowlist (anything else is dropped, its text kept),
+  and a picture only from the app's own `/api/media/...` path.
 - [lib/generate/validate.ts](../lib/generate/validate.ts) checks every
   generated lesson against the rules below (headings, callouts, tags)
   before the app saves it, and sends violations back to the `/lect`
@@ -18,6 +19,7 @@ path, not with content generation). Allowed tags only:
 h1 h2 h3 p ul ol li
 table thead tbody tr td th
 pre code blockquote strong em
+figure img figcaption   (a slide picture only — see below)
 div class="mermaid"
 div class="viz-process-flow"
 div class="viz-timeline"
@@ -54,6 +56,40 @@ Use `viz-*` when the concept maps cleanly to one of those shapes.
 Use Mermaid when the diagram needs arrows between arbitrary nodes,
 subgraphs, or genuine sequence/state/decision-tree logic.
 Use a `<table>` for comparisons — never a diagram.
+
+## Slide pictures (strict)
+The run is offered the pictures inside the upload — every slide's diagram,
+figure, photo or screenshot — as files named by slide (`slide-07-1.png`),
+listed with their size in the prompt's picture list. A lesson shows the real
+picture instead of describing around it.
+
+```
+<figure><img src="slide-07-1.png" alt="What the picture shows, in one line"><figcaption>One or two sentences: what to read off it.</figcaption></figure>
+```
+
+- **Exactly that shape**: a `<figure>` holds one `<img>` and one
+  `<figcaption>`, nothing else, at the top level of the lesson (never inside
+  a list, table or callout). `src` is the offered file name, copied exactly;
+  `alt` is required. No `width`, `height`, `class` or any other attribute —
+  the app adds the size when it saves the picture and gives it its stored
+  address.
+- **Only where it teaches.** Place a picture when the slide's figure carries
+  something the text can't say as well: a structure, a layout, a flow with
+  many parts, a screenshot of real output, a photo of the hardware. Skip
+  logos, decoration, photos of people and pictures that only repeat a
+  slide's own bullets. Open a picture with Read before placing it — the name
+  says where it is, not what it shows.
+- **Where it belongs**: inside the concept it illustrates, normally in
+  `How it Works` or `Example`, right after the sentence it supports. The
+  sentence before it says what to look at; the caption says what to take
+  away. A picture does not replace that concept's diagram (Mermaid or
+  `viz-*`) — the diagram is the lesson's own simplified view, the picture is
+  the source's.
+- **Never write that a slide "is only a picture"**, "shows a figure" or "has
+  no text". If the picture teaches, show it and explain it from what it
+  shows; if it doesn't, leave it out without a word.
+- Every fact in the explanation still comes from the source; read labels and
+  values off the picture itself only when they are legible.
 
 ## Heading scheme (strict — only these, never deeper than `h3`, no emoji)
 Every lesson uses this fixed set of headings, repeated per concept.

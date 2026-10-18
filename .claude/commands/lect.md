@@ -42,13 +42,22 @@ genuinely needs to know the storage layout (the three docs above are normally en
    check the tool list), say so explicitly and stop, rather than silently
    falling back to reading the raw file yourself.
 
-3. **Generate the lesson** from the markitdown output, per
+3. **Look at the slide pictures.** The prompt names a picture list: every
+   picture in the upload, by slide, with its size (none for a plain-text
+   upload). Read the pictures on slides whose text is thin or that point at
+   a figure, and decide which ones teach — per "Slide pictures" in
+   [html-output-contract.md](../../docs/html-output-contract.md). Don't open
+   every picture of a picture-heavy deck; open the ones the slide text says
+   matter.
+
+4. **Generate the lesson** from the markitdown output, per
    [teaching-guidelines.md](../../docs/teaching-guidelines.md) and
    [lesson-template.md](../../docs/lesson-template.md). Lesson **title**
    always comes from the real file content, never from the `/lect` argument
    — it is the one `<h1>`, and the app takes the lesson's name from it.
+   Place the chosen pictures as `<figure>`s by their offered file name.
 
-4. **Reply with the HTML only** — the complete lesson, starting at the
+5. **Reply with the HTML only** — the complete lesson, starting at the
    `<h1>`, with no code fence and no text before or after it. The reply *is*
    the output: the app extracts the document from it.
 
@@ -60,6 +69,32 @@ genuinely needs to know the storage layout (the three docs above are normally en
   passes.
 - Names it (`<seq>-<slug>`, from the `<h1>` and the folder's existing
   lessons) and saves it to Supabase. You compute none of that.
+
+## Picture mode
+When the prompt starts with `/lect Picture mode`, the lesson already exists
+and is saved; only its slide pictures are added. **Do not rewrite it** — the
+reader already learned from its wording, and a rewrite would cost the whole
+lesson in tokens for a few pictures.
+
+1. Read the lesson file and convert the slides with markitdown, as above,
+   so you know which slide each part of the lesson came from.
+2. Read the picture list, and look at the pictures that may teach (step 3
+   above). Pick only those the "Slide pictures" rules allow.
+3. Reply with only a JSON array, one object per picture, in lesson order:
+   ```
+   [{"picture":"slide-07-1.png","after":"An exact sentence copied from the lesson.","alt":"What it shows, one line","caption":"What to read off it, one or two sentences."}]
+   ```
+   - `after`: a sentence copied exactly from the lesson; the picture goes
+     right after the paragraph, list or table that holds it. Pick the
+     sentence the picture illustrates, inside the right concept.
+   - Use `"replaces"` instead of `after` when the lesson has a sentence the
+     picture makes obsolete ("those slides contain only pictures", "shown
+     only as a picture"): that whole sentence is taken out and the picture
+     goes where it was. Such a sentence marks exactly the slides the reader
+     is missing, so replace every one with its slide's picture.
+   - An empty array `[]` when no picture is worth adding.
+4. The app applies the list and checks the result like any lesson; a
+   sentence it can't find comes back to you to fix.
 
 ## Restrictions (strict)
 - Never modify application code (`app/`, `components/`, `lib/`, `tools/`).

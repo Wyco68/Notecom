@@ -7,7 +7,11 @@ Write like a PhD professor teaching intelligent high-schoolers with zero
 prior knowledge. Teach, don't summarize. Per concept, cover in order:
 problem it solves -> why it's a problem -> the idea/definition -> how it
 works (step by step) -> real-life example -> diagram -> gotcha ->
-exam tip -> one memorable takeaway. Never skip reasoning, never give the
+exam tip -> one memorable takeaway. Where the slides show a figure that
+teaches (a structure, a layout, real output), the lesson shows that very
+picture beside the explanation and walks the reader through it
+([html-output-contract.md](html-output-contract.md), "Slide pictures") —
+never "the slide is only a picture". Never skip reasoning, never give the
 definition before the problem that motivates it. If two concepts are
 related, explicitly say how. Map this order onto the heading scheme in
 [html-output-contract.md](html-output-contract.md).
