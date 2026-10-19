@@ -324,18 +324,27 @@ pre code { background: none; padding: 0; font-weight: normal; }
    (orange), a comparison (teal, with a title), a mix-up to avoid (red), a
    rule of thumb (violet), other groups (pink, yellow). Lines inside a box
    take the box's colour, not their own band. */
-.box, .cmp, .box-warn, .box-key, .box-ex, .box-pink, .box-yellow { break-inside: avoid; margin: 1.2pt 0 1.6pt; padding: 1pt 2pt 1pt 2.4pt; }
+/* A box may continue in the next column, its colour and edge drawn again on
+   each part: kept whole, a box too tall for the space left would move on and
+   leave that space empty. Tables, code and pictures still never split. */
+.box, .cmp, .box-warn, .box-key, .box-ex, .box-pink, .box-yellow, .box-q { margin: 1.2pt 0 1.6pt; padding: 1pt 2pt 1pt 2.4pt;
+  -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+.box > *, .cmp > *, .box-warn > *, .box-key > *, .box-ex > *, .box-pink > *, .box-yellow > *, .box-q > * { break-inside: avoid; }
 .box { background: var(--blue-bg); border-left: 1.6pt solid var(--blue); }
 .box-ex { background: var(--ex-bg); border-left: 1.6pt solid var(--ex-edge); color: var(--ex-ink); }
 .box-warn { background: var(--red-bg); border-left: 1.6pt solid var(--red-edge); }
 .box-key { background: var(--violet-bg); border-left: 1.6pt solid var(--violet); }
 .box-pink { background: var(--rose-bg); border-left: 1.6pt solid var(--rose); }
 .box-yellow { background: var(--sun-bg); border-left: 1.6pt solid var(--sun); }
+/* The reader's own class questions, set apart from the notes: grey with a
+   dashed navy edge; each line is the question, then → its answer in bold. */
+.box-q { background: #eef0f5; border: 0.6pt dashed var(--navy); border-radius: 1.5pt; }
+.box-q li::before { content: "?"; color: var(--navy); font-weight: bold; }
 :is(.box, .box-ex, .box-warn, .box-key, .box-pink, .box-yellow, .cmp) :is(p, li).ex,
 :is(.box, .box-ex, .box-warn, .box-key, .box-pink, .box-yellow, .cmp) :is(p, li).warn { border-left: 0; padding-left: 0; background: none; }
 .cmp { background: var(--teal-bg); border: 0.6pt solid var(--teal); border-radius: 2pt; padding: 1.2pt 2.4pt; }
 .bt { color: var(--teal-ink); font-weight: 900; font-size: calc(var(--fs) + 0.8pt); margin-bottom: 0.6pt; letter-spacing: 0.1pt; }
-.box ul, .box-warn ul, .box-key ul, .box-ex ul, .box-pink ul, .box-yellow ul, .cmp ul { margin-left: 5pt; }
+.box ul, .box-warn ul, .box-key ul, .box-ex ul, .box-pink ul, .box-yellow ul, .box-q ul, .cmp ul { margin-left: 5pt; }
 .box b, .box strong { color: #1d6f93; }
 .box-warn b, .box-warn strong { color: var(--red-ink); }
 .box-ex b, .box-ex strong { color: var(--ex-ink); }
