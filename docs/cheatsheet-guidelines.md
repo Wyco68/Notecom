@@ -68,6 +68,7 @@ else: no `id`, `href`, `style`, event handlers, and `src` on nothing but an
 | `box-key` | `div` | a rule of thumb or a fact to remember: light violet, violet edge |
 | `box-pink` | `div` | another group the sources make (a set of definitions, a list of types): light pink |
 | `box-yellow` | `div` | formulas or numbers to remember together: light yellow |
+| `box-q` | `div` | the reader's own class questions from an added question bank, set apart from the notes: grey, dashed navy edge; one `<li>` per question, `<b>N</b>` chapter, the question, then `→` and the answer in `<b>` |
 
 ## Elements
 
@@ -92,7 +93,9 @@ else: no `id`, `href`, `style`, event handlers, and `src` on nothing but an
   - example → `ex` line or `box-ex` (orange);
   - trap, mix-up, limit → `warn` line or `box-warn` (red);
   - rule to remember → `box-key` (violet); comparison → `cmp` (teal);
-  - other groups → `box-pink` or `box-yellow`.
+  - other groups → `box-pink` or `box-yellow`;
+  - the reader's question bank → `box-q`, one block of questions at the
+    end of the sheet, so it reads apart from the notes.
 
   Tables stay outside boxes, and a box holds a few lines, so the colours
   stay readable. Plain unboxed lines are for loose facts between them.
@@ -158,9 +161,10 @@ Terse class notes, never an assistant's voice.
 - `=`, `→`, `/`, `+`, `vs`, `e.g.`, `i.e.` replace phrases.
 - Questions or quiz items in the source become plain facts or `Ex:` lines,
   stated with their correct answer: "Ring 0 (centre) = most power." A
-  question the reader added as a source (a question bank, with answers)
-  goes into its own chapter, merged with the fact already there instead of
-  repeated; one that adds nothing new is left out.
+  question bank the reader added as a source goes in two places: its facts
+  into their chapters, merged with what is already there, and the questions
+  themselves, each with its answer, into the one `box-q` block at the end of
+  the sheet (see the classes table).
 - Where notes and slides disagree, one short `warn` line says so. Never fix
   a slide silently.
 
