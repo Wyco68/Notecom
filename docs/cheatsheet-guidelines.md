@@ -53,18 +53,21 @@ else: no `id`, `href`, `style`, event handlers, and `src` on nothing but an
 
 | Class | On | Means |
 |---|---|---|
-| `ex` | `p`, `li`, `span` | example line, starts with `Ex:`; orange |
-| `warn` | `p`, `li`, `span` | a common mix-up or limit; red, no label |
+| `ex` | `p`, `li`, `span` | example line, starts with `Ex:`; orange band |
+| `warn` | `p`, `li`, `span` | a common mix-up or limit; red band, no label |
 | `key` | `span`, `b` | a key term worth spotting; purple |
 | `f` | `p` | a formula on its own line; purple |
 | `c` | `span` inside `pre` | a code comment; grey |
 | `d` | `svg` | a diagram (required on every `svg`) |
 | `box-b`, `box-g`, `box-y`, `box-r`, `box-w` | `rect` | blue, green, yellow, red, white fill |
-| `box` | `div` | a group of related facts: light blue, blue edge |
+| `box` | `div` | an explanation, or a group of related facts: light blue, blue edge |
+| `box-ex` | `div` | a worked example of several lines: light orange, orange edge |
 | `cmp` | `div` | a comparison of two to four things: teal frame, ▸ bullets |
 | `bt` | `p` | the title of a `cmp` box, its first child: `Interrupt vs Trap vs Syscall` |
 | `box-warn` | `div` | a mix-up to avoid: light red, red edge, no label |
 | `box-key` | `div` | a rule of thumb or a fact to remember: light violet, violet edge |
+| `box-pink` | `div` | another group the sources make (a set of definitions, a list of types): light pink |
+| `box-yellow` | `div` | formulas or numbers to remember together: light yellow |
 
 ## Elements
 
@@ -81,13 +84,24 @@ else: no `id`, `href`, `style`, event handlers, and `src` on nothing but an
 - **Memory hook,** only if the source gives one: `"Switch cuts collisions, router cuts broadcasts."`
 - **Table** first column names the thing. Common shapes: `Aspect | IPv4 | IPv6`,
   `Command | Shows`, `Field | Bytes`, `Concept | Caused by | Example`.
-- **Boxes** make the sheet scannable, as in the reader's reference sheet.
-  Use them where the sources group things, not on every fact — most of the
-  sheet stays plain lines and tables:
+- **Colour by kind.** The reader finds things by background colour, so
+  every part of a chapter is marked by what it is:
+  - explanation → `box` (light blue): the few lines that say what a thing
+    is and how it works;
+  - code, commands, pseudocode → `pre` (green);
+  - example → `ex` line or `box-ex` (orange);
+  - trap, mix-up, limit → `warn` line or `box-warn` (red);
+  - rule to remember → `box-key` (violet); comparison → `cmp` (teal);
+  - other groups → `box-pink` or `box-yellow`.
+
+  Tables stay outside boxes, and a box holds a few lines, so the colours
+  stay readable. Plain unboxed lines are for loose facts between them.
+  Example boxes:
   `<div class="box"><ul><li><b>Process Mgmt:</b> create, delete, suspend, resume processes.</li>…</ul></div>`
   `<div class="cmp"><p class="bt">Interrupt vs Trap</p><ul><li>Caused by hardware → <b>interrupt</b>.</li>…</ul><hr><ul><li><b>Interrupt = asynchronous.</b></li></ul></div>`
   `<div class="box-warn"><p>Protection (inside, access control) ≠ security (outside threats).</p></div>`
   `<div class="box-key"><p>A blocking call always means Running → <b>Waiting</b>.</p></div>`
+  `<div class="box-ex"><p>Ex: Available = (3, 3, 2).</p><p>P1 asks (1, 0, 2) ≤ Need and ≤ Available → pretend.</p><p>Safe order found → granted.</p></div>`
   A box holds a few lines; never nest boxes. The wording rules apply inside
   them too: no "Ask:", "Mistake:", "Rule of thumb:" labels — the colour says it.
 - **Diagram** only where the source draws one: `<svg class="d" viewBox="0 0 100 30">`,
