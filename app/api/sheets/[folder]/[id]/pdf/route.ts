@@ -45,6 +45,8 @@ export async function POST(
   // The font and columns the pages were fitted with.
   const font = Number(stored ? meta.layout!.font : body?.font);
   const columns = Number(stored ? meta.layout!.columns : body?.columns);
+  const lh = Number(stored ? meta.layout!.lineHeight ?? 1.17 : body?.lineHeight ?? 1.17);
+  const lineHeight = lh >= 1 && lh <= 1.5 ? lh : 1.17;
   const L = LAYOUTS[meta.spec.layout];
   if (
     !pages ||
@@ -71,7 +73,7 @@ export async function POST(
     const inlined = (await inlinePictures(pages)).html;
     if (stored) {
       // Laid out by this very browser: print it as it is.
-      const file = await savePdf(browser, printDocument(inlined, meta.spec.layout, doc.title, font, columns), name);
+      const file = await savePdf(browser, printDocument(inlined, meta.spec.layout, doc.title, font, columns, false, lineHeight), name);
       return Response.json({ ok: true, path: file });
     }
     // The browser that laid the pages out (WebKit, in the Linux app) and the
@@ -83,9 +85,9 @@ export async function POST(
     const free = inlined.replace(/\sstyle="break-before:\s*column;?"/g, "");
     const file = await savePdf(
       browser,
-      printDocument(free, meta.spec.layout, doc.title, font, columns),
+      printDocument(free, meta.spec.layout, doc.title, font, columns, false, lineHeight),
       name,
-      printDocument(inlined, meta.spec.layout, doc.title, font, columns)
+      printDocument(inlined, meta.spec.layout, doc.title, font, columns, false, lineHeight)
     );
     return Response.json({ ok: true, path: file });
   } catch (err: any) {

@@ -135,13 +135,20 @@ export default function SheetView({
 
   useEffect(() => {
     if (mode === "stored" && stored) {
-      setFit({ pages: stored.pages, font: stored.font, columns: stored.columns, fill: stored.fill, issues: stored.issues as LayoutIssue[] });
+      setFit({
+        pages: stored.pages,
+        font: stored.font,
+        columns: stored.columns,
+        lineHeight: stored.lineHeight ?? 1.17,
+        fill: stored.fill,
+        issues: stored.issues as LayoutIssue[],
+      });
     }
   }, [mode, stored]);
 
   const srcDoc = useMemo(() => {
     if (!doc || !spec) return "";
-    if (mode === "stored" && stored) return printDocument(stored.html, spec.layout, doc.title, stored.font, stored.columns, true);
+    if (mode === "stored" && stored) return printDocument(stored.html, spec.layout, doc.title, stored.font, stored.columns, true, stored.lineHeight);
     if (mode === "client") return sheetDocument(doc.html, spec.layout, doc.title);
     return "";
   }, [doc, spec, mode, stored]);
@@ -194,7 +201,7 @@ export default function SheetView({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         // A stored layout is printed from the server's own copy, exactly.
-        body: JSON.stringify(mode === "stored" ? { stored: true } : { pages, font: fit.font, columns: fit.columns }),
+        body: JSON.stringify(mode === "stored" ? { stored: true } : { pages, font: fit.font, columns: fit.columns, lineHeight: fit.lineHeight }),
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok) toast.success(`Saved ${data.path}`);

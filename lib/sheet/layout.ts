@@ -76,6 +76,8 @@ export interface StoredLayout {
   pages: number;
   font: number;
   columns: number;
+  /** body line spacing the fitter settled on (older layouts: the base) */
+  lineHeight?: number;
   fill: number;
   issues: Array<{ kind: string; page: number; text: string }>;
   at: string;
@@ -216,11 +218,12 @@ export function printDocument(
   fontPt: number,
   columns: number,
   /** a stored layout shown in the app: its pictures load from /api/media */
-  inApp = false
+  inApp = false,
+  lineHeight = 1.17
 ): string {
   const policy = inApp ? "" : `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:">\n`;
   return `<!doctype html>
-<html lang="en" style="--fs: ${Number(fontPt)}pt; --cols: ${Number(columns)}">
+<html lang="en" style="--fs: ${Number(fontPt)}pt; --cols: ${Number(columns)}; --lh: ${Number(lineHeight)}">
 <head>
 ${policy}
 <meta charset="utf-8">
@@ -239,7 +242,7 @@ function sheetCss(layout: SheetLayout): string {
   const L = LAYOUTS[layout];
   return `
 :root {
-  --fs: ${L.font}pt; --cols: ${L.columns};
+  --fs: ${L.font}pt; --cols: ${L.columns}; --lh: 1.17;
   --navy: #1b2a5e; --ink: #1d1f24; --muted: #6b7183;
   --red: #b5122b; --ex: #b35900; --key: #6a3fb5;
   --rule: #d6d9e2; --zebra: #f2f3f9; --cell: #c9cdd9;
@@ -256,7 +259,7 @@ function sheetCss(layout: SheetLayout): string {
 @page { size: ${L.width}mm ${L.height}mm; margin: 0; }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html { background: #fff; }
-body { color: var(--ink); font-family: ${L.family}; font-size: var(--fs); line-height: 1.17;
+body { color: var(--ink); font-family: ${L.family}; font-size: var(--fs); line-height: var(--lh);
   overflow-wrap: anywhere; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 .page { position: relative; width: ${L.width}mm; height: ${L.height}mm; padding: ${L.margin}mm;
   background: #fff; overflow: hidden; break-after: page; }
@@ -329,7 +332,9 @@ pre code { background: none; padding: 0; font-weight: normal; }
    leave that space empty. Tables, code and pictures still never split. */
 .box, .cmp, .box-warn, .box-key, .box-ex, .box-pink, .box-yellow, .box-q { margin: 1.2pt 0 1.6pt; padding: 1pt 2pt 1pt 2.4pt;
   -webkit-box-decoration-break: clone; box-decoration-break: clone; }
-.box > *, .cmp > *, .box-warn > *, .box-key > *, .box-ex > *, .box-pink > *, .box-yellow > *, .box-q > * { break-inside: avoid; }
+:is(.box, .cmp, .box-warn, .box-key, .box-ex, .box-pink, .box-yellow, .box-q) > :not(ul, ol) { break-inside: avoid; }
+/* A list, in a box or not, splits between items, never inside one. */
+li { break-inside: avoid; }
 .box { background: var(--blue-bg); border-left: 1.6pt solid var(--blue); }
 .box-ex { background: var(--ex-bg); border-left: 1.6pt solid var(--ex-edge); color: var(--ex-ink); }
 .box-warn { background: var(--red-bg); border-left: 1.6pt solid var(--red-edge); }

@@ -19,7 +19,7 @@ import { sheetStyles, type SheetSpec, type StoredLayout } from "./layout";
 import { layOutInBrowser } from "./pdf";
 
 /** Bumped when the paginator or fitter changes what a layout comes out as. */
-const ENGINE = "1";
+const ENGINE = "2";
 
 export function layoutKey(html: string, spec: SheetSpec): string {
   const { from, to, pages, layout, columns } = spec;
@@ -67,6 +67,7 @@ export async function layOutOnDevice(
     pages: number;
     font: number;
     columns: number;
+    lineHeight: number;
     fill: number;
     issues: StoredLayout["issues"];
   }>(browser, `${origin}/sheet-engine`, { body, spec, title });
@@ -76,6 +77,7 @@ export async function layOutOnDevice(
     pages: out.pages,
     font: out.font,
     columns: out.columns,
+    lineHeight: out.lineHeight,
     fill: out.fill,
     issues: out.issues,
     at: new Date().toISOString(),

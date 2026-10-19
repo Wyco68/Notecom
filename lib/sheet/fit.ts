@@ -13,15 +13,20 @@
 // columns at the layout's own font.
 
 import { LAYOUTS, columnsOf, type SheetSpec } from "./layout";
-import { auditLayout, lastPageFill, paginate, type LayoutIssue } from "./paginate";
+import { BASE_LINE_HEIGHT, auditLayout, lastPageFill, paginate, type LayoutIssue } from "./paginate";
 
 export interface Fit {
   pages: number;
   font: number;
   columns: number;
+  /** body line spacing: loosened from the base to fill the last page */
+  lineHeight: number;
   fill: number;
   issues: LayoutIssue[];
 }
+
+// The most the spacing may open up: past this, lines start to look loose.
+const MAX_LINE_HEIGHT = 1.4;
 
 // A line shorter than this many characters wraps on every other word; longer
 // than the upper bound, the eye loses its place. Average glyph width is about
@@ -35,9 +40,9 @@ const yieldToBrowser = () => new Promise<void>((r) => setTimeout(r, 0));
 export async function fitSheet(doc: Document, spec: SheetSpec, onProgress?: (text: string) => void): Promise<Fit> {
   const L = LAYOUTS[spec.layout];
   const numbered = spec.layout === "roomy";
-  const finish = (columns: number, font: number): Fit => {
-    const pages = paginate(doc, font, numbered, columns);
-    return { pages, font, columns, fill: lastPageFill(doc), issues: auditLayout(doc) };
+  const finish = (columns: number, font: number, lineHeight = BASE_LINE_HEIGHT): Fit => {
+    const pages = paginate(doc, font, numbered, columns, lineHeight);
+    return { pages, font, columns, lineHeight, fill: lastPageFill(doc), issues: auditLayout(doc) };
   };
 
   if (!spec.pages) return finish(columnsOf(spec.layout, spec.columns), L.font);
@@ -102,6 +107,26 @@ export async function fitSheet(doc: Document, spec: SheetSpec, onProgress?: (tex
     const candidate = finish(alt.columns, alt.font);
     if (candidate.issues.length < best.issues.length) best = candidate;
   }
+  // The next font step up would overflow, so the last page can end part
+  // empty. Open the line spacing up, in fine steps, until the pages are as
+  // full as the limit allows — never past MAX_LINE_HEIGHT, and never at the
+  // cost of a layout problem the plain spacing didn't have.
+  if (best.pages === spec.pages && best.fill < 0.985) {
+    onProgress?.("Filling the last page…");
+    await yieldToBrowser();
+    let lo = BASE_LINE_HEIGHT;
+    let hi = MAX_LINE_HEIGHT;
+    if (paginate(doc, best.font, numbered, best.columns, hi) <= spec.pages) lo = hi;
+    else {
+      while (hi - lo > 0.004) {
+        const mid = Math.round(((lo + hi) / 2) * 1000) / 1000;
+        if (paginate(doc, best.font, numbered, best.columns, mid) <= spec.pages) lo = mid;
+        else hi = mid;
+      }
+    }
+    const filled = finish(best.columns, best.font, Math.floor(lo * 1000) / 1000);
+    if (filled.pages <= spec.pages && filled.issues.length <= best.issues.length) return filled;
+  }
   // Leave the pages showing the winner.
-  return best.columns === ranked[0].columns && best.font === ranked[0].font ? finish(best.columns, best.font) : best;
+  return finish(best.columns, best.font);
 }

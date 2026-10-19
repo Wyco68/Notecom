@@ -11,14 +11,17 @@
 // parent window — the preview iframe is sandboxed with no scripts of its own.
 
 const HEADING = /^H[23]$/;
+export const BASE_LINE_HEIGHT = 1.17;
 
-export function paginate(doc: Document, fontPt: number, numbered: boolean, columns: number): number {
+/** `lineHeight`: body line spacing, which the fitter loosens to fill the last page. */
+export function paginate(doc: Document, fontPt: number, numbered: boolean, columns: number, lineHeight = BASE_LINE_HEIGHT): number {
   const root = doc.getElementById("pages");
   const src = doc.getElementById("src") as HTMLTemplateElement | null;
   if (!root || !src) return 0;
   root.textContent = "";
   doc.documentElement.style.setProperty("--fs", `${fontPt}pt`);
   doc.documentElement.style.setProperty("--cols", String(columns));
+  doc.documentElement.style.setProperty("--lh", String(lineHeight));
 
   const queue: Element[] = [...(src.content.cloneNode(true) as DocumentFragment).children];
   let cols = newPage(doc, root, numbered);
