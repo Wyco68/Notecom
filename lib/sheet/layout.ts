@@ -344,7 +344,6 @@ li { break-inside: avoid; }
 /* The reader's own class questions, set apart from the notes: grey with a
    dashed navy edge; each line is the question, then → its answer in bold. */
 .box-q { background: #eef0f5; border: 0.6pt dashed var(--navy); border-radius: 1.5pt; }
-.box-q li::before { content: "?"; color: var(--navy); font-weight: bold; }
 :is(.box, .box-ex, .box-warn, .box-key, .box-pink, .box-yellow, .cmp) :is(p, li).ex,
 :is(.box, .box-ex, .box-warn, .box-key, .box-pink, .box-yellow, .cmp) :is(p, li).warn { border-left: 0; padding-left: 0; background: none; }
 .cmp { background: var(--teal-bg); border: 0.6pt solid var(--teal); border-radius: 2pt; padding: 1.2pt 2.4pt; }
