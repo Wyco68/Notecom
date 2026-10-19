@@ -223,6 +223,10 @@ function sheetCss(layout: SheetLayout): string {
   --teal: #2e8b7a; --teal-bg: #edf7f3; --teal-ink: #17594d;
   --pink-bg: #fde9ec; --pink: #c62839;
   --violet-bg: #f1ecfb; --violet: #7a4fc8;
+  --ex-bg: #fff0dc; --ex-edge: #e8892b; --ex-ink: #8a4300;
+  --red-bg: #fde2e2; --red-edge: #d32f2f; --red-ink: #9b1111;
+  --rose-bg: #fce7f3; --rose: #c2387f;
+  --sun-bg: #fff6cc; --sun: #c9a000;
   --code-bg: #ecf6ea; --code: #4c9a58; --code-ink: #1f3d22;
 }
 @page { size: ${L.width}mm ${L.height}mm; margin: 0; }
@@ -251,8 +255,15 @@ h3 { color: var(--navy); font-size: calc(var(--fs) + 1.2pt); font-weight: bold; 
   margin: 2.2pt 0 0.6pt; break-after: avoid; }
 p { margin: 0 0 0.5pt; }
 b, strong { color: var(--navy); }
-.ex { color: var(--ex); }
-.warn { color: var(--pink); font-weight: bold; }
+/* Colour by kind, the reader's key: explanation light blue (.box), code
+   green (pre), example orange (.ex, .box-ex), mix-up red (.warn,
+   .box-warn), rule violet (.box-key), comparison teal (.cmp), and pink and
+   yellow boxes for other groups the sources make. A line gets its colour
+   as a background band with an edge, so it reads at a glance in print. */
+.ex { color: var(--ex-ink); background: var(--ex-bg); }
+p.ex, li.ex { border-left: 1.2pt solid var(--ex-edge); padding: 0 1pt 0 1.6pt; }
+.warn { color: var(--red-ink); background: var(--red-bg); font-weight: bold; }
+p.warn, li.warn { border-left: 1.2pt solid var(--red-edge); padding: 0 1pt 0 1.6pt; }
 .key { color: var(--key); font-weight: bold; }
 .f { color: var(--key); font-weight: bold; margin: 0.6pt 0; }
 /* A slide picture: the column's width, its own shape, never taller than about
@@ -285,17 +296,27 @@ code { background: var(--code-bg); color: var(--code-ink); font-weight: bold; fo
   padding: 0 0.6pt; border-radius: 1pt; }
 pre code { background: none; padding: 0; font-weight: normal; }
 
-/* Boxes: a group of related facts (blue), a comparison (teal, with a title),
-   a mix-up to avoid (pink), a rule of thumb (violet). */
-.box, .cmp, .box-warn, .box-key { break-inside: avoid; margin: 1.2pt 0 1.6pt; padding: 1pt 2pt 1pt 2.4pt; }
+/* Boxes: an explanation or group of related facts (blue), a worked example
+   (orange), a comparison (teal, with a title), a mix-up to avoid (red), a
+   rule of thumb (violet), other groups (pink, yellow). Lines inside a box
+   take the box's colour, not their own band. */
+.box, .cmp, .box-warn, .box-key, .box-ex, .box-pink, .box-yellow { break-inside: avoid; margin: 1.2pt 0 1.6pt; padding: 1pt 2pt 1pt 2.4pt; }
 .box { background: var(--blue-bg); border-left: 1.6pt solid var(--blue); }
-.box-warn { background: var(--pink-bg); border-left: 1.6pt solid var(--pink); }
+.box-ex { background: var(--ex-bg); border-left: 1.6pt solid var(--ex-edge); color: var(--ex-ink); }
+.box-warn { background: var(--red-bg); border-left: 1.6pt solid var(--red-edge); }
 .box-key { background: var(--violet-bg); border-left: 1.6pt solid var(--violet); }
+.box-pink { background: var(--rose-bg); border-left: 1.6pt solid var(--rose); }
+.box-yellow { background: var(--sun-bg); border-left: 1.6pt solid var(--sun); }
+:is(.box, .box-ex, .box-warn, .box-key, .box-pink, .box-yellow, .cmp) :is(p, li).ex,
+:is(.box, .box-ex, .box-warn, .box-key, .box-pink, .box-yellow, .cmp) :is(p, li).warn { border-left: 0; padding-left: 0; background: none; }
 .cmp { background: var(--teal-bg); border: 0.6pt solid var(--teal); border-radius: 2pt; padding: 1.2pt 2.4pt; }
 .bt { color: var(--teal-ink); font-weight: 900; font-size: calc(var(--fs) + 0.8pt); margin-bottom: 0.6pt; letter-spacing: 0.1pt; }
-.box ul, .box-warn ul, .box-key ul, .cmp ul { margin-left: 5pt; }
+.box ul, .box-warn ul, .box-key ul, .box-ex ul, .box-pink ul, .box-yellow ul, .cmp ul { margin-left: 5pt; }
 .box b, .box strong { color: #1d6f93; }
-.box-warn b, .box-warn strong { color: var(--pink); }
+.box-warn b, .box-warn strong { color: var(--red-ink); }
+.box-ex b, .box-ex strong { color: var(--ex-ink); }
+.box-pink b, .box-pink strong { color: var(--rose); }
+.box-yellow b, .box-yellow strong { color: #6b5500; }
 .box-key b, .box-key strong { color: var(--violet); }
 .cmp b, .cmp strong { color: var(--teal-ink); }
 .cmp ul li::before { content: "\\25B8"; color: var(--teal); }

@@ -186,7 +186,7 @@ const SHEET_ATTRS = new Set([
 ]);
 const SHEET_CLASSES = new Set([
   "ex", "warn", "key", "f", "c", "d", "box-b", "box-g", "box-y", "box-r", "box-w",
-  "box", "cmp", "bt", "box-warn", "box-key",
+  "box", "cmp", "bt", "box-warn", "box-key", "box-ex", "box-pink", "box-yellow",
 ]);
 // Study talk and assistant voice. Case-insensitive, whole words where it matters.
 // A rule marked `source` gives way when the chapters themselves use the word:
@@ -346,7 +346,7 @@ export function checkSheetPages(html: string): string[] {
 }
 
 /** `sourceText`: the chapters' plain text, for the rules a source term may override. */
-const BOX_CLASSES = new Set(["box", "cmp", "box-warn", "box-key"]);
+const BOX_CLASSES = new Set(["box", "cmp", "box-warn", "box-key", "box-ex", "box-pink", "box-yellow"]);
 
 /**
  * The part of the sheet contract that guards the page rather than the
