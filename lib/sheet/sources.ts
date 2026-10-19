@@ -17,6 +17,9 @@ export interface ChapterSource {
 export function plainText(html: string): string {
   return html
     .replace(/<(script|style)\b[\s\S]*?<\/\1>/gi, " ")
+    // A slide picture's alt says what the picture shows; a fact read off it
+    // (a year, a model number) is as sourced as one in the text.
+    .replace(/<img\b[^>]*\balt="([^"]*)"[^>]*>/gi, " $1 ")
     .replace(/<[^>]+>/g, " ")
     .replace(/&nbsp;/g, " ")
     .replace(/&amp;/g, "&")
