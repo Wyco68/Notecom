@@ -138,7 +138,22 @@ sheet as `meta.checks` for the reader to send back. Writing and review run on
 Opus 5.5 (`SHEET_MODEL`, default `claude-opus-5-5`; `SHEET_EFFORT`, default
 `high`; no fallback).
 
-**Layout.** The browser lays the fragment into pages
+**Layout, once per version, on the printing device (2026-10).** Fitting a
+sheet in the app's own window on every open cost seconds each time, and the
+PDF was printed by a different engine (WebKit lays out the Linux app,
+Chromium prints), so columns ended early or ran long on paper. Now
+`POST /api/sheets/…/layout` lays the sheet out in this machine's headless
+Chromium — the browser `lib/sheet/pdf.ts` prints with — by opening the app's
+own `/sheet-engine` page, a script-only page that runs the same paginator and
+fitter and is handed the fragment (pictures inlined) over the DevTools
+protocol, so it needs no session. The finished pages, font and columns are
+stored in `meta.layout` under a key of fragment, spec, page styles and engine
+version (`lib/sheet/device-layout.ts`); `GET /api/sheets/…` says whether it
+is current (`layoutFresh`). The view shows a current layout as it is, and
+Save PDF (`{ stored: true }`) prints exactly those pages. Without the CLI or
+a Chromium-family browser, the view fits the sheet itself as below.
+
+**Layout in the window.** The browser lays the fragment into pages
 (`lib/sheet/layout.ts`, `lib/sheet/paginate.ts`): A4 landscape for one or two
 pages, portrait for more or none. For a page-limited sheet `lib/sheet/fit.ts`
 tries 2 to 8 columns and, for each, the largest font that still fits the

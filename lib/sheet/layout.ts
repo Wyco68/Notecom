@@ -63,6 +63,22 @@ export interface SheetMeta {
   /** chapters not written yet — a write that stopped part-way */
   pending?: number[];
   messages: SheetMessage[];
+  /** the pages as laid out on the machine that prints them (see
+   *  lib/sheet/device-layout.ts); stale when `key` no longer matches */
+  layout?: StoredLayout;
+}
+
+export interface StoredLayout {
+  /** the fragment, spec and page styles this layout was made from */
+  key: string;
+  /** the laid-out pages, ready to show or print as they are */
+  html: string;
+  pages: number;
+  font: number;
+  columns: number;
+  fill: number;
+  issues: Array<{ kind: string; page: number; text: string }>;
+  at: string;
 }
 
 /** The review state of any stored meta, older shapes included. */
@@ -166,6 +182,11 @@ export function visibleChars(html: string): number {
  * engine has to fragment across sheets of paper. Columns and font are CSS
  * variables, set by the paginator for each try.
  */
+/** The page styles, for telling whether a stored layout still matches them. */
+export function sheetStyles(layout: SheetLayout): string {
+  return sheetCss(layout);
+}
+
 export function sheetDocument(body: string, layout: SheetLayout, title: string): string {
   return `<!doctype html>
 <html lang="en">
@@ -193,12 +214,15 @@ export function printDocument(
   layout: SheetLayout,
   title: string,
   fontPt: number,
-  columns: number
+  columns: number,
+  /** a stored layout shown in the app: its pictures load from /api/media */
+  inApp = false
 ): string {
+  const policy = inApp ? "" : `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:">\n`;
   return `<!doctype html>
 <html lang="en" style="--fs: ${Number(fontPt)}pt; --cols: ${Number(columns)}">
 <head>
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:">
+${policy}
 <meta charset="utf-8">
 <title>${esc(title)}</title>
 <style>${sheetCss(layout)}</style>

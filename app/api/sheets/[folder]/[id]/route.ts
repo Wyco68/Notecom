@@ -1,19 +1,26 @@
 import { NextRequest, NextResponse } from "next/server";
 import { deleteDoc, loadDoc, renameDoc } from "@/lib/vault/store";
+import { layoutKey } from "@/lib/sheet/device-layout";
+import type { SheetMeta } from "@/lib/sheet/layout";
 
 // notes_documents.title has no DB length constraint; this only stops a client
 // handing the handler an enormous string to forward for no legitimate reason.
 const MAX_TITLE_LENGTH = 200;
 
 // A stored cheatsheet: its fragment, title and meta (spec, review, the edit
-// conversation). Same shape and rules as /api/lesson and /api/quiz.
+// conversation). Same shape and rules as /api/lesson and /api/quiz, plus
+// `layoutFresh`: whether meta.layout was made from this very version, so the
+// view can show it without fitting again.
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ folder: string; id: string }> }
 ) {
   const { folder, id } = await params;
   try {
-    return NextResponse.json(await loadDoc(folder, id, "sheet"));
+    const doc = await loadDoc(folder, id, "sheet");
+    const meta = doc.meta as SheetMeta | null;
+    const layoutFresh = !!meta?.spec && meta.layout?.key === layoutKey(doc.html, meta.spec);
+    return NextResponse.json({ ...doc, layoutFresh });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 404 });
   }

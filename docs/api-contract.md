@@ -54,14 +54,15 @@ which the app checks against the contract and files in Supabase.
 | `/api/generate/[id]` | POST | — | `{ ok, id, title }` — names the `ready` document and saves it to Supabase as the caller (RLS). Idempotent; 409 when there is nothing to save. The client calls it as soon as the tail ends `ready`, and on reload for any job still `ready` |
 | `/api/generate/[id]` | DELETE | — | `{ ok }` — force-stop (the log view's Ctrl+C) |
 | `/api/sheet` | POST | multipart `folder`, `from`, `to`, `pages` (0–30, 0 = no page limit), optional `columns` (2–8; absent = the page size's own), optional `files` | `{ jobId, sheet }` — reads lessons `from`..`to` as the caller, hands them to the CLI as files and runs `/sheet`. Followed and stopped through `/api/generate/[id]` like any job; ends `done`, never `ready` |
-| `/api/sheets/[folder]/[id]` | GET | — | `{ html, title, meta }` — a stored sheet; `meta` is `{ spec, review: { passes, found, open }, messages: [{ role, text, at }] }` |
+| `/api/sheets/[folder]/[id]` | GET | — | `{ html, title, meta, layoutFresh }` — a stored sheet (`layoutFresh`: `meta.layout` was made from this version); `meta` is `{ spec, review: { passes, found, open }, messages: [{ role, text, at }] }` |
 | `/api/sheets/[folder]/[id]` | DELETE | — | `{ ok }` |
 | `/api/sheets/[folder]/[id]` | POST | `{ newTitle }` | `{ ok }` (rename) |
+| `/api/sheets/[folder]/[id]/layout` | POST | — | `{ layout }` — the sheet laid out on this machine's headless Chromium (font, columns, pages, issues, page HTML), stored in `meta.layout`; returned at once when still current. 501 without the CLI or a Chromium-family browser: the view fits the sheet itself |
 | `/api/sheets/[folder]/[id]/continue` | POST | — | `{ jobId, sheet, step }` — writes the chapters still pending (`meta.pending`), one run and one save each |
 | `/api/sheets/[folder]/[id]/review` | POST | `{ all? }` | `{ jobId, sheet, step }` — reviews the chapters not yet reviewed (all with `all: true`), one fresh session and one save per chapter |
 | `/api/sheets/[folder]/[id]/sources` | POST | multipart `refs` (JSON `[{ kind, id }]` of folder lessons/quizzes), `files`, `note` | `{ jobId, sheet, step }` — an edit run that folds new sources in; refs are kept in `meta.spec.extra` for later steps, uploads are used once |
 | `/api/sheets/[folder]/[id]/edit` | POST | `{ message }` (≤ 4000 chars) | `{ jobId, sheet }` — a message from the sheet's chat box: an edit run on Opus with every check and the review; saved over the sheet through `/api/generate/[id]` like any job. Needs folder write access; its own rate limit, 30 an hour |
-| `/api/sheets/[folder]/[id]/pdf` | POST | `{ pages, font, columns }` | `{ ok, path }` — prints the pages the browser laid out (checked by `checkSheetPages`) with a Chromium-family browser via the DevTools protocol and saves the PDF in Downloads. Only where the CLI is installed; otherwise 501 `{ fallback: "print" }` and the client opens the print dialog |
+| `/api/sheets/[folder]/[id]/pdf` | POST | `{ stored: true }` or `{ pages, font, columns }` | `{ ok, path }` — prints the pages the browser laid out (checked by `checkSheetPages`) with a Chromium-family browser via the DevTools protocol and saves the PDF in Downloads. Only where the CLI is installed; otherwise 501 `{ fallback: "print" }` and the client opens the print dialog |
 
 **Cheatsheets are generation jobs that are saved as documents.** `/api/sheet`
 and a sheet's `/edit` start one in the same job map, so the sidebar row, the

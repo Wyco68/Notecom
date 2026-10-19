@@ -1,7 +1,8 @@
 import { NextRequest } from "next/server";
 import { checkSheetPages } from "@/lib/generate/validate";
 import { cliInstalled } from "@/lib/auth/cli";
-import { loadDoc, readMedia } from "@/lib/vault/store";
+import { loadDoc } from "@/lib/vault/store";
+import { inlinePictures, layoutKey } from "@/lib/sheet/device-layout";
 import { LAYOUTS, MAX_COLUMNS, MIN_COLUMNS, printDocument, type SheetMeta } from "@/lib/sheet/layout";
 import { findBrowser, savePdf } from "@/lib/sheet/pdf";
 
@@ -9,10 +10,11 @@ import { findBrowser, savePdf } from "@/lib/sheet/pdf";
 const MAX_PAGES_BYTES = 5 * 1024 * 1024;
 
 // Save a stored cheatsheet as a PDF in the reader's Downloads folder, in one
-// click. The browser sends the pages it laid out (only a real layout knows
-// where a page ends) and the font it settled on; this checks them against the
-// sheet allowlist, prints them with a local browser and returns where the file
-// went.
+// click. With `{ stored: true }` it prints the layout stored with the sheet,
+// made on this machine by the same browser that prints it
+// (lib/sheet/device-layout.ts), so the PDF is that layout exactly. Otherwise
+// the browser sends the pages it laid out and the font it settled on. Either
+// way the pages are checked against the sheet allowlist before printing.
 //
 // Only where the Claude Code CLI is — the reader's own machine, whose
 // Downloads folder is theirs. A hosted server answers 501 and the client opens
@@ -35,10 +37,14 @@ export async function POST(
     return Response.json({ error: "sheet too large to print" }, { status: 413 });
   }
   const body = await req.json().catch(() => null);
-  const pages = typeof body?.pages === "string" ? body.pages : "";
-  // The font and columns the browser fitted the pages with.
-  const font = Number(body?.font);
-  const columns = Number(body?.columns);
+  const stored = body?.stored === true;
+  if (stored && meta.layout?.key !== layoutKey(doc.html, meta.spec)) {
+    return Response.json({ error: "the stored layout is out of date — reopen the sheet to lay it out again" }, { status: 409 });
+  }
+  const pages = stored ? meta.layout!.html : typeof body?.pages === "string" ? body.pages : "";
+  // The font and columns the pages were fitted with.
+  const font = Number(stored ? meta.layout!.font : body?.font);
+  const columns = Number(stored ? meta.layout!.columns : body?.columns);
   const L = LAYOUTS[meta.spec.layout];
   if (
     !pages ||
@@ -62,7 +68,12 @@ export async function POST(
   }
   const name = `${folder}-${id}`;
   try {
-    const inlined = await inlinePictures(pages);
+    const inlined = (await inlinePictures(pages)).html;
+    if (stored) {
+      // Laid out by this very browser: print it as it is.
+      const file = await savePdf(browser, printDocument(inlined, meta.spec.layout, doc.title, font, columns), name);
+      return Response.json({ ok: true, path: file });
+    }
     // The browser that laid the pages out (WebKit, in the Linux app) and the
     // one printing them (Chromium) measure text a little differently, so the
     // column breaks the paginator forced to keep a heading with its text
@@ -81,21 +92,4 @@ export async function POST(
     console.error("[sheet pdf]", err?.message);
     return Response.json({ error: "printing to PDF failed", fallback: "print" }, { status: 502 });
   }
-}
-
-/**
- * The printer loads nothing (its document's policy forbids it) and has no
- * session to load with anyway, so each picture goes in as a data: URL, read
- * as the caller — a picture they may not read prints as nothing. Only the
- * /api/media paths checkSheetPages already let through are touched.
- */
-async function inlinePictures(pages: string): Promise<string> {
-  const srcs = new Set([...pages.matchAll(/\bsrc="(\/api\/media\/[^"]+)"/g)].map((m) => m[1]));
-  const read = await Promise.all([...srcs].map(async (src) => [src, await readMedia(src)] as const));
-  let out = pages;
-  for (const [src, media] of read) {
-    const data = media ? `data:${media.type};base64,${media.data.toString("base64")}` : "";
-    out = out.split(`src="${src}"`).join(`src="${data}"`);
-  }
-  return out;
 }

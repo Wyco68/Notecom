@@ -20,6 +20,10 @@ import path from "path";
 
 const RENDER_TIMEOUT_MS = 60_000;
 
+// True when some page's columns overflow, i.e. content would be cut off: a
+// page box has a fixed height, so too much text only grows sideways.
+const OVERFLOWS = `[...document.querySelectorAll(".cols")].some((c) => c.scrollWidth > c.clientWidth + 1)`;
+
 /** A headless-capable browser on this machine, or null. */
 export function findBrowser(): string | null {
   const env = process.env.SHEET_PDF_BROWSER;
@@ -102,20 +106,20 @@ function freeName(dir: string, base: string): string {
   }
 }
 
+interface Tab {
+  send: (method: string, params?: object) => Promise<any>;
+  /** navigates and waits for the load event */
+  open: (url: string) => Promise<void>;
+}
+
 /**
- * Renders `html` (a whole document) to PDF and saves it as `<base>.pdf` in the
- * Downloads folder. Returns the saved path.
- *
- * Printed through the DevTools protocol (Page.printToPDF), not the
- * `--print-to-pdf` switch: the switch hangs on some Chromium builds (Brave
+ * Runs `fn` against one tab of a headless browser started for it, and takes
+ * the whole browser down afterwards. Driven through the DevTools protocol, not
+ * command-line switches: `--print-to-pdf` hangs on some Chromium builds (Brave
  * never exits and writes nothing), while the protocol is the same in all of
  * them. Needs Node's global WebSocket (22+, which the desktop bundle ships).
  */
-/**
- * `html` is tried first; when it overflows a page in this browser and a
- * `fallback` is given, the fallback is printed instead (see printPage).
- */
-export async function savePdf(browser: string, html: string, base: string, fallback?: string): Promise<string> {
+async function withTab<T>(browser: string, timeoutMs: number, fn: (tab: Tab, work: string) => Promise<T>): Promise<T> {
   const work = await mkdtemp(path.join(tmpdir(), "notes-sheet-pdf-"));
   // Its own process group, so the whole browser goes at the end — launchers
   // like /usr/bin/brave-browser are shell scripts, and killing only the
@@ -136,26 +140,124 @@ export async function savePdf(browser: string, html: string, base: string, fallb
     ],
     { stdio: ["ignore", "ignore", "pipe"], windowsHide: true, detached: process.platform !== "win32" }
   );
-  const timer = setTimeout(() => killTree(child.pid), RENDER_TIMEOUT_MS);
+  const timer = setTimeout(() => killTree(child.pid), timeoutMs);
+  let ws: WebSocket | undefined;
   try {
-    const page = path.join(work, "sheet.html");
-    await writeFile(page, html);
-    let alt: string | undefined;
-    if (fallback) {
-      alt = path.join(work, "sheet-exact.html");
-      await writeFile(alt, fallback);
-    }
     const endpoint = await devtoolsEndpoint(child);
-    const pdf = await printPage(endpoint, pathToFileUrl(page), alt && pathToFileUrl(alt));
-    const target = freeName(downloadsDir(), base.replace(/[^\w.-]+/g, "-"));
-    // wx: never overwrite, even if a same-named file appeared since freeName looked.
-    await writeFile(target, pdf, { flag: "wx" });
-    return target;
+    ws = new WebSocket(endpoint);
+    const socket = ws;
+    await new Promise<void>((resolve, reject) => {
+      socket.onopen = () => resolve();
+      socket.onerror = () => reject(new Error("could not connect to the browser"));
+    });
+    let next = 0;
+    const pending = new Map<number, (m: any) => void>();
+    const listeners: Array<(m: any) => void> = [];
+    socket.onmessage = (e) => {
+      const m = JSON.parse(String(e.data));
+      if (m.id && pending.has(m.id)) {
+        pending.get(m.id)!(m);
+        pending.delete(m.id);
+      } else {
+        listeners.forEach((l) => l(m));
+      }
+    };
+    const raw = (method: string, params: object = {}, sessionId?: string) =>
+      new Promise<any>((resolve, reject) => {
+        const id = ++next;
+        pending.set(id, (m) => (m.error ? reject(new Error(m.error.message)) : resolve(m.result)));
+        socket.send(JSON.stringify({ id, method, params, sessionId }));
+      });
+    const { targetId } = await raw("Target.createTarget", { url: "about:blank" });
+    const { sessionId } = await raw("Target.attachToTarget", { targetId, flatten: true });
+    await raw("Page.enable", {}, sessionId);
+    const tab: Tab = {
+      send: (method, params) => raw(method, params, sessionId),
+      open: async (url) => {
+        const loaded = new Promise<void>((resolve) =>
+          listeners.push((m) => m.method === "Page.loadEventFired" && m.sessionId === sessionId && resolve())
+        );
+        await raw("Page.navigate", { url }, sessionId);
+        await loaded;
+      },
+    };
+    const out = await fn(tab, work);
+    await raw("Browser.close").catch(() => {});
+    return out;
   } finally {
+    ws?.close();
     clearTimeout(timer);
     killTree(child.pid);
     rm(work, { recursive: true, force: true }).catch(() => {});
   }
+}
+
+/**
+ * Renders `html` (a whole document) to PDF and saves it as `<base>.pdf` in the
+ * Downloads folder. Returns the saved path. `html` is tried first; when it
+ * overflows a page in this browser and a `fallback` is given, the fallback is
+ * printed instead.
+ */
+export async function savePdf(browser: string, html: string, base: string, fallback?: string): Promise<string> {
+  return withTab(browser, RENDER_TIMEOUT_MS, async (tab, work) => {
+    const page = path.join(work, "sheet.html");
+    await writeFile(page, html);
+    await tab.open(pathToFileUrl(page));
+    if (fallback) {
+      // Evaluated by the protocol, not the page: the page's own policy still
+      // forbids every script.
+      const { result } = await tab.send("Runtime.evaluate", { expression: OVERFLOWS, returnByValue: true });
+      if (result?.value !== false) {
+        const alt = path.join(work, "sheet-exact.html");
+        await writeFile(alt, fallback);
+        await tab.open(pathToFileUrl(alt));
+      }
+    }
+    const { data } = await tab.send("Page.printToPDF", {
+      // The sheet's own @page decides the paper; the pages carry their margins.
+      preferCSSPageSize: true,
+      printBackground: true,
+      displayHeaderFooter: false,
+      marginTop: 0,
+      marginBottom: 0,
+      marginLeft: 0,
+      marginRight: 0,
+    });
+    const target = freeName(downloadsDir(), base.replace(/[^\w.-]+/g, "-"));
+    // wx: never overwrite, even if a same-named file appeared since freeName looked.
+    await writeFile(target, Buffer.from(data, "base64"), { flag: "wx" });
+    return target;
+  });
+}
+
+const LAYOUT_TIMEOUT_MS = 4 * 60_000;
+
+/**
+ * Lays a sheet out in this machine's headless browser — the one that prints
+ * it — by opening the app's own layout page (app/sheet-engine) and calling the
+ * same paginator and fitter the preview uses. `input` is handed over by the
+ * protocol, never fetched by the page, so the page needs no session.
+ */
+export async function layOutInBrowser<T>(browser: string, engineUrl: string, input: unknown): Promise<T> {
+  return withTab(browser, LAYOUT_TIMEOUT_MS, async (tab) => {
+    await tab.open(engineUrl);
+    for (let i = 0; ; i++) {
+      const { result } = await tab.send("Runtime.evaluate", {
+        expression: `typeof window.__sheetLayout === "function"`,
+        returnByValue: true,
+      });
+      if (result?.value === true) break;
+      if (i > 300) throw new Error("the layout page did not start");
+      await new Promise((r) => setTimeout(r, 100));
+    }
+    const { result, exceptionDetails } = await tab.send("Runtime.evaluate", {
+      expression: `window.__sheetLayout(${JSON.stringify(input)})`,
+      awaitPromise: true,
+      returnByValue: true,
+    });
+    if (exceptionDetails) throw new Error(`layout failed: ${exceptionDetails.exception?.description ?? exceptionDetails.text}`);
+    return result.value as T;
+  });
 }
 
 function devtoolsEndpoint(child: ChildProcess): Promise<string> {
@@ -169,76 +271,6 @@ function devtoolsEndpoint(child: ChildProcess): Promise<string> {
     child.on("error", reject);
     child.on("close", () => reject(new Error("the browser exited before it was ready")));
   });
-}
-
-// True when some page's columns overflow, i.e. content would be cut off: a
-// page box has a fixed height, so too much text only grows sideways.
-const OVERFLOWS = `[...document.querySelectorAll(".cols")].some((c) => c.scrollWidth > c.clientWidth + 1)`;
-
-async function printPage(endpoint: string, url: string, fallbackUrl?: string): Promise<Buffer> {
-  const ws = new WebSocket(endpoint);
-  await new Promise<void>((resolve, reject) => {
-    ws.onopen = () => resolve();
-    ws.onerror = () => reject(new Error("could not connect to the browser"));
-  });
-  let next = 0;
-  const pending = new Map<number, (m: any) => void>();
-  const listeners: Array<(m: any) => void> = [];
-  ws.onmessage = (e) => {
-    const m = JSON.parse(String(e.data));
-    if (m.id && pending.has(m.id)) {
-      pending.get(m.id)!(m);
-      pending.delete(m.id);
-    } else {
-      listeners.forEach((l) => l(m));
-    }
-  };
-  const send = (method: string, params: object = {}, sessionId?: string) =>
-    new Promise<any>((resolve, reject) => {
-      const id = ++next;
-      pending.set(id, (m) => (m.error ? reject(new Error(m.error.message)) : resolve(m.result)));
-      ws.send(JSON.stringify({ id, method, params, sessionId }));
-    });
-  try {
-    const { targetId } = await send("Target.createTarget", { url: "about:blank" });
-    const { sessionId } = await send("Target.attachToTarget", { targetId, flatten: true });
-    await send("Page.enable", {}, sessionId);
-    const loaded = new Promise<void>((resolve) =>
-      listeners.push((m) => m.method === "Page.loadEventFired" && m.sessionId === sessionId && resolve())
-    );
-    await send("Page.navigate", { url }, sessionId);
-    await loaded;
-    if (fallbackUrl) {
-      // Evaluated by the protocol, not the page: the page's own policy still
-      // forbids every script.
-      const { result } = await send("Runtime.evaluate", { expression: OVERFLOWS, returnByValue: true }, sessionId);
-      if (result?.value !== false) {
-        const again = new Promise<void>((resolve) =>
-          listeners.push((m) => m.method === "Page.loadEventFired" && m.sessionId === sessionId && resolve())
-        );
-        await send("Page.navigate", { url: fallbackUrl }, sessionId);
-        await again;
-      }
-    }
-    const { data } = await send(
-      "Page.printToPDF",
-      {
-        // The sheet's own @page decides the paper; the pages carry their margins.
-        preferCSSPageSize: true,
-        printBackground: true,
-        displayHeaderFooter: false,
-        marginTop: 0,
-        marginBottom: 0,
-        marginLeft: 0,
-        marginRight: 0,
-      },
-      sessionId
-    );
-    await send("Browser.close").catch(() => {});
-    return Buffer.from(data, "base64");
-  } finally {
-    ws.close();
-  }
 }
 
 function killTree(pid: number | undefined) {

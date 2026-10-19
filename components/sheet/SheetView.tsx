@@ -5,12 +5,14 @@ import {
   LAYOUTS,
   layoutLabel,
   pageLimitText,
+  printDocument,
   reviewOf,
   sheetDocument,
   type SheetMeta,
   type SourceRef,
+  type StoredLayout,
 } from "@/lib/sheet/layout";
-import { describeIssue } from "@/lib/sheet/paginate";
+import { describeIssue, type LayoutIssue } from "@/lib/sheet/paginate";
 import { fitSheet, type Fit } from "@/lib/sheet/fit";
 import type { Lesson } from "@/lib/vault/types";
 import SpinnerIcon from "../icons/SpinnerIcon";
@@ -23,8 +25,14 @@ import { useToast } from "../toast/ToastProvider";
 //
 // The sheet renders in a sandboxed iframe with no scripts of its own — the
 // HTML came from a model, and the contract check is not the only thing that
-// should stand between it and the app's origin. This component reaches in
-// (allow-same-origin) to lay the blocks into pages, fit and audit them.
+// should stand between it and the app's origin.
+//
+// Its pages are laid out once per version, on this machine, by the headless
+// browser that also prints them, and stored with the sheet
+// (lib/sheet/device-layout.ts): opening a sheet shows the stored pages as
+// they are, and Save PDF prints exactly those. Only where there is no such
+// browser does this component fit the pages itself, reaching into the frame
+// (allow-same-origin) to lay the blocks out and audit them.
 //
 // Every step is the reader's to start, and every step saves as it goes
 // (lib/generate/sheet.ts), so a run that runs out of tokens never costs what
@@ -34,6 +42,8 @@ import { useToast } from "../toast/ToastProvider";
 // at a time per sheet. Save PDF works from the first saved chapter on.
 
 type Doc = { html: string; title: string; meta: SheetMeta | null };
+/** stored: pages laid out on this device; client: fitted in this window */
+type Mode = "stored" | "client" | null;
 
 export default function SheetView({
   folder,
@@ -52,6 +62,8 @@ export default function SheetView({
   const [doc, setDoc] = useState<Doc | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [fit, setFit] = useState<Fit | null>(null);
+  const [mode, setMode] = useState<Mode>(null);
+  const [stored, setStored] = useState<StoredLayout | null>(null);
   const [fitting, setFitting] = useState<string | null>(null);
   const [frameSize, setFrameSize] = useState({ width: 818, height: 800 });
   const [scale, setScale] = useState(1);
@@ -78,6 +90,14 @@ export default function SheetView({
         const spec = (data.meta as SheetMeta | null)?.spec;
         if (spec) setFrameSize({ width: Math.ceil((LAYOUTS[spec.layout].width * 96) / 25.4) + 24, height: 800 });
         setFit(null);
+        const layout = (data.meta as SheetMeta | null)?.layout ?? null;
+        if (data.layoutFresh && layout) {
+          setStored(layout);
+          setMode("stored");
+        } else {
+          setStored(null);
+          setMode(null);
+        }
         setDoc({ html: data.html, title: data.title, meta: data.meta ?? null });
       })
       .catch((err: Error) => !cancelled && setError(err.message));
@@ -89,7 +109,48 @@ export default function SheetView({
 
   const meta = doc?.meta ?? null;
   const spec = meta?.spec ?? null;
-  const srcDoc = useMemo(() => (doc && spec ? sheetDocument(doc.html, spec.layout, doc.title) : ""), [doc, spec]);
+  // No current stored layout: have this device lay the sheet out (once, then
+  // it is stored), or fit it here when the device can't.
+  useEffect(() => {
+    if (!doc || !spec || mode !== null) return;
+    let cancelled = false;
+    setFitting("Laying out the pages on this device…");
+    fetch(`/api/sheets/${encodeURIComponent(folder)}/${encodeURIComponent(id)}/layout`, { method: "POST" })
+      .then(async (r) => {
+        const data = await r.json().catch(() => ({}));
+        if (cancelled) return;
+        if (r.ok && data.layout) {
+          setStored(data.layout);
+          setMode("stored");
+        } else {
+          setMode("client");
+        }
+      })
+      .catch(() => !cancelled && setMode("client"))
+      .finally(() => !cancelled && setFitting(null));
+    return () => {
+      cancelled = true;
+    };
+  }, [doc, spec, mode, folder, id]);
+
+  useEffect(() => {
+    if (mode === "stored" && stored) {
+      setFit({ pages: stored.pages, font: stored.font, columns: stored.columns, fill: stored.fill, issues: stored.issues as LayoutIssue[] });
+    }
+  }, [mode, stored]);
+
+  const srcDoc = useMemo(() => {
+    if (!doc || !spec) return "";
+    if (mode === "stored" && stored) return printDocument(stored.html, spec.layout, doc.title, stored.font, stored.columns, true);
+    if (mode === "client") return sheetDocument(doc.html, spec.layout, doc.title);
+    return "";
+  }, [doc, spec, mode, stored]);
+
+  // A stored layout is shown as it is: only the frame needs sizing.
+  const sizeFrame = useCallback(() => {
+    const d = frameRef.current?.contentDocument;
+    if (d) setFrameSize({ width: d.documentElement.scrollWidth, height: d.documentElement.scrollHeight });
+  }, []);
 
   const layOut = useCallback(async () => {
     const d = frameRef.current?.contentDocument;
@@ -132,7 +193,8 @@ export default function SheetView({
       const res = await fetch(`/api/sheets/${encodeURIComponent(folder)}/${encodeURIComponent(id)}/pdf`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pages, font: fit.font, columns: fit.columns }),
+        // A stored layout is printed from the server's own copy, exactly.
+        body: JSON.stringify(mode === "stored" ? { stored: true } : { pages, font: fit.font, columns: fit.columns }),
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok) toast.success(`Saved ${data.path}`);
@@ -340,7 +402,7 @@ export default function SheetView({
                   title="Cheatsheet preview"
                   srcDoc={srcDoc}
                   sandbox="allow-same-origin allow-modals"
-                  onLoad={layOut}
+                  onLoad={mode === "stored" ? sizeFrame : layOut}
                   style={{
                     width: frameSize.width,
                     height: frameSize.height,
