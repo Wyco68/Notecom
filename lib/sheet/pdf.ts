@@ -111,7 +111,11 @@ function freeName(dir: string, base: string): string {
  * never exits and writes nothing), while the protocol is the same in all of
  * them. Needs Node's global WebSocket (22+, which the desktop bundle ships).
  */
-export async function savePdf(browser: string, html: string, base: string): Promise<string> {
+/**
+ * `html` is tried first; when it overflows a page in this browser and a
+ * `fallback` is given, the fallback is printed instead (see printPage).
+ */
+export async function savePdf(browser: string, html: string, base: string, fallback?: string): Promise<string> {
   const work = await mkdtemp(path.join(tmpdir(), "notes-sheet-pdf-"));
   // Its own process group, so the whole browser goes at the end — launchers
   // like /usr/bin/brave-browser are shell scripts, and killing only the
@@ -136,8 +140,13 @@ export async function savePdf(browser: string, html: string, base: string): Prom
   try {
     const page = path.join(work, "sheet.html");
     await writeFile(page, html);
+    let alt: string | undefined;
+    if (fallback) {
+      alt = path.join(work, "sheet-exact.html");
+      await writeFile(alt, fallback);
+    }
     const endpoint = await devtoolsEndpoint(child);
-    const pdf = await printPage(endpoint, pathToFileUrl(page));
+    const pdf = await printPage(endpoint, pathToFileUrl(page), alt && pathToFileUrl(alt));
     const target = freeName(downloadsDir(), base.replace(/[^\w.-]+/g, "-"));
     // wx: never overwrite, even if a same-named file appeared since freeName looked.
     await writeFile(target, pdf, { flag: "wx" });
@@ -162,7 +171,11 @@ function devtoolsEndpoint(child: ChildProcess): Promise<string> {
   });
 }
 
-async function printPage(endpoint: string, url: string): Promise<Buffer> {
+// True when some page's columns overflow, i.e. content would be cut off: a
+// page box has a fixed height, so too much text only grows sideways.
+const OVERFLOWS = `[...document.querySelectorAll(".cols")].some((c) => c.scrollWidth > c.clientWidth + 1)`;
+
+async function printPage(endpoint: string, url: string, fallbackUrl?: string): Promise<Buffer> {
   const ws = new WebSocket(endpoint);
   await new Promise<void>((resolve, reject) => {
     ws.onopen = () => resolve();
@@ -195,6 +208,18 @@ async function printPage(endpoint: string, url: string): Promise<Buffer> {
     );
     await send("Page.navigate", { url }, sessionId);
     await loaded;
+    if (fallbackUrl) {
+      // Evaluated by the protocol, not the page: the page's own policy still
+      // forbids every script.
+      const { result } = await send("Runtime.evaluate", { expression: OVERFLOWS, returnByValue: true }, sessionId);
+      if (result?.value !== false) {
+        const again = new Promise<void>((resolve) =>
+          listeners.push((m) => m.method === "Page.loadEventFired" && m.sessionId === sessionId && resolve())
+        );
+        await send("Page.navigate", { url: fallbackUrl }, sessionId);
+        await again;
+      }
+    }
     const { data } = await send(
       "Page.printToPDF",
       {

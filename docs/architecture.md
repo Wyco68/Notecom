@@ -167,7 +167,14 @@ so its input is filtered twice: the pages must pass `checkSheetPages` (a
 browser-faithful tokenizer, not a regex, against the sheet allowlist; a
 picture only by its `/api/media` path), and the document they are printed in
 carries a policy that forbids every load but `data:` images — the route
-swaps each picture for a `data:` URL it read as the caller. No
+swaps each picture for a `data:` URL it read as the caller. The browser that
+laid the pages out and the one printing them measure text a little
+differently (WebKit and Chromium in the Linux app), so the column breaks
+the paginator forced to keep a heading with its text would leave empty
+stretches in print: the PDF is printed without them, Chromium keeping
+headings with their text itself, and only when that overflows a page there
+(checked over the DevTools protocol, not by a page script) exactly as laid
+out. No
 browser installed: the print dialog, with "Save as PDF".
 
 ## No broad read-only mode — but a capability signal (2026-08)

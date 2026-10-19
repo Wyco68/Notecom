@@ -62,7 +62,20 @@ export async function POST(
   }
   const name = `${folder}-${id}`;
   try {
-    const file = await savePdf(browser, printDocument(await inlinePictures(pages), meta.spec.layout, doc.title, font, columns), name);
+    const inlined = await inlinePictures(pages);
+    // The browser that laid the pages out (WebKit, in the Linux app) and the
+    // one printing them (Chromium) measure text a little differently, so the
+    // column breaks the paginator forced to keep a heading with its text
+    // leave empty stretches in print. Chromium keeps headings with their text
+    // by itself (break-after: avoid), so print without those breaks — unless
+    // that overflows a page here, then exactly as laid out.
+    const free = inlined.replace(/\sstyle="break-before:\s*column;?"/g, "");
+    const file = await savePdf(
+      browser,
+      printDocument(free, meta.spec.layout, doc.title, font, columns),
+      name,
+      printDocument(inlined, meta.spec.layout, doc.title, font, columns)
+    );
     return Response.json({ ok: true, path: file });
   } catch (err: any) {
     console.error("[sheet pdf]", err?.message);
