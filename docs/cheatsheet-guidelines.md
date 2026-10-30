@@ -13,13 +13,15 @@ The app sends the chapters (the course's lesson notes, one file per chapter)
 and, sometimes, the original slides. Those files are the only source. Nothing
 from general knowledge goes on the sheet.
 
-### No team names
+### No personal names
 
 When a source is the reader's own project document (a proposal, SRS, SDS or
 report), the sheet carries facts about the project only. Never put the team
-members' names, nicknames or student IDs on it. Keep each role and what it
-does, without the person: `Product Owner: scope, priorities, product
-direction`. A picture that shows team names or IDs stays off the sheet.
+members' names, nicknames or student IDs on it, nor the customer's name
+(write "the customer"). Keep each role and what it does, without the person:
+`Product Owner: scope, priorities, product direction`. A name in an example
+becomes a placeholder such as `A. Member`. A picture that shows any of these
+names or IDs stays off the sheet.
 
 ## Output: a flat HTML fragment
 
@@ -244,5 +246,5 @@ as a list:
 Before replying, walk every chapter file top to bottom and confirm each
 definition, list item, number, formula, command, table row, worked example and
 comparison is on the sheet, and that each picture you left off says nothing
-the sheet lacks. Team names and student IDs are never missing facts (see "No
-team names").
+the sheet lacks. Personal names and student IDs are never missing facts (see "No
+personal names").

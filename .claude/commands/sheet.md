@@ -111,8 +111,8 @@ and write nothing.
    - `missing`: a definition, list item, number, formula, command, table
      row, worked example or comparison in the sources that is not on the
      sheet, or a lesson picture whose facts are nowhere on it. Team
-     members' names and student IDs are never missing: they stay off the
-     sheet (guidelines, "No team names").
+     members' and the customer's names and student IDs are never missing:
+     they stay off the sheet (guidelines, "No personal names").
 3. Check every number the prompt lists against the sources.
 4. Reply with only the JSON object the prompt asks for. Quote the sheet
    exactly in `where`, and say in `fix` what the sources say and in which
