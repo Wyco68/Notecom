@@ -221,7 +221,7 @@ export async function listJoinRequests(folderId: string): Promise<JoinRequest[]>
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("notes_folder_join_requests")
-    .select("id, folder_id, user_id, message, status, created_at, notes_folders(name), profiles(username, avatar_url)")
+    .select("id, folder_id, user_id, message, status, created_at, notes_folders(name), profiles!notes_folder_join_requests_user_id_fkey(username, avatar_url)")
     .eq("folder_id", folderId)
     .eq("status", "pending")
     .order("created_at", { ascending: false });
