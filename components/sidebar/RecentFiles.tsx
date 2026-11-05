@@ -26,9 +26,7 @@ export default function RecentFiles({
 }) {
   if (!entries.length) {
     return (
-      <p className="px-2 py-1 text-xs text-gray-500 dark:text-gray-500">
-        Nothing yet — a file lands here once you move on from it.
-      </p>
+      <p className="px-2 py-1 text-sm text-muted">Nothing yet.</p>
     );
   }
 
@@ -46,16 +44,14 @@ export default function RecentFiles({
             title={`${entry.title} — ${folderNames?.[entry.folder] ?? entry.folder.replace(/-/g, " ")}`}
             style={{ animationDelay: `${Math.min(i, 8) * 25}ms` }}
             className={`ui-rise ui-row flex w-full min-w-0 items-center gap-1.5 overflow-hidden px-2 py-1 text-left text-sm ${
-              isActive
-                ? "bg-blue-600/10 text-blue-700 dark:bg-blue-600/20 dark:text-blue-300"
-                : "text-gray-700 dark:text-gray-300"
+              isActive ? "ui-row-on" : "text-ink-2"
             }`}
           >
             {entry.kind === "quiz" && (
-              <QuizIcon className="h-3.5 w-3.5 shrink-0 text-gray-400" />
+              <QuizIcon className="h-3.5 w-3.5 shrink-0 text-muted" />
             )}
             {entry.kind === "sheet" && (
-              <SheetIcon className="h-3.5 w-3.5 shrink-0 text-gray-400" />
+              <SheetIcon className="h-3.5 w-3.5 shrink-0 text-muted" />
             )}
             {/* One line, always. Unlike the tree — where a folder name wraps
                 because it is how you find the folder — a recent row has a fixed

@@ -209,7 +209,7 @@ export default function FolderManagePanel({
   if (error || !detail) {
     return (
       <div className="mx-auto max-w-2xl px-6 py-16 text-center">
-        <p className="text-sm text-red-600 dark:text-red-400">{error ?? "Folder not found."}</p>
+        <p className="text-sm text-danger">{error ?? "Folder not found."}</p>
         <BackControl onClose={onClose} className="mt-4 inline-block" />
       </div>
     );
@@ -219,15 +219,14 @@ export default function FolderManagePanel({
     <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6 sm:py-12">
       <PanelHeader
         title={detail.name}
-        subtitle={`owned by ${detail.ownerUsername} · ${detail.documentCount} notes`}
+        subtitle={`${detail.ownerUsername} · ${detail.documentCount} notes`}
         onClose={onClose}
         className="mb-8"
       />
 
       {!canManage && (
-        <p className="ui-rise mb-6 rounded-md border border-black/10 bg-black/[0.02] px-3 py-2.5 text-xs leading-relaxed text-gray-500 dark:border-white/10 dark:bg-white/[0.03] dark:text-gray-400">
-          You are a {detail.myRole ?? "guest"} in this folder. Only the owner can change its
-          settings.
+        <p className="ui-rise mb-6 text-sm text-muted">
+          You&apos;re {detail.myRole === "editor" ? "an" : "a"} {detail.myRole ?? "guest"} here. Only the owner changes settings.
         </p>
       )}
 
@@ -236,7 +235,7 @@ export default function FolderManagePanel({
           <div className="space-y-3">
             <Toggle
               label="Public"
-              hint="Anyone signed in can find this folder in search. The files inside stay members-only either way, and joining always means asking you."
+              hint="Anyone signed in can find it. Files stay members-only; joining needs your OK."
               checked={draft.visibility === "public"}
               disabled={busy}
               onChange={(v) =>
@@ -244,7 +243,7 @@ export default function FolderManagePanel({
               }
             />
             <div>
-              <label className="mb-1.5 block text-xs font-medium text-gray-500 dark:text-gray-400">
+              <label className="mb-1.5 block text-sm font-medium text-ink">
                 Description
               </label>
               <textarea
@@ -274,7 +273,7 @@ export default function FolderManagePanel({
                 }
                 className="ui-btn ui-btn-sm ui-btn-primary"
               >
-                Save changes
+                Save
               </button>
               <button
                 disabled={busy || !settingsDirty}
@@ -289,9 +288,7 @@ export default function FolderManagePanel({
                 Discard
               </button>
               {settingsDirty && (
-                <span className="ui-rise text-xs text-amber-600 dark:text-amber-300">
-                  Unsaved changes
-                </span>
+                <span className="ui-rise text-xs text-warn">Unsaved</span>
               )}
             </div>
           </div>
@@ -303,7 +300,8 @@ export default function FolderManagePanel({
           value={memberQuery}
           onChange={(e) => setMemberQuery(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && submitMemberSearch()}
-          placeholder="Search members by username — press Enter"
+          placeholder="Search members"
+          aria-label="Search members by username, then press Enter"
           className="ui-field ui-field-sm mb-3"
         />
         {members.length === 0 ? (
@@ -334,7 +332,7 @@ export default function FolderManagePanel({
           </div>
         )}
         {memberTotal > PAGE && (
-          <div className="mt-3 flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+          <div className="mt-3 flex items-center gap-2 text-xs text-muted">
             <button
               disabled={memberOffset === 0}
               onClick={() => setMemberOffset(Math.max(0, memberOffset - PAGE))}
@@ -358,22 +356,20 @@ export default function FolderManagePanel({
 
       {canManage && (
         <Section title="Invite someone" index={2}>
-          <p className="mb-4 max-w-prose text-xs leading-relaxed text-gray-500 dark:text-gray-400">
-            You can invite people who follow you. That is what stops unsolicited
-            invitations, so someone who has not followed you will not appear here.
-          </p>
+          <p className="mb-3 text-xs text-muted">Only people who follow you can be invited.</p>
           <input
             value={followerQuery}
             onChange={(e) => setFollowerQuery(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && setFollowerSearch(followerQuery.trim())}
-            placeholder="Search your followers — press Enter"
+            placeholder="Search followers"
+            aria-label="Search your followers, then press Enter"
             className="ui-field ui-field-sm mb-2"
           />
           {followers.length === 0 ? (
             <Empty>
               {followerSearch
                 ? "No follower matches."
-                : "Nobody follows you yet, so there is no one to invite."}
+                : "No followers yet."}
             </Empty>
           ) : (
             <div className="flex gap-2">
@@ -382,7 +378,7 @@ export default function FolderManagePanel({
                 onChange={(e) => setInviteName(e.target.value)}
                 className="ui-field ui-field-sm min-w-0 flex-1"
               >
-                <option value="">Choose a follower...</option>
+                <option value="">Choose a follower</option>
                 {followers
                   .filter((f) => !members.some((m) => m.userId === f.userId))
                   .map((f) => (
@@ -419,7 +415,7 @@ export default function FolderManagePanel({
             </div>
           )}
           {invitations.length > 0 && (
-            <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+            <p className="mt-2 text-xs text-muted">
               Pending: {invitations.map((i) => i.inviteeUsername).join(", ")}
             </p>
           )}
@@ -436,12 +432,12 @@ export default function FolderManagePanel({
                 <div
                   key={r.id}
                   style={{ animationDelay: `${Math.min(i, 8) * 25}ms` }}
-                  className="ui-rise flex items-center gap-3 rounded-md border border-black/10 px-3 py-2.5 transition-colors duration-150 ease-out hover:border-black/20 dark:border-white/10 dark:hover:border-white/20"
+                  className="ui-rise flex items-center gap-3 rounded-md border border-line px-3 py-2.5 transition-colors duration-150 ease-out hover:border-ink/25"
                 >
                   <div className="min-w-0 flex-1">
-                    <div className="text-sm text-gray-900 dark:text-gray-100">{r.username}</div>
+                    <div className="text-sm text-ink">{r.username}</div>
                     {r.message && (
-                      <p className="truncate text-xs text-gray-500 dark:text-gray-400">
+                      <p className="truncate text-xs text-muted">
                         {r.message}
                       </p>
                     )}
@@ -510,10 +506,7 @@ export default function FolderManagePanel({
         )}
 
         {canManage && (
-          <p className="mb-4 max-w-prose text-xs leading-relaxed text-gray-500 dark:text-gray-400">
-            Topics help people find this folder in Discover. They don't grant access —
-            joining still goes through a request or an invitation.
-          </p>
+          <p className="mb-3 text-xs text-muted">Topics help people find it. They don&apos;t grant access.</p>
         )}
 
         {canManage && (
@@ -553,14 +546,10 @@ export default function FolderManagePanel({
       {canManage && (
         <Section title="Danger zone" tone="danger" index={5}>
           <div>
-            <p className="mb-1 text-sm font-medium text-gray-900 dark:text-gray-100">
-              Transfer ownership
-            </p>
-            <p className="mb-3 max-w-prose text-xs leading-relaxed text-gray-500 dark:text-gray-400">
-              The new owner must already be a member. You stay in the folder as an editor.
-            </p>
+            <p className="mb-1 text-sm font-semibold text-ink">Transfer ownership</p>
+            <p className="mb-3 text-xs text-muted">To a member. You stay as an editor.</p>
             {transferable.length === 0 ? (
-              <Empty>Invite someone first — there is no one to transfer to.</Empty>
+              <Empty>No other members yet.</Empty>
             ) : (
               <div className="mb-4 flex flex-wrap items-center gap-2">
                 <select
@@ -568,7 +557,7 @@ export default function FolderManagePanel({
                   onChange={(e) => setTransferTo(e.target.value)}
                   className="ui-field ui-field-sm min-w-0 flex-1"
                 >
-                  <option value="">Choose a member...</option>
+                  <option value="">Choose a member</option>
                   {transferable.map((m) => (
                     <option key={m.userId} value={m.userId}>
                       {m.username}
@@ -585,13 +574,8 @@ export default function FolderManagePanel({
               </div>
             )}
 
-            <p className="mb-1 mt-6 border-t border-red-500/20 pt-6 text-sm font-medium text-gray-900 dark:text-gray-100">
-              Delete folder
-            </p>
-            <p className="mb-3 max-w-prose text-xs leading-relaxed text-gray-500 dark:text-gray-400">
-              Removes the folder and every file in it, on this device and everywhere it
-              has synced.
-            </p>
+            <p className="mb-1 mt-6 border-t border-line pt-6 text-sm font-semibold text-ink">Delete folder</p>
+            <p className="mb-3 text-xs text-muted">Deletes the folder and every file in it, for everyone.</p>
             <button
               disabled={busy}
               onClick={() => setConfirming({ kind: "delete" })}
@@ -686,7 +670,7 @@ function BackControl({ onClose, className = "" }: { onClose?: () => void; classN
     return (
       <button
         onClick={onClose}
-        className={`ui-btn ui-btn-sm ui-btn-ghost font-normal text-blue-600 dark:text-blue-400 ${className}`}
+        className={`ui-btn ui-btn-sm ui-btn-ghost font-normal text-accent ${className}`}
       >
         Back to notes
       </button>
@@ -695,7 +679,7 @@ function BackControl({ onClose, className = "" }: { onClose?: () => void; classN
   return (
     <a
       href="/vault"
-      className={`ui-focus rounded text-sm text-blue-600 transition-colors duration-150 ease-out hover:text-blue-500 dark:text-blue-400 ${className}`}
+      className={`ui-focus rounded text-sm text-accent transition-colors duration-150 ease-out hover:text-accent/80 ${className}`}
     >
       Back to vault
     </a>
@@ -703,10 +687,8 @@ function BackControl({ onClose, className = "" }: { onClose?: () => void; classN
 }
 
 /**
- * One panel of the console. Cards rather than a single long form: the console
- * is six unrelated concerns stacked, and the borders are what stop it reading
- * as one dense sheet. `tone="danger"` only changes the border colour; `index`
- * staggers its entrance so the console assembles instead of appearing.
+ * One section of the console: a ruled row, its title in the left column.
+ * `tone="danger"` writes the title in red pen; `index` staggers its entrance.
  */
 function Section({
   title,
@@ -722,22 +704,10 @@ function Section({
   return (
     <section
       style={{ animationDelay: `${Math.min(index, 6) * 40}ms` }}
-      className={`ui-rise mb-4 rounded-lg border p-5 transition-colors duration-150 ease-out ${
-        tone === "danger"
-          ? "border-red-500/30 bg-red-500/[0.02] hover:border-red-500/50"
-          : "border-black/10 bg-black/[0.01] hover:border-black/20 dark:border-white/10 dark:bg-white/[0.02] dark:hover:border-white/20"
-      }`}
+      className="ui-rise grid gap-x-8 gap-y-3 border-t border-line py-7 sm:grid-cols-[10rem_minmax(0,1fr)]"
     >
-      <h2
-        className={`mb-4 text-xs font-semibold uppercase tracking-wide ${
-          tone === "danger"
-            ? "text-red-600 dark:text-red-400"
-            : "text-gray-500 dark:text-gray-400"
-        }`}
-      >
-        {title}
-      </h2>
-      {children}
+      <h2 className={`text-sm font-semibold ${tone === "danger" ? "text-danger" : "text-ink"}`}>{title}</h2>
+      <div className="min-w-0">{children}</div>
     </section>
   );
 }
@@ -766,11 +736,11 @@ function Toggle({
         checked={checked}
         disabled={disabled}
         onChange={(e) => onChange(e.target.checked)}
-        className="ui-focus mt-0.5 h-4 w-4 shrink-0 rounded accent-blue-600"
+        className="ui-focus mt-0.5 h-4 w-4 shrink-0 rounded accent-[rgb(var(--accent))]"
       />
       <span>
-        <span className="block text-sm font-medium text-gray-900 dark:text-gray-100">{label}</span>
-        <span className="mt-0.5 block max-w-prose text-xs leading-relaxed text-gray-500 dark:text-gray-400">
+        <span className="block text-sm font-medium text-ink">{label}</span>
+        <span className="mt-0.5 block text-xs text-muted">
           {hint}
         </span>
       </span>

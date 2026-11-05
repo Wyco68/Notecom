@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Avatar from "@/components/collab/Avatar";
+import CloseIcon from "@/components/icons/CloseIcon";
 import SearchIcon from "@/components/icons/SearchIcon";
 import PanelHeader from "@/components/layout/PanelHeader";
 import { SkeletonRows } from "@/components/layout/Skeleton";
@@ -57,33 +58,24 @@ export default function PeoplePanel({ onClose }: { onClose?: () => void }) {
     <div className="mx-auto max-w-3xl p-4 sm:p-8">
       <PanelHeader
         title="People"
-        subtitle="Everyone you follow, and everyone following you."
         onClose={onClose}
       />
 
       {needsAuth ? (
-        <div className="py-16 text-center">
-          <p className="mb-3 ui-empty">
-            Your session expired — sign in again to search your network.
-          </p>
+        <div className="py-10">
+          <p className="mb-3 ui-empty">Session expired.</p>
           <a href="/auth/sign-in?next=/people" className="ui-btn ui-btn-primary px-4">
             Sign in
           </a>
         </div>
       ) : (
         <>
-          <p className="mb-4 max-w-prose text-xs leading-relaxed text-gray-500 dark:text-gray-400">
-            Following someone puts the public folders they publish in your Home feed
-            and lets them invite you to folders, once they accept. Requests you
-            receive wait for you in Notifications.
-          </p>
-
           <div className="mb-6 flex gap-2">
             <input
               value={followName}
               onChange={(e) => setFollowName(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && doFollow()}
-              placeholder="Follow by exact username"
+              placeholder="Follow a username"
               className="ui-field ui-field-sm min-w-0 flex-1"
             />
             <button
@@ -95,15 +87,15 @@ export default function PeoplePanel({ onClose }: { onClose?: () => void }) {
             </button>
           </div>
 
-          <div className="mb-4 flex gap-1 border-b border-black/10 dark:border-white/10">
+          <div className="mb-4 flex gap-1 border-b border-line">
             {(["following", "followers"] as const).map((d) => (
               <button
                 key={d}
                 onClick={() => setDirection(d)}
-                className={`ui-focus -mb-px border-b-2 px-3 py-2 text-sm font-medium transition-colors duration-150 ease-out ${
+                className={`ui-focus -mb-px border-b-2 px-3 py-2 text-sm transition-colors duration-150 ease-out ${
                   direction === d
-                    ? "border-blue-600 text-blue-700 dark:border-blue-500 dark:text-blue-300"
-                    : "border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                    ? "border-accent font-semibold text-ink"
+                    : "border-transparent text-muted hover:text-ink"
                 }`}
               >
                 {d === "following" ? "You follow" : "Follows you"}
@@ -239,17 +231,18 @@ function PeopleSearch({
     <div>
       <div className="mb-3 flex items-center gap-2">
         <div className="ui-field flex flex-1 items-center gap-2 px-2.5 py-1.5">
-          <SearchIcon className="h-3.5 w-3.5 shrink-0 text-gray-400" />
+          <SearchIcon className="h-3.5 w-3.5 shrink-0 text-muted" />
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && submit()}
-            placeholder="Search by username — press Enter"
-            className="w-full bg-transparent text-sm text-gray-800 outline-none placeholder:text-gray-400 dark:text-gray-200 dark:placeholder:text-gray-500"
+            placeholder="Search usernames"
+            aria-label="Search usernames, then press Enter"
+            className="w-full bg-transparent text-sm text-ink outline-none placeholder:text-muted"
           />
           {submitted && (
-            <button onClick={clear} title="Clear search" className="ui-icon-btn h-5 w-5 text-xs">
-              ✕
+            <button onClick={clear} title="Clear search" aria-label="Clear search" className="ui-icon-btn h-5 w-5">
+              <CloseIcon className="h-3.5 w-3.5" />
             </button>
           )}
         </div>
@@ -258,19 +251,11 @@ function PeopleSearch({
       {loading ? (
         <SkeletonRows rows={4} lines={1} />
       ) : error ? (
-        <p className="py-8 text-center text-sm text-red-600 dark:text-red-400">
-          Search failed — {error}
-        </p>
+        <p className="py-6 text-sm text-danger">Search failed: {error}</p>
       ) : !submitted ? (
-        <p className="py-8 text-center ui-empty">
-          {direction === "following"
-            ? "Search who you follow by username."
-            : "Search who follows you by username."}
-        </p>
+        <p className="py-6 ui-empty">{direction === "following" ? "Search who you follow." : "Search who follows you."}</p>
       ) : people.length === 0 ? (
-        <p className="py-8 text-center ui-empty">
-          Nobody matches &quot;{submitted}&quot;.
-        </p>
+        <p className="py-6 ui-empty">Nobody matches &quot;{submitted}&quot;.</p>
       ) : (
         <ul className="-mx-1.5">
           {people.map((p, i) => (
@@ -280,13 +265,13 @@ function PeopleSearch({
               className="ui-rise ui-row group flex items-center gap-2.5 px-1.5 py-1.5"
             >
               <Avatar username={p.username} avatarUrl={p.avatarUrl} size={6} />
-              <span className="min-w-0 flex-1 truncate text-sm text-gray-700 dark:text-gray-200">
+              <span className="min-w-0 flex-1 truncate text-sm text-ink-2">
                 {p.username}
               </span>
               <button
                 onClick={() => act(p.userId)}
                 disabled={busy === p.userId}
-                className="ui-btn ui-btn-xs ui-reveal shrink-0 font-normal text-gray-500 hover:bg-red-500/10 hover:text-red-600 dark:hover:text-red-400"
+                className="ui-btn ui-btn-xs ui-reveal shrink-0 font-normal text-muted hover:bg-ink/[0.06] hover:text-ink"
               >
                 {direction === "following" ? "Unfollow" : "Remove"}
               </button>
@@ -296,7 +281,7 @@ function PeopleSearch({
       )}
 
       {total > PAGE && (
-        <div className="mt-3 flex items-center gap-2 text-xs tabular-nums text-gray-500 dark:text-gray-400">
+        <div className="mt-3 flex items-center gap-2 text-xs tabular-nums text-muted">
           <button
             disabled={offset === 0}
             onClick={() => goToOffset(Math.max(0, offset - PAGE))}

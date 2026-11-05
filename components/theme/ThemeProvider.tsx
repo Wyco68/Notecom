@@ -14,7 +14,9 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   // with it, rather than guessing at it during the initial render (which is
   // what caused a hydration mismatch on anything that renders differently
   // per theme, e.g. ThemeToggle's icon).
-  const [theme, setTheme] = useState<Theme>("dark");
+  // Null until mounted: writing the class back before the real theme is read
+  // flashed the dark theme over a light page on every load.
+  const [theme, setTheme] = useState<Theme | null>(null);
 
   useEffect(() => {
     const actual = document.documentElement.classList.contains("dark") ? "dark" : "light";
@@ -22,6 +24,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
+    if (!theme) return;
     document.documentElement.classList.toggle("dark", theme === "dark");
     localStorage.setItem("theme", theme);
   }, [theme]);
@@ -30,7 +33,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     setTheme((t) => (t === "dark" ? "light" : "dark"));
   }
 
-  return <ThemeContext.Provider value={{ theme, toggle }}>{children}</ThemeContext.Provider>;
+  return <ThemeContext.Provider value={{ theme: theme ?? "dark", toggle }}>{children}</ThemeContext.Provider>;
 }
 
 export function useTheme() {

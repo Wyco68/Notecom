@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { headers } from "next/headers";
-import { Geist, Geist_Mono } from "next/font/google";
+import { JetBrains_Mono, Public_Sans } from "next/font/google";
 import "./globals.css";
 import { ToastProvider } from "@/components/toast/ToastProvider";
 import { ThemeProvider } from "@/components/theme/ThemeProvider";
@@ -8,8 +8,8 @@ import { ThemeProvider } from "@/components/theme/ThemeProvider";
 // Self-hosted at build time by next/font, so no request ever leaves the page
 // for a font file — which is also what keeps them inside the CSP's
 // `font-src 'self'` (middleware.ts) without widening it to Google's origins.
-const sans = Geist({ subsets: ["latin"], variable: "--font-sans", display: "swap" });
-const mono = Geist_Mono({ subsets: ["latin"], variable: "--font-mono", display: "swap" });
+const sans = Public_Sans({ subsets: ["latin"], variable: "--font-sans", display: "swap" });
+const mono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-mono", display: "swap" });
 
 export const metadata: Metadata = {
   // A page that sets its own title reads "Account · Notecom"; the vault and
@@ -62,7 +62,7 @@ export default async function RootLayout({
             file, already authorized by the CSP's script-src 'self' alone. */}
         <script src="/theme-init.js" />
       </head>
-      <body className="bg-white font-sans text-gray-900 antialiased dark:bg-[#0d1117] dark:text-[#e6edf3]">
+      <body className="font-sans antialiased">
         {/* First thing in the tab order, visible only once focused: a keyboard
             reader shouldn't have to walk the whole sidebar tree to reach the
             document. Every page that has a main region marks it `#main`. */}

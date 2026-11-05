@@ -8,7 +8,7 @@ import RenameModal from "../modals/RenameModal";
 import TrashIcon from "../icons/TrashIcon";
 import EditIcon from "../icons/EditIcon";
 import StarIcon from "../icons/StarIcon";
-import QuizIcon from "../icons/QuizIcon";
+import ChevronIcon from "../icons/ChevronIcon";
 import SheetIcon from "../icons/SheetIcon";
 import ShareIcon from "../icons/ShareIcon";
 import { useToast } from "../toast/ToastProvider";
@@ -23,7 +23,7 @@ const COLLAB_ENABLED = !!process.env.NEXT_PUBLIC_SUPABASE_URL;
 function SeqBadge({ seq }: { seq: number }) {
   if (!Number.isFinite(seq) || seq <= 0) return null;
   return (
-    <span className="shrink-0 tabular-nums text-xs text-gray-500 dark:text-gray-500">
+    <span data-numeric className="shrink-0 text-xs leading-5 text-muted">
       {String(seq).padStart(2, "0")}
     </span>
   );
@@ -157,20 +157,19 @@ export default function FileTreeNode({
       <div className="group flex items-center">
         <button
           onClick={() => setOpen((o) => !o)}
-          className="ui-row flex min-w-0 flex-1 items-start gap-1.5 px-2 py-1.5 text-left text-sm text-gray-800 dark:text-gray-200"
+          aria-expanded={open}
+          className="ui-row flex min-w-0 flex-1 items-start gap-1.5 px-2 py-1.5 text-left text-sm text-ink"
         >
           {/* One glyph that rotates, rather than two that swap: a transform
               animates, a different character can only cut. */}
-          <span
-            className={`inline-block text-gray-500 transition-transform duration-150 ease-out ${
+          <ChevronIcon
+            className={`mt-0.5 h-4 w-4 shrink-0 text-muted transition-transform duration-150 ease-out ${
               open ? "rotate-90" : ""
             }`}
-          >
-            ▸
-          </span>
+          />
           {/* Wraps rather than truncates: a folder name is how you find the
               folder, and the sidebar never scrolls sideways. */}
-          <span className="break-words font-medium">{folder.displayName}</span>
+          <span className="break-words font-semibold">{folder.displayName}</span>
         </button>
         {/* Opens the sharing console in the content column when the shell
             offers that, and navigates only as a fallback — a button that
@@ -224,7 +223,7 @@ export default function FileTreeNode({
           animation is opacity and transform only — animating the height here
           would reflow every row below it. */}
       {open && (
-        <div className="ui-rise ml-4 border-l border-black/10 pl-2 dark:border-white/10">
+        <div className="ui-rise ml-[1.05rem] border-l border-cover-line pb-1 pl-1.5">
           {/* Not yet fetched is not the same as empty: placeholder rows while
               the request is out, so the folder never reads as "No lessons yet"
               for a folder that has some. */}
@@ -234,7 +233,7 @@ export default function FileTreeNode({
             lessons.length === 0 &&
             quizzes.length === 0 &&
             sheets.length === 0 && (
-              <p className="px-2 py-1 text-xs text-gray-500">No lessons yet</p>
+              <p className="px-2 py-1 text-sm text-muted">Empty</p>
             )
           )}
           {lessons.map((lesson, i) => {
@@ -250,10 +249,8 @@ export default function FileTreeNode({
               >
                 <button
                   onClick={() => onSelect({ folder: folder.name, id: lesson.id, kind: "lesson" })}
-                  className={`ui-row flex min-w-0 flex-1 items-start gap-1.5 px-2 py-1 text-left text-sm ${
-                    isActive
-                      ? "bg-blue-600/10 text-blue-700 dark:bg-blue-600/20 dark:text-blue-300"
-                      : "text-gray-700 dark:text-gray-300"
+                  className={`ui-row flex min-w-0 flex-1 items-start gap-2 px-2 py-1 text-left text-sm ${
+                    isActive ? "ui-row-on" : "text-ink-2"
                   }`}
                   title={lesson.title}
                 >
@@ -275,7 +272,7 @@ export default function FileTreeNode({
                   }
                   className={`ui-icon-btn mr-1 h-5 w-5 ${
                     favorites.has(`lesson:${folder.name}:${lesson.id}`)
-                      ? "text-amber-500 hover:text-amber-500 dark:text-amber-500 dark:hover:text-amber-400"
+                      ? "text-warn hover:text-warn"
                       : "ui-reveal"
                   }`}
                 >
@@ -309,9 +306,7 @@ export default function FileTreeNode({
           })}
 
           {quizzes.length > 0 && (
-            <p className="px-2 pt-2 pb-1 ui-section-title">
-              Quizzes
-            </p>
+            <p className="px-2 pb-1 pt-2.5 ui-section-title">Quizzes</p>
           )}
           {quizzes.map((quiz, i) => {
             const isActive =
@@ -326,14 +321,11 @@ export default function FileTreeNode({
               >
                 <button
                   onClick={() => onSelect({ folder: folder.name, id: quiz.id, kind: "quiz" })}
-                  className={`ui-row flex min-w-0 flex-1 items-start gap-1.5 px-2 py-1 text-left text-sm ${
-                    isActive
-                      ? "bg-blue-600/10 text-blue-700 dark:bg-blue-600/20 dark:text-blue-300"
-                      : "text-gray-700 dark:text-gray-300"
+                  className={`ui-row flex min-w-0 flex-1 items-start gap-2 px-2 py-1 text-left text-sm ${
+                    isActive ? "ui-row-on" : "text-ink-2"
                   }`}
                   title={quiz.title}
                 >
-                  <QuizIcon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-gray-400" />
                   <SeqBadge seq={quiz.seq} />
                   <span className="break-words">{quiz.title}</span>
                 </button>
@@ -352,7 +344,7 @@ export default function FileTreeNode({
                   }
                   className={`ui-icon-btn mr-1 h-5 w-5 ${
                     favorites.has(`quiz:${folder.name}:${quiz.id}`)
-                      ? "text-amber-500 hover:text-amber-500 dark:text-amber-500 dark:hover:text-amber-400"
+                      ? "text-warn hover:text-warn"
                       : "ui-reveal"
                   }`}
                 >
@@ -385,7 +377,7 @@ export default function FileTreeNode({
             );
           })}
 
-          {sheets.length > 0 && <p className="px-2 pt-2 pb-1 ui-section-title">Cheatsheets</p>}
+          {sheets.length > 0 && <p className="px-2 pb-1 pt-2.5 ui-section-title">Cheatsheets</p>}
           {sheets.map((sheet, i) => {
             const ref = { folder: folder.name, id: sheet.id, kind: "sheet" as const };
             const key = `sheet:${folder.name}:${sheet.id}`;
@@ -399,14 +391,12 @@ export default function FileTreeNode({
               >
                 <button
                   onClick={() => onSelect(ref)}
-                  className={`ui-row flex min-w-0 flex-1 items-start gap-1.5 px-2 py-1 text-left text-sm ${
-                    isActive
-                      ? "bg-blue-600/10 text-blue-700 dark:bg-blue-600/20 dark:text-blue-300"
-                      : "text-gray-700 dark:text-gray-300"
+                  className={`ui-row flex min-w-0 flex-1 items-start gap-2 px-2 py-1 text-left text-sm ${
+                    isActive ? "ui-row-on" : "text-ink-2"
                   }`}
                   title={sheet.title}
                 >
-                  <SheetIcon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-gray-400" />
+                  <SheetIcon className="mt-0.5 h-3.5 w-3.5 shrink-0 opacity-70" />
                   <span className="break-words">{sheet.title}</span>
                 </button>
                 <button
@@ -417,7 +407,7 @@ export default function FileTreeNode({
                   title={favorites.has(key) ? "Remove from favorites" : "Add to favorites"}
                   className={`ui-icon-btn mr-1 h-5 w-5 ${
                     favorites.has(key)
-                      ? "text-amber-500 hover:text-amber-500 dark:text-amber-500 dark:hover:text-amber-400"
+                      ? "text-warn hover:text-warn"
                       : "ui-reveal"
                   }`}
                 >

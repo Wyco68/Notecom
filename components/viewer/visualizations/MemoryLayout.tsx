@@ -15,13 +15,13 @@ export default function MemoryLayout({ data }: { data: MemoryLayoutData }) {
       transition={{ duration: 0.3, ease: "easeOut" }}
       className="not-prose my-6 flex justify-center"
     >
-      <div className="w-64 overflow-hidden rounded-lg border border-blue-300 bg-blue-50 dark:border-blue-800/50 dark:bg-blue-950/20">
+      <div className="w-64 overflow-hidden rounded-md border border-line">
         {title && (
-          <p className="border-b border-blue-200 py-2 text-center text-xs font-semibold uppercase tracking-wide text-blue-600 dark:border-blue-800/40 dark:text-blue-400">
+          <p className="border-b border-line py-2 text-center ui-section-title">
             {title}
           </p>
         )}
-        <p className="px-3 pt-1 text-right text-[10px] text-blue-400/60 dark:text-blue-600/60">
+        <p className="px-3 pt-1 text-right text-[10px] text-muted">
           High Address ▲
         </p>
         <div className="flex flex-col gap-0.5 px-1 pb-1">
@@ -31,20 +31,20 @@ export default function MemoryLayout({ data }: { data: MemoryLayoutData }) {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ delay: i * 0.05 }}
-              className="flex items-center justify-between rounded border border-blue-400/60 bg-white px-3 py-1.5 dark:border-blue-600/40 dark:bg-blue-900/20"
+              className="flex items-center justify-between rounded border border-line bg-cover/60 px-3 py-1.5"
             >
-              <span className="text-sm font-semibold text-blue-900 dark:text-blue-100">
+              <span className="text-sm font-semibold text-ink">
                 {seg.name}
               </span>
               {(seg.size ?? seg.note) && (
-                <span className="ml-3 text-xs text-blue-500/70 dark:text-blue-400/60">
+                <span className="ml-3 text-xs text-muted">
                   {[seg.size, seg.note].filter(Boolean).join(" · ")}
                 </span>
               )}
             </motion.div>
           ))}
         </div>
-        <p className="px-3 pb-1 text-right text-[10px] text-blue-400/60 dark:text-blue-600/60">
+        <p className="px-3 pb-1 text-right text-[10px] text-muted">
           ▼ Low Address
         </p>
       </div>

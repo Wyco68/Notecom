@@ -106,8 +106,8 @@ export default function ProfilePanel({
             ] as const
           ).map(([label, n]) => (
             <div key={label}>
-              <dd className="font-semibold tabular-nums text-gray-900 dark:text-gray-100">{n}</dd>
-              <dt className="text-xs text-gray-500 dark:text-gray-400">{label}</dt>
+              <dd className="font-semibold tabular-nums text-ink">{n}</dd>
+              <dt className="text-xs text-muted">{label}</dt>
             </div>
           ))}
         </dl>
@@ -124,13 +124,13 @@ export default function ProfilePanel({
         )}
       </div>
 
-      <h2 className="ui-section-title mb-3">Folders</h2>
+      <h2 className="mb-3 text-sm font-semibold text-ink">Folders</h2>
       {folders === null ? (
         <SkeletonCard lines={2} />
       ) : folders.length === 0 ? (
         <p className="ui-empty">No folders you can see yet.</p>
       ) : (
-        <div className="grid gap-3">
+        <div className="ui-cells sm:grid-cols-2">
           {folders.map((f) => (
             <FolderCard key={f.id} folder={f} onJoined={onJoined} />
           ))}

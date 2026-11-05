@@ -36,8 +36,8 @@ const KIND_LABEL: Record<NotificationKind, string> = {
 // app: blue for a folder role, neutral for a follow, which grants nothing on
 // its own.
 const KIND_TONE: Record<NotificationKind, string> = {
-  invitation: "border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-300",
-  follow: "border-black/10 bg-black/5 text-gray-600 dark:border-white/10 dark:bg-white/5 dark:text-gray-300",
+  invitation: "border-accent/40 text-accent",
+  follow: "border-line text-muted",
 };
 
 export default function NotificationsPanel({
@@ -60,12 +60,12 @@ export default function NotificationsPanel({
     <div className="mx-auto max-w-3xl p-4 sm:p-8">
       <PanelHeader
         title="Notifications"
-        subtitle="Everything waiting on an answer. Accepting an invitation is what adds its folder to your vault."
+        subtitle="Accepting an invitation adds its folder to your notes."
         badge={
           count > 0 ? (
             <span
               data-numeric
-              className="ui-badge border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-300"
+              className="ui-badge border-accent/40 bg-accent/10 text-accent"
             >
               {count}
             </span>
@@ -117,10 +117,8 @@ export default function NotificationsPanel({
               rendering two thirds of an inbox is how a pending invitation goes
               unanswered. */}
           {failedKinds.size > 0 && (
-            <div className="ui-card mb-3 flex flex-wrap items-center justify-between gap-2 px-3 py-2.5">
-              <p className="text-xs text-amber-700 dark:text-amber-300">
-                Couldn&apos;t load {listKinds(failedKinds)} — this list may be incomplete.
-              </p>
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <p className="text-sm text-warn">Couldn&apos;t load {listKinds(failedKinds)}. This list may be incomplete.</p>
               <button
                 onClick={() => refresh()}
                 className="ui-btn ui-btn-xs ui-btn-secondary font-normal"
@@ -129,7 +127,7 @@ export default function NotificationsPanel({
               </button>
             </div>
           )}
-        <ul className="space-y-3">
+        <ul className="border-t border-line">
           {items.map((item, i) => (
             <li
               key={item.id}
@@ -164,14 +162,10 @@ function listKinds(kinds: Set<NotificationKind>): string {
 }
 
 function EmptyState({ onOpenDiscover }: { onOpenDiscover?: () => void }) {
-  const cls = "ui-btn ui-btn-sm ui-btn-secondary mt-5 font-normal";
+  const cls = "ui-btn ui-btn-sm ui-btn-text -ml-1 mt-2";
   return (
-    <div className="ui-card flex flex-col items-center px-6 py-14 text-center">
-      <BellIcon className="mb-3 h-6 w-6 text-gray-400 dark:text-gray-600" />
+    <div className="py-2">
       <p className="ui-empty">Nothing waiting on you.</p>
-      <p className="mt-1 max-w-sm text-xs text-gray-400 dark:text-gray-500">
-        Folder invitations and follow requests land here.
-      </p>
       {/* A button inside the shell, where Discover opens in place; a link only
           on the standalone route, where it genuinely has to navigate.
           Navigating out of the workspace would tear down the tree, the open
@@ -202,7 +196,7 @@ function NotificationRow({
   const { face, title, detail } = describe(item);
 
   return (
-    <article className="ui-card ui-card-hover p-4">
+    <article className="border-b border-line py-4">
       <div className="flex items-start gap-3">
         {/* `flex`, not a bare inline span: Avatar's root is a <span> whose
             own h-8/w-8 only take effect once something makes it block-level,
@@ -215,9 +209,9 @@ function NotificationRow({
             <span className={`ui-badge ${KIND_TONE[item.kind]}`}>{KIND_LABEL[item.kind]}</span>
             <RelativeTime iso={item.createdAt} />
           </div>
-          <p className="text-sm text-gray-900 dark:text-gray-100">{title}</p>
+          <p className="text-sm text-ink">{title}</p>
           {detail && (
-            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{detail}</p>
+            <p className="mt-1 text-xs text-muted">{detail}</p>
           )}
         </div>
 
@@ -322,7 +316,7 @@ function RelativeTime({ iso }: { iso: string }) {
     <time
       dateTime={iso}
       title={then.toLocaleString()}
-      className="text-xs text-gray-400 dark:text-gray-500"
+      className="text-xs text-muted"
     >
       {new Intl.RelativeTimeFormat(undefined, { numeric: "auto" }).format(-value, unit)}
     </time>

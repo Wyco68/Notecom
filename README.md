@@ -1,7 +1,7 @@
 # Notecom
 
 Turn lecture slides and PDFs into clear, plain-language study notes — read,
-searched, and shared with classmates, in a code-editor-style reader.
+searched, and shared with classmates, in a clean, minimal reader.
 
 Content is written by **Claude Code** (`/lect`, `/quiz`), grounded strictly in
 the file you give it. The app itself only reads, organizes, and shares what

@@ -13,10 +13,10 @@ export default function Timeline({ data }: { data: TimelineData }) {
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3, ease: "easeOut" }}
-      className="not-prose my-6 rounded-lg border border-blue-300 bg-blue-50 p-5 dark:border-blue-800/50 dark:bg-blue-950/20"
+      className="not-prose my-6 rounded-md border border-line p-5"
     >
       {title && (
-        <p className="mb-4 text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
+        <p className="mb-4 ui-section-title">
           {title}
         </p>
       )}
@@ -24,17 +24,17 @@ export default function Timeline({ data }: { data: TimelineData }) {
         {items.map((item, i) => (
           <div key={i} className="flex gap-3">
             <div className="flex flex-col items-center">
-              <div className="mt-1 h-3 w-3 flex-shrink-0 rounded-full border-2 border-blue-500 bg-blue-100 dark:bg-blue-900" />
+              <div className="mt-1 h-3 w-3 flex-shrink-0 rounded-full border-2 border-accent bg-paper" />
               {i < items.length - 1 && (
-                <div className="mt-1 min-h-[1.5rem] w-0.5 flex-1 bg-blue-200 dark:bg-blue-800/50" />
+                <div className="mt-1 min-h-[1.5rem] w-px flex-1 bg-line" />
               )}
             </div>
             <div className="pb-4">
-              <div className="text-sm font-semibold text-gray-800 dark:text-gray-100">
+              <div className="text-sm font-semibold text-ink">
                 {item.label}
               </div>
               {item.desc && (
-                <div className="mt-0.5 text-sm leading-relaxed text-gray-600 dark:text-gray-400">
+                <div className="mt-0.5 text-sm leading-relaxed text-muted">
                   {item.desc}
                 </div>
               )}

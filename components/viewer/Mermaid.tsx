@@ -3,57 +3,57 @@
 import { motion } from "framer-motion";
 import { useEffect, useState } from "react";
 
-// Dark theme: background matches computed dark:bg-blue-950/20 over the app's
-// #0d1117 base (~#0f1523). Light text on dark blue — same palette as before.
+// Diagrams use the app palette (app/globals.css): white nodes ruled in blue,
+// pale-blue groups, muted ink for the lines; graphite in dark. Mermaid needs
+// literal colours, so these mirror the tokens.
 const DARK_VARS = {
-  background: "#0f1523",
-  mainBkg: "#1e3a8a",
-  nodeBorder: "#3b82f6",
-  clusterBkg: "#0f172a",
-  clusterBorder: "#1e40af",
-  primaryColor: "#1e3a8a",
-  primaryBorderColor: "#3b82f6",
-  primaryTextColor: "#dbeafe",
-  secondaryColor: "#1d4ed8",
-  secondaryBorderColor: "#60a5fa",
-  secondaryTextColor: "#dbeafe",
-  tertiaryColor: "#0f172a",
-  tertiaryBorderColor: "#1e40af",
-  tertiaryTextColor: "#dbeafe",
-  lineColor: "#60a5fa",
-  textColor: "#dbeafe",
-  titleColor: "#dbeafe",
-  edgeLabelBackground: "#0f1523",
-  noteBkgColor: "#1e3a8a",
-  noteTextColor: "#dbeafe",
-  noteBorderColor: "#3b82f6",
-  fontSize: "19px",
+  background: "#0e0e10",
+  mainBkg: "#18181b",
+  nodeBorder: "#6ea5ff",
+  clusterBkg: "#141416",
+  clusterBorder: "#2c2c31",
+  primaryColor: "#18181b",
+  primaryBorderColor: "#6ea5ff",
+  primaryTextColor: "#ededf0",
+  secondaryColor: "#1f1f23",
+  secondaryBorderColor: "#6ea5ff",
+  secondaryTextColor: "#ededf0",
+  tertiaryColor: "#141416",
+  tertiaryBorderColor: "#2c2c31",
+  tertiaryTextColor: "#ededf0",
+  lineColor: "#9a9aa3",
+  textColor: "#ededf0",
+  titleColor: "#ededf0",
+  edgeLabelBackground: "#0e0e10",
+  noteBkgColor: "#26221a",
+  noteTextColor: "#ededf0",
+  noteBorderColor: "#ecb25a",
+  fontSize: "17px",
 };
 
-// Light theme: background matches bg-blue-50 (#eff6ff). Dark text on light blue.
 const LIGHT_VARS = {
-  background: "#eff6ff",
-  mainBkg: "#bfdbfe",
+  background: "#ffffff",
+  mainBkg: "#ffffff",
   nodeBorder: "#2563eb",
-  clusterBkg: "#dbeafe",
-  clusterBorder: "#93c5fd",
-  primaryColor: "#bfdbfe",
+  clusterBkg: "#f1f5fd",
+  clusterBorder: "#d6e0f2",
+  primaryColor: "#ffffff",
   primaryBorderColor: "#2563eb",
-  primaryTextColor: "#1e3a8a",
-  secondaryColor: "#dbeafe",
-  secondaryBorderColor: "#3b82f6",
-  secondaryTextColor: "#1e40af",
-  tertiaryColor: "#eff6ff",
-  tertiaryBorderColor: "#93c5fd",
-  tertiaryTextColor: "#1e3a8a",
-  lineColor: "#2563eb",
-  textColor: "#1e3a8a",
-  titleColor: "#1e3a8a",
-  edgeLabelBackground: "#eff6ff",
-  noteBkgColor: "#dbeafe",
-  noteTextColor: "#1e40af",
-  noteBorderColor: "#93c5fd",
-  fontSize: "19px",
+  primaryTextColor: "#111827",
+  secondaryColor: "#f1f5fd",
+  secondaryBorderColor: "#2563eb",
+  secondaryTextColor: "#111827",
+  tertiaryColor: "#ffffff",
+  tertiaryBorderColor: "#d6e0f2",
+  tertiaryTextColor: "#111827",
+  lineColor: "#646c7d",
+  textColor: "#111827",
+  titleColor: "#111827",
+  edgeLabelBackground: "#ffffff",
+  noteBkgColor: "#fdf6e7",
+  noteTextColor: "#111827",
+  noteBorderColor: "#965808",
+  fontSize: "17px",
 };
 
 // Re-initialize only when the mode flips, not on every render.
@@ -73,7 +73,7 @@ async function getMermaid(isDark: boolean) {
       // click handlers or inline styling — "loose" was buying no feature,
       // only a stored-XSS surface.
       securityLevel: "strict",
-      fontFamily: "ui-sans-serif, system-ui, sans-serif",
+      fontFamily: "var(--font-sans), ui-sans-serif, system-ui, sans-serif",
       themeVariables: isDark ? DARK_VARS : LIGHT_VARS,
     });
     lastInitMode = isDark;
@@ -127,11 +127,11 @@ export default function Mermaid({ code }: { code: string }) {
 
   if (error) {
     return (
-      <div className="my-5 rounded-md border border-red-300 bg-red-50 p-4 dark:border-red-800/60 dark:bg-red-950/30">
-        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-red-700 dark:text-red-300">
+      <div className="my-5 rounded-md border border-danger/40 bg-danger/[0.06] p-4">
+        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-danger">
           Diagram failed to render
         </p>
-        <pre className="overflow-x-auto text-xs text-red-700 dark:text-red-200">
+        <pre className="overflow-x-auto text-xs text-danger">
           {code.trim()}
         </pre>
       </div>
@@ -140,7 +140,7 @@ export default function Mermaid({ code }: { code: string }) {
 
   if (!svg) {
     return (
-      <div className="my-6 flex h-48 items-center justify-center rounded-md border border-blue-300 bg-blue-50 text-sm text-blue-400 dark:border-blue-800/50 dark:bg-blue-950/20 dark:text-blue-600">
+      <div className="my-6 flex h-48 animate-pulse items-center justify-center rounded-md border border-line text-sm text-muted">
         Rendering diagram...
       </div>
     );
@@ -151,7 +151,7 @@ export default function Mermaid({ code }: { code: string }) {
       initial={{ opacity: 0, scale: 0.98 }}
       animate={{ opacity: 1, scale: 1 }}
       transition={{ duration: 0.3, ease: "easeOut" }}
-      className="mermaid-diagram my-6 overflow-x-auto rounded-md border border-blue-300 bg-blue-50 p-8 dark:border-blue-800/50 dark:bg-blue-950/20"
+      className="mermaid-diagram my-6 overflow-x-auto rounded-md border border-line p-6"
       dangerouslySetInnerHTML={{ __html: svg }}
     />
   );

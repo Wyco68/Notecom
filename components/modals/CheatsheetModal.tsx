@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import type { Folder, Lesson } from "@/lib/vault/types";
 import { LAYOUTS, MAX_COLUMNS, MAX_PAGES, MIN_COLUMNS, layoutFor } from "@/lib/sheet/layout";
 import Modal from "./Modal";
+import FileDrop from "../generate/FileDrop";
 import { JobLog } from "./GenerateModal";
 import { MAX_CONCURRENT_JOBS, useGenerateJobs } from "../generate/GenerateJobsProvider";
 
@@ -99,9 +100,9 @@ export default function CheatsheetModal({
     const savedId = job.saved?.id ?? (job.edit?.docKey || undefined);
     const done = !!savedId;
     return (
-      <Modal title="Cheatsheet" onClose={onClose}>
+      <Modal title="Cheatsheet" onClose={onClose} size="md">
         <JobLog job={job} onAbort={() => abort(job.id)} onSignIn={onSignIn} />
-        <div className="mt-3 flex gap-2">
+        <div className="mt-5 flex gap-2">
           {done ? (
             <button
               onClick={() => onOpenSheet({ folder: job.folder, id: savedId! })}
@@ -111,27 +112,22 @@ export default function CheatsheetModal({
             </button>
           ) : (
             <button onClick={onClose} className="ui-btn ui-btn-sm ui-btn-secondary flex-1">
-              {job.status === "running" ? "Run in background" : "Close"}
+              {job.status === "running" ? "Keep running in background" : "Close"}
             </button>
           )}
           {job.status === "running" && (
             <button onClick={() => abort(job.id)} className="ui-btn ui-btn-sm ui-btn-danger-outline shrink-0">
-              Abort
+              Stop
             </button>
           )}
         </div>
-        {job.status === "running" && (
-          <p className="mt-2 text-center text-xs leading-snug text-gray-500">
-            Closing this keeps the run going — follow it from the sidebar.
-          </p>
-        )}
       </Modal>
     );
   }
 
   const layout = LAYOUTS[layoutFor(pages)];
   const range = lessons?.filter((l) => l.seq >= from && l.seq <= to).length ?? 0;
-  const label = "mb-1.5 block text-xs font-medium text-gray-500 dark:text-gray-400";
+  const label = "mb-1.5 block text-sm font-medium text-ink";
   const chapterOptions = (lessons ?? []).map((l) => (
     <option key={l.id} value={l.seq}>
       {String(l.seq).padStart(2, "0")}. {l.title}
@@ -139,15 +135,15 @@ export default function CheatsheetModal({
   ));
 
   return (
-    <Modal title="Cheatsheet" onClose={onClose}>
+    <Modal title="Cheatsheet" onClose={onClose} size="md">
       <label htmlFor="sheet-folder" className={label}>
-        Subject
+        Folder
       </label>
       <select
         id="sheet-folder"
         value={folder}
         onChange={(e) => setFolder(e.target.value)}
-        className="ui-field mb-4"
+        className="ui-field mb-5"
       >
         {folders.map((f) => (
           <option key={f.name} value={f.name}>
@@ -157,14 +153,14 @@ export default function CheatsheetModal({
       </select>
 
       {lessons === null ? (
-        <p className="ui-empty mb-4">Loading chapters…</p>
+        <p className="ui-empty mb-5">Loading chapters…</p>
       ) : !lessons.length ? (
-        <p className="ui-empty mb-4">This folder has no lessons yet — a cheatsheet is made from its lessons.</p>
+        <p className="ui-empty mb-5">No lessons in this folder yet.</p>
       ) : (
-        <div className="mb-4 grid grid-cols-2 gap-2">
+        <div className="mb-5 grid grid-cols-2 gap-3">
           <div className="min-w-0">
             <label htmlFor="sheet-from" className={label}>
-              From chapter
+              From
             </label>
             <select
               id="sheet-from"
@@ -181,7 +177,7 @@ export default function CheatsheetModal({
           </div>
           <div className="min-w-0">
             <label htmlFor="sheet-to" className={label}>
-              To chapter
+              To
             </label>
             <select
               id="sheet-to"
@@ -199,7 +195,7 @@ export default function CheatsheetModal({
         </div>
       )}
 
-      <div className="mb-1.5 grid grid-cols-2 gap-2">
+      <div className="mb-2 grid grid-cols-2 gap-3">
         <div className="min-w-0">
           <label htmlFor="sheet-pages" className={label}>
             Page limit
@@ -243,50 +239,49 @@ export default function CheatsheetModal({
           </div>
         )}
       </div>
-      <label className="mb-1.5 flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
-        <input type="checkbox" checked={noLimit} onChange={(e) => setNoLimit(e.target.checked)} className="ui-focus" />
-        No page limit — cover everything, as many pages as it takes
+      <label className="mb-1.5 flex items-center gap-2 text-sm text-ink-2">
+        <input
+          type="checkbox"
+          checked={noLimit}
+          onChange={(e) => setNoLimit(e.target.checked)}
+          className="ui-focus h-4 w-4 accent-[rgb(var(--accent))]"
+        />
+        No page limit
       </label>
       <p
         id="sheet-pages-hint"
-        className={`mb-4 text-xs ${pagesValid ? "text-gray-500" : "text-red-600 dark:text-red-400"}`}
+        className={`mb-5 text-xs ${pagesValid ? "text-muted" : "text-danger"}`}
         data-numeric
       >
         {pagesValid ? (
           <>
             {noLimit
               ? `No page limit · ${layout.label}, ${columns || layout.columns} columns, ${layout.font}pt`
-              : `${pages} ${pages === 1 ? "page" : "pages"} · ${layout.label}, columns and font fitted to fill the pages`}
+              : `${pages} ${pages === 1 ? "page" : "pages"} · ${layout.label}, fitted to fill`}
             {range ? ` · ${range} ${range === 1 ? "chapter" : "chapters"}` : ""}
           </>
         ) : (
-          `Enter a whole number of pages from 1 to ${MAX_PAGES}, or tick No page limit.`
+          `Pages: a whole number from 1 to ${MAX_PAGES}.`
         )}
       </p>
 
-      <label htmlFor="sheet-files" className={label}>
-        Slides to check against (optional)
-      </label>
-      <input
-        id="sheet-files"
-        type="file"
-        multiple
-        onChange={(e) => setFiles([...(e.target.files ?? [])])}
-        className="ui-focus mb-5 w-full rounded-md text-sm text-gray-600 file:mr-3 file:cursor-pointer file:rounded-md file:border-0 file:bg-blue-600 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-white file:transition-colors hover:file:bg-blue-500 dark:text-gray-400"
-      />
+      <p className={label}>
+        Slides to check against <span className="font-normal text-muted">(optional)</span>
+      </p>
+      <div className="mb-5">
+        <FileDrop files={files} onChange={setFiles} multiple label="Drop slides or browse" />
+      </div>
 
       <button
         onClick={begin}
         disabled={!lessons?.length || from > to || !pagesValid || starting || atCapacity}
         className="ui-btn ui-btn-primary w-full"
       >
-        {starting ? "Starting..." : "Make cheatsheet with Claude Code"}
+        {starting ? "Starting…" : "Make cheatsheet"}
       </button>
-      <p className="mt-2.5 text-xs leading-snug text-gray-500">
-        {atCapacity
-          ? `Already running ${activeCount} jobs — wait for one to finish.`
-          : "Runs your local Claude Code CLI on your subscription, like /sheet in a terminal. Takes a few minutes and runs in the background."}
-      </p>
+      {atCapacity && (
+        <p className="mt-2 text-center text-xs text-warn">{activeCount} runs going. Wait for one to finish.</p>
+      )}
     </Modal>
   );
 }

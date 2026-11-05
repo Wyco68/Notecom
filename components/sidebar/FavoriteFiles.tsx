@@ -25,7 +25,7 @@ export default function FavoriteFiles({
   if (!entries.length) return null;
 
   return (
-    <div className="border-b border-black/10 px-2 py-2 dark:border-white/10">
+    <div className="px-2 py-2">
       <p className="px-2 pb-1 ui-section-title">
         Favorites
       </p>
@@ -45,16 +45,14 @@ export default function FavoriteFiles({
               onClick={() => onSelect(ref)}
               title={`${entry.title} — ${folderNames?.[entry.folder] ?? entry.folder.replace(/-/g, " ")}`}
               className={`ui-row flex min-w-0 flex-1 items-center gap-1.5 truncate px-2 py-1 text-left text-sm ${
-                isActive
-                  ? "bg-blue-600/10 text-blue-700 dark:bg-blue-600/20 dark:text-blue-300"
-                  : "text-gray-700 dark:text-gray-300"
+                isActive ? "ui-row-on" : "text-ink-2"
               }`}
             >
               {entry.kind === "quiz" && (
-                <QuizIcon className="h-3.5 w-3.5 shrink-0 text-gray-400" />
+                <QuizIcon className="h-3.5 w-3.5 shrink-0 text-muted" />
               )}
               {entry.kind === "sheet" && (
-                <SheetIcon className="h-3.5 w-3.5 shrink-0 text-gray-400" />
+                <SheetIcon className="h-3.5 w-3.5 shrink-0 text-muted" />
               )}
               <span className="truncate">{entry.title}</span>
             </button>
@@ -62,7 +60,7 @@ export default function FavoriteFiles({
               onClick={() => onToggle(ref, entry.title)}
               title="Remove from favorites"
               aria-label={`Remove ${entry.title} from favorites`}
-              className="ui-icon-btn mr-1 h-5 w-5 text-amber-500 hover:text-amber-500 dark:text-amber-500 dark:hover:text-amber-400"
+              className="ui-icon-btn mr-1 h-5 w-5 text-warn hover:text-warn"
             >
               <StarIcon className="h-3.5 w-3.5" filled />
             </button>

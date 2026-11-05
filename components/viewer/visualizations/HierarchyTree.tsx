@@ -14,22 +14,22 @@ function TreeBranch({ node, depth }: { node: TreeNode; depth: number }) {
         <div
           className={`h-2 w-2 flex-shrink-0 rounded-full border-2 ${
             hasChildren
-              ? "border-blue-500 bg-blue-100 dark:bg-blue-900"
-              : "border-blue-300 bg-white dark:border-blue-600/60 dark:bg-blue-950"
+              ? "border-accent bg-accent"
+              : "border-muted/60 bg-paper"
           }`}
         />
         <span
           className={`text-sm ${
             hasChildren
-              ? "font-semibold text-blue-900 dark:text-blue-100"
-              : "text-blue-700 dark:text-blue-300"
+              ? "font-semibold text-ink"
+              : "text-ink-2"
           }`}
         >
           {node.label}
         </span>
       </div>
       {hasChildren && (
-        <div className="ml-1 border-l border-blue-200 pl-1 dark:border-blue-800/50">
+        <div className="ml-1 border-l border-line pl-1">
           {(node.children ?? []).map((child, i) => (
             <TreeBranch key={i} node={child} depth={depth + 1} />
           ))}
@@ -47,10 +47,10 @@ export default function HierarchyTree({ data }: { data: HierarchyTreeData }) {
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3, ease: "easeOut" }}
-      className="not-prose my-6 rounded-lg border border-blue-300 bg-blue-50 p-4 dark:border-blue-800/50 dark:bg-blue-950/20"
+      className="not-prose my-6 rounded-md border border-line p-4"
     >
       {title && (
-        <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
+        <p className="mb-3 ui-section-title">
           {title}
         </p>
       )}

@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import SignOutIcon from "../icons/SignOutIcon";
 import UserIcon from "../icons/UserIcon";
 
 // The sidebar's foot: who is signed in, a way into their profile, and sign out.
@@ -77,8 +76,8 @@ export default function AccountControl({
   if (!ready) {
     return (
       <div className="flex min-w-0 flex-1 animate-pulse items-center gap-2 px-1.5 py-1" aria-hidden>
-        <span className="h-7 w-7 shrink-0 rounded-full bg-black/[0.08] dark:bg-white/[0.09]" />
-        <span className="h-2.5 w-20 rounded bg-black/[0.08] dark:bg-white/[0.09]" />
+        <span className="h-7 w-7 shrink-0 rounded-full bg-ink/[0.08]" />
+        <span className="h-2.5 w-20 rounded bg-ink/[0.08]" />
       </div>
     );
   }
@@ -94,9 +93,9 @@ export default function AccountControl({
     return (
       <a
         href="/auth/sign-in"
-        className="ui-focus min-w-0 flex-1 truncate rounded px-1.5 text-xs text-blue-600 transition-colors duration-150 ease-out hover:text-blue-500 dark:text-blue-400"
+        className="ui-focus min-w-0 flex-1 truncate rounded px-1.5 text-sm font-medium text-accent transition-colors duration-150 ease-out hover:text-accent/80"
       >
-        Sign in to share folders
+        Sign in
       </a>
     );
   }
@@ -116,9 +115,8 @@ export default function AccountControl({
         onClick={signOut}
         title="Sign out"
         aria-label="Sign out"
-        className="ui-btn ui-btn-xs group shrink-0 gap-1.5 rounded-md border border-black/10 font-normal text-gray-600 transition-[color,background-color,border-color,transform] duration-150 ease-out hover:-translate-y-px hover:border-red-500/40 hover:bg-red-500/10 hover:text-red-600 focus-visible:ring-red-600/70 dark:border-white/10 dark:text-gray-300 dark:hover:text-red-400 dark:focus-visible:ring-red-500/70"
+        className="ui-btn ui-btn-xs shrink-0 font-normal text-muted hover:bg-ink/[0.06] hover:text-ink"
       >
-        <SignOutIcon className="h-3.5 w-3.5 transition-transform duration-150 ease-out group-hover:translate-x-0.5" />
         Sign out
       </button>
     </>
@@ -142,22 +140,20 @@ function ProfileButton({
   active?: boolean;
   onOpen?: () => void;
 }) {
-  const className = `ui-row group flex min-w-0 flex-1 items-center gap-2 px-1.5 py-1 text-left text-xs ${
-    active
-      ? "bg-blue-600/10 text-blue-700 dark:bg-blue-600/20 dark:text-blue-300"
-      : "text-gray-700 dark:text-gray-300"
+  const className = `ui-row group flex min-w-0 flex-1 items-center gap-2 px-1.5 py-1 text-left text-sm ${
+    active ? "ui-row-on" : "text-ink-2"
   }`;
 
   const face = (
     <>
-      <span className="relative h-7 w-7 shrink-0 overflow-hidden rounded-full border border-black/10 bg-black/[0.03] transition-transform duration-150 ease-out group-hover:scale-105 dark:border-white/10 dark:bg-white/[0.06]">
+      <span className="relative h-7 w-7 shrink-0 overflow-hidden rounded-full border border-cover-line bg-paper">
         {avatarUrl ? (
           // eslint-disable-next-line @next/next/no-img-element -- a signed
           // Storage URL is short-lived and per-request, so next/image's
           // optimiser has nothing stable to cache.
           <img src={avatarUrl} alt="" className="h-full w-full object-cover" />
         ) : (
-          <UserIcon className="absolute inset-0 m-auto h-4 w-4 text-gray-400 dark:text-gray-500" />
+          <UserIcon className="absolute inset-0 m-auto h-4 w-4 text-muted" />
         )}
       </span>
       <span className="min-w-0 flex-1 truncate font-medium">{username}</span>

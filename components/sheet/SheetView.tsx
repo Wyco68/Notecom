@@ -16,6 +16,9 @@ import { describeIssue, type LayoutIssue } from "@/lib/sheet/paginate";
 import { fitSheet, type Fit } from "@/lib/sheet/fit";
 import type { Lesson } from "@/lib/vault/types";
 import SpinnerIcon from "../icons/SpinnerIcon";
+import CheckIcon from "../icons/CheckIcon";
+import AlertIcon from "../icons/AlertIcon";
+import FileDrop from "../generate/FileDrop";
 import Modal from "../modals/Modal";
 import { useGenerateJobs, type GenerateJob } from "../generate/GenerateJobsProvider";
 import { useToast } from "../toast/ToastProvider";
@@ -255,19 +258,19 @@ export default function SheetView({
   }
 
   return (
-    <div className="mx-auto grid max-w-7xl gap-5 p-4 sm:p-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
+    <div className="mx-auto grid max-w-7xl gap-6 p-4 sm:p-8 lg:grid-cols-[minmax(0,1fr)_22rem]">
       <section aria-label="Cheatsheet" className="min-w-0">
-        <div className="mb-4 flex flex-wrap items-baseline justify-between gap-3">
+        <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
-            <h1 className="text-xl font-semibold text-gray-900 dark:text-gray-100">{doc?.title ?? "Cheatsheet"}</h1>
+            <h1 className="text-2xl font-bold tracking-tight text-ink">{doc?.title ?? "Cheatsheet"}</h1>
             {spec && (
-              <p className="mt-0.5 text-sm text-gray-500">
+              <p className="mt-1 text-sm text-muted">
                 {folderName} · chapters {spec.from}–{spec.to} · {layoutLabel(spec, fit?.columns)}
                 {fit && <> · {fit.font}pt</>}
                 {fit && (
                   <span
                     data-numeric
-                    className={`ui-badge ml-2 ${allPass ? "text-emerald-700 dark:text-emerald-400" : "text-amber-700 dark:text-amber-400"}`}
+                    className={`ui-badge ml-2 ${allPass ? "text-ok" : "text-warn"}`}
                   >
                     {spec.pages ? `${fit.pages} / ${pageLimitText(spec.pages)}` : `${pageLimitText(fit.pages)}, no limit`}
                   </span>
@@ -276,14 +279,14 @@ export default function SheetView({
             )}
           </div>
           <div className="flex items-center gap-1.5">
-            <button onClick={print} disabled={!fit || !!fitting} className="ui-btn ui-btn-xs ui-btn-secondary">
+            <button onClick={print} disabled={!fit || !!fitting} className="ui-btn ui-btn-sm ui-btn-secondary">
               Print…
             </button>
             <button
               onClick={savePdf}
               disabled={!fit || !!fitting || saving}
               title={allPass ? "Save to your Downloads folder" : "Saves the sheet as it is now"}
-              className="ui-btn ui-btn-xs ui-btn-primary"
+              className="ui-btn ui-btn-sm ui-btn-primary"
             >
               {saving ? "Saving…" : "Save PDF"}
             </button>
@@ -297,10 +300,10 @@ export default function SheetView({
             <SpinnerIcon className="h-3.5 w-3.5" /> Loading the cheatsheet…
           </p>
         ) : !spec ? (
-          <p className="ui-empty">This cheatsheet has no layout information, so it can't be shown.</p>
+          <p className="ui-empty">This cheatsheet has no layout data.</p>
         ) : (
           <>
-            <section aria-label="Steps" className="ui-card mb-3 divide-y divide-black/5 text-xs dark:divide-white/5">
+            <section aria-label="Steps" className="ui-card mb-3 divide-y divide-line text-xs">
               <StepRow
                 ok={!pending.length}
                 title={pending.length ? `Written: ${written} of ${chapters} chapters` : `Written: all ${chapters} chapters`}
@@ -395,11 +398,11 @@ export default function SheetView({
 
             <div
               ref={boxRef}
-              className="relative overflow-hidden rounded-md border border-black/10 bg-[#d9dce1] dark:border-white/10"
+              className="relative overflow-hidden rounded-lg bg-cover"
               style={{ height: frameSize.height * scale }}
             >
               {fitting && (
-                <div className="absolute inset-x-0 top-0 z-10 flex items-center justify-center gap-2 bg-white/80 py-2 text-xs text-gray-600 dark:bg-black/60 dark:text-gray-300">
+                <div className="absolute inset-x-0 top-0 z-10 flex items-center justify-center gap-2 bg-paper/80 py-2 text-xs text-muted">
                   <SpinnerIcon className="h-3.5 w-3.5" /> {fitting}
                 </div>
               )}
@@ -465,16 +468,18 @@ function StepRow({
 }) {
   return (
     <div className="flex flex-wrap items-start gap-x-3 gap-y-1.5 px-3 py-2">
-      <span aria-hidden="true" className={`mt-px ${ok ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400"}`}>
-        {ok ? "✓" : "!"}
-      </span>
+      {ok ? (
+        <CheckIcon className="mt-0.5 h-4 w-4 shrink-0 text-ok" />
+      ) : (
+        <AlertIcon className="mt-0.5 h-4 w-4 shrink-0 text-warn" />
+      )}
       <div className="min-w-0 flex-1">
-        <p className="text-gray-700 dark:text-gray-300">
+        <p className="text-ink-2">
           <span className="sr-only">{ok ? "Done: " : "To do: "}</span>
           {title}
         </p>
         {detail.length > 0 && (
-          <ul className="mt-0.5 list-disc space-y-0.5 pl-4 text-gray-500 dark:text-gray-400">
+          <ul className="mt-0.5 list-disc space-y-0.5 pl-4 text-muted">
             {detail.map((d, i) => (
               <li key={i} className="break-words">
                 {d}
@@ -559,23 +564,20 @@ function AddSourcesModal({
   }
 
   return (
-    <Modal title="Add sources" onClose={onClose}>
-      <p className="mb-3 text-xs leading-snug text-gray-500">
-        Claude adds what these say to the chapters they belong to; the new version is checked like any other. Picked
-        documents stay with the sheet for later edits and reviews; uploaded files are used for this change only.
-      </p>
+    <Modal title="Add sources" onClose={onClose} size="md">
+      <p className="mb-4 text-xs text-muted">Picked notes stay with the sheet; uploads are used once.</p>
       {!docs ? (
         <p className="ui-empty mb-3">Loading the folder…</p>
       ) : !options.length ? (
         <p className="ui-empty mb-3">No quizzes or other lessons in this folder.</p>
       ) : (
         <fieldset className="ui-scroll mb-3 max-h-56 space-y-1 overflow-y-auto">
-          <legend className="mb-1 text-xs font-medium text-gray-500 dark:text-gray-400">From this folder</legend>
+          <legend className="mb-1.5 text-sm font-medium text-ink">From this folder</legend>
           {options.map((o) => {
             const key = `${o.kind}:${o.doc.id}`;
             const already = has(o.kind, o.doc.id);
             return (
-              <label key={key} className="flex items-start gap-2 text-sm text-gray-700 dark:text-gray-300">
+              <label key={key} className="flex items-start gap-2 text-sm text-ink-2">
                 <input
                   type="checkbox"
                   className="ui-focus mt-0.5"
@@ -584,29 +586,22 @@ function AddSourcesModal({
                   onChange={() => toggle(key)}
                 />
                 <span className="min-w-0 break-words">
-                  <span className="text-xs text-gray-500">
+                  <span className="text-xs text-muted">
                     {o.kind === "quiz" ? "Quiz" : `Lesson ${String(o.doc.seq).padStart(2, "0")}`}
                   </span>{" "}
                   {o.doc.title}
-                  {already && <span className="text-xs text-gray-500"> · already a source</span>}
+                  {already && <span className="text-xs text-muted"> · already a source</span>}
                 </span>
               </label>
             );
           })}
         </fieldset>
       )}
-      <label htmlFor="sources-files" className="mb-1.5 block text-xs font-medium text-gray-500 dark:text-gray-400">
-        Files (slides, handouts — optional)
-      </label>
-      <input
-        id="sources-files"
-        type="file"
-        multiple
-        onChange={(e) => setFiles([...(e.target.files ?? [])])}
-        className="ui-focus mb-3 w-full rounded-md text-sm text-gray-600 file:mr-3 file:cursor-pointer file:rounded-md file:border-0 file:bg-blue-600 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-white file:transition-colors hover:file:bg-blue-500 dark:text-gray-400"
-      />
-      <label htmlFor="sources-note" className="mb-1.5 block text-xs font-medium text-gray-500 dark:text-gray-400">
-        Anything Claude should know (optional)
+      <div className="mb-4">
+        <FileDrop files={files} onChange={setFiles} multiple label="Drop slides or handouts" />
+      </div>
+      <label htmlFor="sources-note" className="mb-1.5 block text-sm font-medium text-ink">
+        Note for Claude <span className="font-normal text-muted">(optional)</span>
       </label>
       <textarea
         id="sources-note"
@@ -685,18 +680,15 @@ function SheetChat({
   return (
     <aside
       aria-label="Edit the cheatsheet"
-      className="flex min-h-[24rem] flex-col rounded-lg border border-black/10 bg-white dark:border-white/10 dark:bg-[#161b22] lg:sticky lg:top-16 lg:h-[calc(100dvh-6rem)]"
+      className="flex min-h-[24rem] flex-col rounded-lg border border-line bg-paper lg:sticky lg:top-[4.5rem] lg:h-[calc(100dvh-6.5rem)]"
     >
-      <div className="border-b border-black/10 px-3 py-2 dark:border-white/10">
-        <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Edit with Claude</h2>
-        <p className="text-xs text-gray-500">Ask for a change. Every change is saved as soon as it is made.</p>
+      <div className="border-b border-line px-4 py-3">
+        <h2 className="text-sm font-semibold text-ink">Edit with Claude</h2>
       </div>
 
       <div ref={listRef} role="log" aria-live="polite" className="ui-scroll flex-1 space-y-3 overflow-y-auto px-3 py-3 text-sm">
         {!messages.length && !live.length && (
-          <p className="ui-empty">
-            Try “add the OSPF cost formula”, “make chapter 3 shorter” or “turn the port list into a table”.
-          </p>
+          <p className="ui-empty">Try “make chapter 3 shorter”.</p>
         )}
         {messages.map((m, i) => (
           <Bubble key={i} role={m.role} text={m.text} />
@@ -711,17 +703,17 @@ function SheetChat({
               <div
                 className={`rounded-lg px-3 py-2 text-xs leading-relaxed ${
                   isRunning
-                    ? "bg-black/[0.03] text-gray-600 dark:bg-white/[0.04] dark:text-gray-400"
-                    : "border border-red-500/30 bg-red-500/[0.06] text-red-700 dark:text-red-300"
+                    ? "bg-ink/[0.03] text-muted"
+                    : "border border-danger/30 bg-danger/[0.06] text-danger"
                 }`}
               >
                 {isRunning ? (
                   <div className="flex items-start gap-2">
-                    <SpinnerIcon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-blue-600 dark:text-blue-400" />
+                    <SpinnerIcon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-accent" />
                     <span className="min-w-0 flex-1 break-words">
                       {name && <b className="font-semibold">{name}: </b>}
                       {status(j)}{" "}
-                      <span data-numeric className="text-gray-400">
+                      <span data-numeric className="text-muted">
                         {Math.floor(secs / 60)}:{String(secs % 60).padStart(2, "0")}
                       </span>
                     </span>
@@ -730,7 +722,7 @@ function SheetChat({
                   <p>
                     {j.status === "aborted" ? "Stopped." : `${name ?? "That change"} didn't finish.`}{" "}
                     {j.saves ? "What it did before stopping is saved." : "Nothing of it was saved."}{" "}
-                    <span className="text-gray-500">{j.status === "error" ? status(j) : ""}</span>
+                    <span className="text-muted">{j.status === "error" ? status(j) : ""}</span>
                   </p>
                 )}
                 <div className="mt-1.5 flex gap-3">
@@ -754,7 +746,7 @@ function SheetChat({
       </div>
 
       <form
-        className="border-t border-black/10 p-2 dark:border-white/10"
+        className="border-t border-line p-2"
         onSubmit={(e) => {
           e.preventDefault();
           submit();
@@ -778,7 +770,7 @@ function SheetChat({
             maxLength={4000}
             disabled={disabled}
             placeholder={busy ? "Wait for the current step to finish…" : "Ask for a change…"}
-            className="min-w-0 flex-1 resize-none bg-transparent text-sm outline-none placeholder:text-gray-500"
+            className="min-w-0 flex-1 resize-none bg-transparent text-sm outline-none placeholder:text-muted"
           />
           <button
             type="submit"
@@ -795,10 +787,10 @@ function SheetChat({
 
 function Bubble({ role, text }: { role: "user" | "assistant"; text: string }) {
   return role === "user" ? (
-    <div className="ml-6 whitespace-pre-wrap break-words rounded-lg bg-blue-600/10 px-3 py-2 text-gray-800 dark:bg-blue-600/20 dark:text-gray-100">
+    <div className="ml-6 whitespace-pre-wrap break-words rounded-lg bg-accent/10 px-3 py-2 text-ink">
       {text}
     </div>
   ) : (
-    <div className="mr-6 whitespace-pre-wrap break-words text-gray-700 dark:text-gray-300">{text}</div>
+    <div className="mr-6 whitespace-pre-wrap break-words text-ink-2">{text}</div>
   );
 }
