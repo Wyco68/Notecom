@@ -55,6 +55,8 @@ export interface Job {
   needsAuth?: boolean;
   /** live process handle — undefined once the job has finished */
   child?: ChildProcess;
+  /** the folder's id: slugs repeat across owners, so runs queue by this */
+  folderId?: string;
   /** the signed-in user who started this job. The CLI itself has no notion of
    *  per-request identity (it runs as one shared subprocess), so this is the
    *  only thing standing between "list every job on the box" and "list mine" —
@@ -114,6 +116,7 @@ export function activeSheetStep(userId: string, folder: string, docKey: string):
 
 /** Adds a job started elsewhere (lib/generate/sheet.ts) to the list. */
 export function registerJob(job: Job): void {
+  pruneJobs();
   jobs.set(job.id, job);
 }
 
@@ -162,10 +165,13 @@ export function startJob(
   originalName: string,
   startedBy: string,
   /** add pictures to this saved lesson instead of writing a new one */
-  target?: Job["target"]
+  target?: Job["target"],
+  folderId?: string
 ): Job {
+  pruneJobs();
   const job: Job = {
     id: randomUUID(),
+    folderId,
     status: "running",
     folder,
     kind,
@@ -243,16 +249,7 @@ export function startJob(
     // The reply IS the output — the app extracts the document from it.
     `When the ${noun} is ready, reply with only its complete HTML, starting at the <h1> — no code fence, no summary, and no text before or after it.`;
 
-  // Queue behind whatever is already running in this same folder — see
-  // folderChains above. `.catch()` on the stored link (not the returned
-  // promise) so one run's rejection can never wedge the folder's queue for
-  // whatever comes after it.
-  if (folderChains.has(folder)) {
-    job.log.push(`Queued — waiting for another generation in "${folder}" to finish first.`);
-  }
-  const priorInFolder = folderChains.get(folder) ?? Promise.resolve();
-  const thisRun = priorInFolder.then(async () => {
-    if (job.status !== "running") return;
+  queueInFolder(job, async () => {
     let first: string;
     try {
       first = await prepare();
@@ -262,9 +259,43 @@ export function startJob(
     }
     return generate(job, repoRoot, inputs, first, safeOriginal);
   });
-  folderChains.set(folder, thisRun.catch(() => {}));
 
   return job;
+}
+
+/**
+ * Runs `run` once every earlier job in the same folder has ended — see
+ * folderChains above. `.catch()` on the stored link (not the returned
+ * promise) so one run's rejection can never wedge the folder's queue for
+ * whatever comes after it. A job stopped while it waited never runs.
+ */
+function queueInFolder(job: Job, run: () => Promise<void>): void {
+  // By id: two owners can each have a folder with the same slug, and one
+  // must never wait on — or learn about — the other's runs.
+  const key = job.folderId ?? `${job.startedBy}/${job.folder}`;
+  if (folderChains.has(key)) {
+    job.log.push(`Queued — waiting for another generation in "${job.folder}" to finish first.`);
+  }
+  const prior = folderChains.get(key) ?? Promise.resolve();
+  const thisRun = prior.then(() => (job.status === "running" ? run() : undefined));
+  folderChains.set(key, thisRun.catch(() => {}));
+}
+
+/** Runs this caller has going or queued — a server-side cap, since the
+ *  browser's own limit is only a courtesy. */
+export function activeJobs(userId: string): number {
+  return [...jobs.values()].filter((j) => j.startedBy === userId && j.status === "running").length;
+}
+
+// Finished jobs are kept so a reload can still show how a run ended, but not
+// forever: the job map lives as long as the server process.
+const KEEP_FINISHED_MS = 6 * 60 * 60_000;
+
+function pruneJobs() {
+  const cutoff = Date.now() - KEEP_FINISHED_MS;
+  for (const [id, j] of jobs) {
+    if ((j.status === "done" || j.status === "error" || j.status === "aborted") && j.startedAt < cutoff) jobs.delete(id);
+  }
 }
 
 // Without the command file, claude "succeeds" with a confused one-turn reply
@@ -646,7 +677,7 @@ export function stopJob(id: string, userId: string): boolean {
   const job = getJob(id, userId);
   if (!job || job.status !== "running") return false;
   job.status = "aborted";
-  job.log.push("^C — aborted by user.");
+  job.log.push("Stopped.");
   if (job.child?.pid) {
     if (process.platform === "win32") {
       spawn("taskkill", ["/pid", String(job.child.pid), "/T", "/F"], { windowsHide: true });

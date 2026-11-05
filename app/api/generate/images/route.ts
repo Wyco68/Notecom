@@ -44,7 +44,8 @@ export async function POST(req: NextRequest) {
   if (!SAFE.test(folder) || !SAFE_KEY.test(lesson)) {
     return NextResponse.json({ error: "invalid folder or lesson" }, { status: 400 });
   }
-  if (!(await resolveWritableFolderId(folder))) return NextResponse.json({ error: "folder not found" }, { status: 404 });
+  const folderId = await resolveWritableFolderId(folder);
+  if (!folderId) return NextResponse.json({ error: "folder not found" }, { status: 404 });
 
   // Read now, as the caller: the run outlives this request, and only a request
   // carries the session the read needs.
@@ -70,6 +71,6 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  const job = startJob(folder, "lect", filePath, fileName, userId, { docKey: lesson, title: current.title, html: current.html });
+  const job = startJob(folder, "lect", filePath, fileName, userId, { docKey: lesson, title: current.title, html: current.html }, folderId);
   return NextResponse.json({ jobId: job.id });
 }

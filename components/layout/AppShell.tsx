@@ -478,7 +478,7 @@ export default function AppShell() {
         }`}
       >
         <div className="flex h-[52px] items-center justify-between px-4">
-          <span className="flex items-center gap-2 text-[15px] font-bold tracking-tight text-ink">
+          <span className="flex items-center gap-2 text-base font-bold tracking-tight text-ink">
             <BrandMark className="h-[18px] w-[15px]" />
             Notecom
           </span>
@@ -598,20 +598,19 @@ export default function AppShell() {
               </span>
               {!query.trim() && (
                 <div className="flex items-center gap-0.5">
-                  {/* Generating needs a local Claude Code CLI, then a session on it.
-                      No CLI at all (a hosted/VPS instance) is a dead end no sign-in
-                      fixes — that gets a plain read-only badge, not a button that
-                      leads nowhere. Installed-but-logged-out still offers sign-in;
-                      offering Generate first would only lead to a run that fails on
-                      auth. */}
-                  {cliInstalled === false ? (
-                    <span
-                      title="No Claude Code CLI on this server. Generate from the desktop app."
-                      className="px-1.5 text-xs text-muted"
-                    >
-                      Read-only
-                    </span>
-                  ) : signedIn === false ? (
+                  {/* Generate works everywhere: with Claude Code on this
+                      computer, or a web service and the reader's own key. A
+                      cheatsheet still needs the CLI, so it shows only where
+                      that can run. */}
+                  <button
+                    onClick={() => setShowGenerate(true)}
+                    title="Generate from a file"
+                    aria-label="Generate a lesson or quiz from a file"
+                    className="ui-icon-btn h-6 w-6"
+                  >
+                    <UploadIcon className="h-3.5 w-3.5" />
+                  </button>
+                  {cliInstalled && signedIn === false && (
                     <button
                       onClick={() => setShowSignIn(true)}
                       title="Claude Code is signed out"
@@ -619,25 +618,16 @@ export default function AppShell() {
                     >
                       Sign in
                     </button>
-                  ) : (
-                    <>
-                      <button
-                        onClick={() => setShowGenerate(true)}
-                        title="Generate from a file"
-                        aria-label="Generate a lesson or quiz from a file"
-                        className="ui-icon-btn h-6 w-6"
-                      >
-                        <UploadIcon className="h-3.5 w-3.5" />
-                      </button>
-                      <button
-                        onClick={() => setShowSheet(true)}
-                        title="Make a cheatsheet"
-                        aria-label="Make a cheatsheet"
-                        className="ui-icon-btn h-6 w-6"
-                      >
-                        <SheetIcon className="h-3.5 w-3.5" />
-                      </button>
-                    </>
+                  )}
+                  {cliInstalled && signedIn !== false && (
+                    <button
+                      onClick={() => setShowSheet(true)}
+                      title="Make a cheatsheet"
+                      aria-label="Make a cheatsheet"
+                      className="ui-icon-btn h-6 w-6"
+                    >
+                      <SheetIcon className="h-3.5 w-3.5" />
+                    </button>
                   )}
                   {/* Only what acts on folders lives here. Discover and
                       People moved to the nav group: they are destinations, and
@@ -825,6 +815,7 @@ export default function AppShell() {
       {showGenerate && (
         <GenerateModal
           folders={folders ?? []}
+          cli={{ installed: cliInstalled, signedIn }}
           watchJobId={typeof showGenerate === "string" ? showGenerate : undefined}
           onClose={() => setShowGenerate(false)}
           onSignIn={() => {

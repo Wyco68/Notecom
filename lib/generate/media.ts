@@ -206,8 +206,17 @@ async function pdfImages(file: string, dir: string): Promise<Array<{ slide: numb
  * A zip's entries by name, each read on demand. Just enough of the format for
  * an Office file: stored and deflated entries, read through the central
  * directory (local headers can leave the sizes out).
+ *
+ * Bounded against hostile archives, since it reads uploads from anyone signed
+ * in: at most MAX_ENTRIES entries, every offset inside the file, no two
+ * entries sharing data, each entry inflated to at most its declared size, and
+ * one total budget for everything read out of the archive.
  */
-function readZip(b: Buffer): Map<string, () => Buffer> {
+const MAX_ENTRIES = 2000;
+const MAX_ENTRY_BYTES = 32 * 1024 * 1024;
+const MAX_ARCHIVE_BYTES = 100 * 1024 * 1024;
+
+export function readZip(b: Buffer): Map<string, () => Buffer> {
   let eocd = -1;
   for (let i = b.length - 22; i >= Math.max(0, b.length - 65_557); i--) {
     if (b.readUInt32LE(i) === 0x06054b50) {
@@ -217,23 +226,38 @@ function readZip(b: Buffer): Map<string, () => Buffer> {
   }
   if (eocd === -1) throw new Error("not a zip file");
   const count = b.readUInt16LE(eocd + 10);
+  if (count > MAX_ENTRIES) throw new Error("too many entries");
   let at = b.readUInt32LE(eocd + 16);
   const entries = new Map<string, () => Buffer>();
+  const seen = new Set<number>();
+  let budget = MAX_ARCHIVE_BYTES;
   for (let n = 0; n < count; n++) {
-    if (b.readUInt32LE(at) !== 0x02014b50) break;
+    if (at < 0 || at + 46 > b.length || b.readUInt32LE(at) !== 0x02014b50) break;
     const method = b.readUInt16LE(at + 10);
     const size = b.readUInt32LE(at + 20);
+    const declared = b.readUInt32LE(at + 24);
     const nameLen = b.readUInt16LE(at + 28);
     const extraLen = b.readUInt16LE(at + 30);
     const commentLen = b.readUInt16LE(at + 32);
     const local = b.readUInt32LE(at + 42);
+    if (at + 46 + nameLen > b.length) break;
     const name = b.toString("utf8", at + 46, at + 46 + nameLen);
+    at += 46 + nameLen + extraLen + commentLen;
+    // Two names pointing at the same bytes is how one small entry is made to
+    // inflate many times over; a real Office file never does it.
+    if (seen.has(local)) throw new Error("entries share data");
+    seen.add(local);
+    if (local + 30 > b.length) throw new Error("entry outside the file");
     entries.set(name, () => {
       const start = local + 30 + b.readUInt16LE(local + 26) + b.readUInt16LE(local + 28);
+      if (start + size > b.length) throw new Error("entry outside the file");
       const raw = b.subarray(start, start + size);
-      return method === 8 ? inflateRawSync(raw) : Buffer.from(raw);
+      const cap = Math.min(declared, MAX_ENTRY_BYTES, budget);
+      const out = method === 8 ? inflateRawSync(raw, { maxOutputLength: Math.max(cap, 1) }) : Buffer.from(raw);
+      if (out.length > cap) throw new Error("entry too large");
+      budget -= out.length;
+      return out;
     });
-    at += 46 + nameLen + extraLen + commentLen;
   }
   return entries;
 }

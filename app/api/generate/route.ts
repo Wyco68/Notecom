@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { writeFile, mkdir, rm } from "fs/promises";
 import { tmpdir } from "os";
 import path from "path";
-import { listJobs, startJob } from "@/lib/generate/runner";
+import { activeJobs, listJobs, startJob } from "@/lib/generate/runner";
 import { convertLegacyOffice, isLegacyOffice } from "@/lib/generate/convert";
 import { cliInstalled } from "@/lib/auth/cli";
 import { resolveWritableFolderId } from "@/lib/vault/store";
@@ -22,6 +22,9 @@ const SAFE = /^[A-Za-z0-9][A-Za-z0-9-]*$/;
 // signed-in, rate-limited caller (5/hour via middleware.ts's GENERATE_LIMIT),
 // so the exploitable window for that gap is narrow.
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
+// Runs one caller may have going or queued at once (the dialog's own limit,
+// MAX_CONCURRENT_JOBS, enforced here too).
+const MAX_ACTIVE_JOBS = 3;
 
 // Jobs this server process is tracking, scoped to the caller — a generation
 // run outlives the dialog that started it and even a page reload, so the
@@ -39,21 +42,26 @@ export async function POST(req: NextRequest) {
 
   // Belt and braces: startJob's own ENOENT handling already fails a run with
   // no local `claude`, but that's after a file upload and a temp-file write.
-  // Reject before doing either — this is capability, not a config toggle: a
-  // box with no CLI on PATH can never generate, on this request or the next.
+  // Reject before doing either. A web-service run never comes here: the
+  // browser talks to the service and saves through /api/generate/save.
   if (!cliInstalled()) {
     return NextResponse.json(
-      { error: "no Claude Code CLI on this server — generate from the desktop app or your own checkout instead" },
+      { error: "no Claude Code CLI on this server — pick a web service in the Generate dialog instead" },
       { status: 501 }
     );
   }
 
+  // Checked before the upload is read: a caller with their quota of runs
+  // going gets no more.
   const declaredLength = Number(req.headers.get("content-length"));
   if (Number.isFinite(declaredLength) && declaredLength > MAX_UPLOAD_BYTES) {
     return NextResponse.json(
       { error: `file too large: keep it under ${MAX_UPLOAD_BYTES / (1024 * 1024)} MB` },
       { status: 400 }
     );
+  }
+  if (activeJobs(userId) >= MAX_ACTIVE_JOBS) {
+    return NextResponse.json({ error: `${MAX_ACTIVE_JOBS} runs already going — wait for one to finish` }, { status: 429 });
   }
 
   let form: FormData;
@@ -81,13 +89,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "invalid folder or kind" }, { status: 400 });
   }
 
+
   // The save at the end of the run goes through RLS like any other write and
   // would be refused for a folder the caller can't write to — but only after a
   // run has spent minutes and real tokens. Check first, with the same
   // `notes_can_write_folder` function RLS calls. Same "not found" either way as
   // every other folder lookup in this app, so a probe can't tell "no such
   // folder" from "not yours".
-  if (!(await resolveWritableFolderId(folder))) {
+  const folderId = await resolveWritableFolderId(folder);
+  if (!folderId) {
     return NextResponse.json({ error: "folder not found" }, { status: 404 });
   }
 
@@ -107,6 +117,6 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  const job = startJob(folder, kind as "lect" | "quiz", filePath, fileName, userId);
+  const job = startJob(folder, kind as "lect" | "quiz", filePath, fileName, userId, undefined, folderId);
   return NextResponse.json({ jobId: job.id });
 }

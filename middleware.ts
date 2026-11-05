@@ -63,6 +63,16 @@ function generateNonce(): string {
  * already covered by 'self' regardless; the nonce is what the inline
  * framework scripts actually need).
  */
+// The AI services a reader can generate with from their browser, by their own
+// key (lib/ai/services.ts): the page calls them directly, so the key never
+// passes through this server. Only these hosts — nothing else is reachable.
+const AI_ORIGINS = [
+  "https://api.anthropic.com",
+  "https://api.openai.com",
+  "https://generativelanguage.googleapis.com",
+  "https://openrouter.ai",
+].join(" ");
+
 function buildCsp(nonce: string): string {
   return [
     "default-src 'self'",
@@ -70,7 +80,7 @@ function buildCsp(nonce: string): string {
     "style-src 'self' 'unsafe-inline'",
     `img-src 'self' data: blob:${SUPABASE_ORIGIN ? ` ${SUPABASE_ORIGIN}` : ""}`,
     "font-src 'self' data:",
-    `connect-src 'self'${SUPABASE_ORIGIN ? ` ${SUPABASE_ORIGIN}` : ""}`,
+    `connect-src 'self'${SUPABASE_ORIGIN ? ` ${SUPABASE_ORIGIN}` : ""} ${AI_ORIGINS}`,
     "frame-ancestors 'none'",
     "base-uri 'self'",
     "form-action 'self'",
@@ -179,6 +189,9 @@ const GENERATE_WINDOW_MS = 60 * 60_000;
 // use up the budget for generating.
 const SHEET_EDIT_LIMIT = 30;
 const IMAGES_LIMIT = 30;
+// Saving a lesson a web service wrote in the reader's browser: the tokens are
+// already spent on their own key, so the bucket is about write volume only.
+const WEB_SAVE_LIMIT = 30;
 const MEDIA_LIMIT = 600;
 
 // The blanket budget for everything else this middleware matches, pages
@@ -215,6 +228,19 @@ function isProtected(path: string): boolean {
 export async function middleware(req: NextRequest) {
   const path = req.nextUrl.pathname;
   const ip = clientIp(req);
+
+  // A write to the API from another site is never this app's own page. The
+  // session cookie is SameSite=Lax, which already stops cross-site posts;
+  // this also stops one from a sibling subdomain (same-site). Requests
+  // without the header (server-to-server, older browsers) pass as before.
+  const fetchSite = req.headers.get("sec-fetch-site");
+  if (
+    path.startsWith("/api/") &&
+    !["GET", "HEAD", "OPTIONS"].includes(req.method) &&
+    (fetchSite === "cross-site" || fetchSite === "same-site")
+  ) {
+    return NextResponse.json({ error: "cross-site request refused" }, { status: 403 });
+  }
   const nonce = generateNonce();
   const csp = buildCsp(nonce);
 
@@ -272,6 +298,11 @@ export async function middleware(req: NextRequest) {
   }
   if (req.method === "POST" && path.startsWith("/api/sheets/") && /\/(edit|continue|review|sources)$/.test(path)) {
     const retryAfter = rateLimit(`sheet-edit:${userId}`, SHEET_EDIT_LIMIT, GENERATE_WINDOW_MS);
+    if (retryAfter !== null) return withCsp(tooManyRequests(retryAfter));
+  }
+
+  if (req.method === "POST" && path === "/api/generate/save") {
+    const retryAfter = rateLimit(`web-save:${userId}`, WEB_SAVE_LIMIT, GENERATE_WINDOW_MS);
     if (retryAfter !== null) return withCsp(tooManyRequests(retryAfter));
   }
 

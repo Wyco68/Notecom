@@ -21,7 +21,9 @@ Loaded by `/feat` only. Source of truth is the route files themselves
 | `/api/quiz/[folder]/[id]` | POST | `{ newTitle }` | `{ ok }` (rename) |
 | `/api/search` | GET | `?q&folder&kind&limit` | `{ mode: "keyword", results: [chunk hits] }` — `notes_search_chunks` |
 | `/api/related/[folder]/[id]` | GET | `?kind` | `{ results: [{folder,id,kind,title,score}] }` — `notes_related_docs` |
-| `/api/generate` | POST | multipart `file, folder, kind(lect\|quiz)` | `{ jobId }` — spawns local Claude Code CLI (read-only) on the upload; a `.ppt`/`.doc`/`.xls` is converted with LibreOffice first, or refused with a 400 saying how to save it when LibreOffice is missing |
+| `/api/generate` | POST | multipart `file, folder, kind(lect\|quiz)` | `{ jobId }` — spawns local Claude Code CLI (read-only) on the upload (501 before the upload is read when this server has no CLI); a `.ppt`/`.doc`/`.xls` is converted with LibreOffice first, or refused with a 400 saying how to save it when LibreOffice is missing. 429 when the caller already has 3 runs going or queued |
+| `/api/ai/template` | GET | `?kind=lect\|quiz` | `{ system }` — the system prompt a web-service run sends, built from the template docs. The run itself happens in the browser, with the reader's own key, which never reaches this server |
+| `/api/generate/save` | POST | JSON `{ folder, kind, html }` (≤ 1 MB) | `{ ok, id, title }` — saves a lesson or quiz a web service wrote in the browser: runs the contract check again (422 with `violations` when it fails), then names and saves it as the caller (RLS). Own rate budget (30/hour) |
 | `/api/generate/images` | POST | multipart `file, folder, lesson` | `{ jobId }` — picture mode: the slides of a saved lesson; a `/lect` run adds their pictures to it without rewriting it. Own rate budget (30/hour) |
 | `/api/media/[folder]/[file]` | GET | — | a slide picture's bytes, read as the caller from the private `notes-media` bucket; 404 when missing or not theirs. `Cache-Control: private, immutable` (the name is the content's hash). Own rate budget (600/minute) |
 | `/api/generate/[id]` | GET | — | SSE job log (`line` events, then `end` with status) |

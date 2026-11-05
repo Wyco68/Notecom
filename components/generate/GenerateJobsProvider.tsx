@@ -10,6 +10,7 @@ import {
 } from "react";
 import { useToast } from "../toast/ToastProvider";
 import type { SheetSpec } from "@/lib/sheet/layout";
+import type { WebService } from "@/lib/ai/services";
 
 // Generation jobs, tracked above the modal that starts them.
 //
@@ -62,6 +63,8 @@ export interface GenerateJob {
   lastActivity: number;
   /** the run failed for lack of a CLI session; the UI offers sign-in */
   needsAuth?: boolean;
+  /** who writes it: "Claude Code" or a web service's name */
+  service?: string;
 }
 
 /**
@@ -81,7 +84,15 @@ interface GenerateJobsValue {
   /** Starts a run and returns its job id, or null when it could not start. */
   /** With `lesson`: picture mode — the slides of that saved lesson, whose
    *  pictures are added to it without rewriting it. */
-  start: (input: { file: File; folder: string; kind: "lect" | "quiz"; lesson?: string }) => Promise<string | null>;
+  /** With `web`: a web service writes it with the reader's own key and model
+   *  instead of the local Claude Code CLI. */
+  start: (input: {
+    file: File;
+    folder: string;
+    kind: "lect" | "quiz";
+    lesson?: string;
+    web?: { service: WebService; label: string; key: string; model: string };
+  }) => Promise<string | null>;
   /** Starts a cheatsheet run over lessons `from`..`to` of a folder. */
   startSheet: (input: {
     folder: string;
@@ -134,6 +145,19 @@ export default function GenerateJobsProvider({ children }: { children: React.Rea
 
   const patch = useCallback((id: string, fn: (job: GenerateJob) => GenerateJob) => {
     setJobs((prev) => prev.map((j) => (j.id === id ? fn(j) : j)));
+  }, []);
+
+  // Web-service runs happen in this page (lib/ai/run.ts), not on the server:
+  // their stop handles, by job id. A reload ends them, like closing the tab.
+  const webRuns = useRef(new Map<string, AbortController>());
+
+  // Leaving the page ends a web run; let the browser ask first.
+  useEffect(() => {
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (webRuns.current.size) e.preventDefault();
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
   }, []);
 
   // follow() runs long after the render that created it; it reads a job's kind
@@ -317,6 +341,7 @@ export default function GenerateJobsProvider({ children }: { children: React.Rea
               tokens: j.tokens ?? { input: 0, output: 0 },
               startedAt: j.startedAt ?? Date.now(),
               lastActivity: Date.now(),
+              service: j.service,
             })),
           ]);
           for (const j of running) follow(j.id);
@@ -333,10 +358,57 @@ export default function GenerateJobsProvider({ children }: { children: React.Rea
   }, [follow]);
 
   const start = useCallback<GenerateJobsValue["start"]>(
-    async ({ file, folder, kind, lesson }) => {
+    async ({ file, folder, kind, lesson, web }) => {
       if (activeCount >= MAX_CONCURRENT_JOBS) {
         toast.error(`Already generating ${activeCount} files — wait for one to finish.`);
         return null;
+      }
+      if (web && !lesson) {
+        const id = `web-${crypto.randomUUID()}`;
+        const controller = new AbortController();
+        webRuns.current.set(id, controller);
+        setJobs((prev) => [
+          ...prev,
+          {
+            id,
+            folder,
+            kind,
+            status: "running",
+            log: [],
+            tokens: { input: 0, output: 0 },
+            startedAt: Date.now(),
+            lastActivity: Date.now(),
+            service: web.label,
+          },
+        ]);
+        const where = folder.replace(/-/g, " ");
+        const noun = kind === "quiz" ? "quiz" : "lesson";
+        import("@/lib/ai/run")
+          .then(({ runWebGeneration }) =>
+            runWebGeneration({
+              file,
+              folder,
+              kind,
+              service: web.service,
+              key: web.key,
+              model: web.model,
+              signal: controller.signal,
+              log: (line) => patch(id, (j) => ({ ...j, log: [...j.log, line], lastActivity: Date.now() })),
+              tokens: (tokens) => patch(id, (j) => ({ ...j, tokens, lastActivity: Date.now() })),
+            })
+          )
+          .then((saved) => {
+            patch(id, (j) => ({ ...j, status: "done", saved, saves: 1, log: [...j.log, "Finished."] }));
+            toast.success(`Generated ${noun} in "${where}".`);
+            setCompletedTick((n) => n + 1);
+          })
+          .catch((err: Error) => {
+            const stopped = controller.signal.aborted;
+            patch(id, (j) => ({ ...j, status: stopped ? "aborted" : "error", log: [...j.log, stopped ? "Stopped." : err.message] }));
+            if (!stopped) toast.error(`Generation failed in "${where}" — see the log.`);
+          })
+          .finally(() => webRuns.current.delete(id));
+        return id;
       }
       try {
         const form = new FormData();
@@ -360,6 +432,7 @@ export default function GenerateJobsProvider({ children }: { children: React.Rea
             tokens: { input: 0, output: 0 },
             startedAt: Date.now(),
             lastActivity: Date.now(),
+            service: web?.label ?? "Claude Code",
           },
         ]);
         follow(data.jobId);
@@ -369,7 +442,7 @@ export default function GenerateJobsProvider({ children }: { children: React.Rea
         return null;
       }
     },
-    [activeCount, follow, toast]
+    [activeCount, follow, patch, toast]
   );
 
   const startSheet = useCallback<GenerateJobsValue["startSheet"]>(
@@ -404,6 +477,7 @@ export default function GenerateJobsProvider({ children }: { children: React.Rea
             tokens: { input: 0, output: 0 },
             startedAt: Date.now(),
             lastActivity: Date.now(),
+            service: "Claude Code",
           },
         ]);
         follow(data.jobId);
@@ -449,6 +523,7 @@ export default function GenerateJobsProvider({ children }: { children: React.Rea
             tokens: { input: 0, output: 0 },
             startedAt: Date.now(),
             lastActivity: Date.now(),
+            service: "Claude Code",
           },
         ]);
         follow(data.jobId);
@@ -462,6 +537,11 @@ export default function GenerateJobsProvider({ children }: { children: React.Rea
   );
 
   const abort = useCallback((id: string) => {
+    const local = webRuns.current.get(id);
+    if (local) {
+      local.abort();
+      return;
+    }
     // The status change comes back through the stream's `end` event, so this
     // only has to ask; guessing locally could disagree with the server.
     fetch(`/api/generate/${id}`, { method: "DELETE" }).catch(() => {});
