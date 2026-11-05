@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { clearAllKeys } from "@/lib/ai/keys";
+import { clearLegacyKeys } from "@/lib/ai/client";
 import UserIcon from "../icons/UserIcon";
 
 // The sidebar's foot: who is signed in, a way into their profile, and sign out.
@@ -67,8 +67,8 @@ export default function AccountControl({
 
     load();
     const { data: sub } = supabase.auth.onAuthStateChange((event) => {
-      // Signed out in another tab: the keys go here too.
-      if (event === "SIGNED_OUT") clearAllKeys();
+      // Signed out in another tab: the same, here too.
+      if (event === "SIGNED_OUT") clearLegacyKeys();
       load();
     });
     return () => sub.subscription.unsubscribe();
@@ -88,8 +88,8 @@ export default function AccountControl({
   }
 
   async function signOut() {
-    // API keys for web generation leave the device with the account.
-    clearAllKeys();
+    // Keys an earlier version kept in this browser go with the account.
+    clearLegacyKeys();
     await createClient().auth.signOut();
     // A full reload is simplest and safest: it drops any server-rendered view
     // that assumed a session, rather than trying to invalidate each in place.

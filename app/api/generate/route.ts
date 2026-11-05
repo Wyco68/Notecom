@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
   // Belt and braces: startJob's own ENOENT handling already fails a run with
   // no local `claude`, but that's after a file upload and a temp-file write.
   // Reject before doing either. A web-service run never comes here: the
-  // browser talks to the service and saves through /api/generate/save.
+  // run goes to the job queue (/api/jobs) instead.
   if (!cliInstalled()) {
     return NextResponse.json(
       { error: "no Claude Code CLI on this server — pick a web service in the Generate dialog instead" },

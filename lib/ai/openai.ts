@@ -79,7 +79,7 @@ export async function chatOpenAICompatible(req: ChatRequest): Promise<ChatResult
       const delta = choice?.delta?.content;
       if (typeof delta === "string" && delta) {
         text += delta;
-        req.onProgress?.(text.length);
+        req.onProgress?.(text.length, text);
       }
       if (choice?.finish_reason) finish = choice.finish_reason;
       if (chunk.usage) {

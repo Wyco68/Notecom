@@ -21,7 +21,8 @@ app:
   get a note or quiz back, written either by their own Claude Code CLI (their
   Claude subscription, on a machine that has it signed in) or, anywhere
   including the hosted web app, by a web service they pay per use (Claude,
-  OpenAI or Gemini API) or OpenRouter, with their own key.
+  OpenAI or Gemini API) or OpenRouter, with their own key — saved once,
+  encrypted, never shown back. A web run keeps going if they close the tab.
 
 A third, lighter context: **the social layer**. Each person has a profile;
 Home is a feed of what they can already read — new notes in their folders, and

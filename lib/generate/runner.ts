@@ -694,6 +694,6 @@ export function stopJob(id: string, userId: string): boolean {
 
 // One block per line: Read cuts very long lines, and a lesson is often stored
 // as one.
-function blockPerLine(html: string): string {
+export function blockPerLine(html: string): string {
   return html.replace(/(<(?:h[1-6]|p|li|tr|table|ul|ol|pre|blockquote|div|figure)[\s>])/g, "\n$1");
 }

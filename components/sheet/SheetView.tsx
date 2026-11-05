@@ -22,6 +22,8 @@ import FileDrop from "../generate/FileDrop";
 import Modal from "../modals/Modal";
 import { useGenerateJobs, type GenerateJob } from "../generate/GenerateJobsProvider";
 import { useToast } from "../toast/ToastProvider";
+import { preferredRunner, savedServices, setPreferredRunner } from "@/lib/ai/client";
+import { WEB_SERVICES } from "@/lib/ai/services";
 
 // A stored cheatsheet: its pages, the steps that made and checked it, and a
 // chat box to change it.
@@ -394,6 +396,7 @@ export default function SheetView({
                   </button>
                 }
               />
+              <StepRunner disabled={busy} />
             </section>
 
             <div
@@ -450,6 +453,71 @@ export default function SheetView({
             if (ok) setAdding(false);
           }}
         />
+      )}
+    </div>
+  );
+}
+
+/** Who runs this sheet's next step: Claude Code on this computer or a web
+ *  service with a saved key. The choice is shared with the Generate and
+ *  Cheatsheet dialogs. */
+function StepRunner({ disabled }: { disabled: boolean }) {
+  const [options, setOptions] = useState<Array<{ value: string; label: string }> | null>(null);
+  const [runner, setRunner] = useState<string>("");
+
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([
+      fetch("/api/auth")
+        .then((r): Promise<{ installed?: boolean }> => (r.ok ? r.json() : Promise.resolve({})))
+        .catch((): { installed?: boolean } => ({})),
+      savedServices(),
+    ]).then(([auth, vault]) => {
+      if (cancelled) return;
+      const list = [
+        ...(auth?.installed ? [{ value: "claude-code", label: "Claude Code · this computer" }] : []),
+        ...(vault.ready
+          ? vault.keys
+              .filter((k) => k.model)
+              .map((k) => ({ value: k.service, label: `${WEB_SERVICES[k.service].label} · ${k.model}` }))
+          : []),
+      ];
+      setOptions(list);
+      const preferred = preferredRunner();
+      const pick = list.find((o) => o.value === preferred)?.value ?? list[0]?.value ?? "";
+      setRunner(pick);
+      if (pick && pick !== preferred) setPreferredRunner(pick);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (!options) return null;
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 px-3 py-2">
+      <label htmlFor="sheet-runner" className="text-muted">
+        Runs with
+      </label>
+      {options.length ? (
+        <select
+          id="sheet-runner"
+          value={runner}
+          disabled={disabled}
+          onChange={(e) => {
+            setRunner(e.target.value);
+            setPreferredRunner(e.target.value);
+          }}
+          className="ui-field w-auto min-w-[12rem] py-1 text-xs"
+        >
+          {options.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+      ) : (
+        <span className="text-muted">Add a service key in the Cheatsheet dialog first.</span>
       )}
     </div>
   );

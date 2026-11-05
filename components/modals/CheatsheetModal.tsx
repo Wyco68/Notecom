@@ -6,6 +6,7 @@ import { LAYOUTS, MAX_COLUMNS, MAX_PAGES, MIN_COLUMNS, layoutFor } from "@/lib/s
 import Modal from "./Modal";
 import FileDrop from "../generate/FileDrop";
 import { JobLog } from "./GenerateModal";
+import RunnerPicker, { type RunnerChoice } from "../generate/RunnerPicker";
 import { MAX_CONCURRENT_JOBS, useGenerateJobs } from "../generate/GenerateJobsProvider";
 
 // Start a cheatsheet run, and watch one.
@@ -18,12 +19,15 @@ import { MAX_CONCURRENT_JOBS, useGenerateJobs } from "../generate/GenerateJobsPr
 // laid out, printed and edited through its chat box.
 export default function CheatsheetModal({
   folders,
+  cli,
   onClose,
   onSignIn,
   onOpenSheet,
   watchJobId,
 }: {
   folders: Folder[];
+  /** what the local Claude Code CLI can do; undefined while still checking */
+  cli: { installed?: boolean; signedIn?: boolean };
   onClose: () => void;
   onSignIn: () => void;
   /** open the saved sheet */
@@ -43,6 +47,8 @@ export default function CheatsheetModal({
   const [files, setFiles] = useState<File[]>([]);
   const [starting, setStarting] = useState(false);
   const [watching, setWatching] = useState<string | null>(watchJobId ?? null);
+  // Who writes it — set by RunnerPicker, as in Generate.
+  const [choice, setChoice] = useState<RunnerChoice | null>(null);
 
   const job = jobs.find((j) => j.id === watching) ?? null;
   const atCapacity = activeCount >= MAX_CONCURRENT_JOBS;
@@ -77,7 +83,7 @@ export default function CheatsheetModal({
   const pages = noLimit ? 0 : pagesValid ? pagesNum : 1;
 
   async function begin() {
-    if (!folder || starting || !lessons?.length || from > to || !pagesValid) return;
+    if (!folder || starting || !lessons?.length || from > to || !pagesValid || !choice?.ready) return;
     setStarting(true);
     try {
       const id = await startSheet({
@@ -87,6 +93,7 @@ export default function CheatsheetModal({
         pages,
         columns: noLimit && columns ? Number(columns) : undefined,
         files,
+        ...(choice.web ? { web: { service: choice.web.service, label: choice.web.label } } : {}),
       });
       if (id) setWatching(id);
     } finally {
@@ -272,9 +279,13 @@ export default function CheatsheetModal({
         <FileDrop files={files} onChange={setFiles} multiple label="Drop slides or browse" />
       </div>
 
+      <div className="mb-5">
+        <RunnerPicker cli={cli} onSignIn={onSignIn} onChange={setChoice} />
+      </div>
+
       <button
         onClick={begin}
-        disabled={!lessons?.length || from > to || !pagesValid || starting || atCapacity}
+        disabled={!lessons?.length || from > to || !pagesValid || starting || atCapacity || !choice?.ready}
         className="ui-btn ui-btn-primary w-full"
       >
         {starting ? "Starting…" : "Make cheatsheet"}

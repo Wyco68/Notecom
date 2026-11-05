@@ -93,54 +93,130 @@ LibreOffice the upload is refused before the run, saying to save it as
 
 ## Web generation: any service, the reader's own key (2026-11)
 
-A lesson or quiz can also be written by a web service instead of the local
-CLI, so generating works on the hosted app too — including Vercel, where a
-function can't run for minutes after it answers or keep jobs in memory
-between requests. So a web run happens **in the reader's browser**
-(`lib/ai/run.ts`), not on the server. The Generate dialog's "Runs
-with" picker offers three kinds: **Subscription** (Claude Code on this
-computer — the CLI path above), **Pay per use** (Claude, OpenAI or Gemini API
-with the reader's key) and **OpenRouter** (one key, most other model makers).
+Lessons, quizzes, slide pictures and cheatsheets can also be written by a web
+service instead of the local CLI, so generating works on the hosted app too —
+including Vercel, where a function stops a few minutes after it starts and
+keeps nothing in memory between requests. The "Runs with" picker (Generate,
+Cheatsheet, and a sheet's steps) offers three kinds: **Subscription** (Claude
+Code on this computer — the CLI path above), **Pay per use** (Claude, OpenAI
+or Gemini API with the reader's key) and **OpenRouter** (one key, most other
+model makers).
 
-- **Keys never reach the server.** The browser calls the service directly
-  with the reader's key; the page's CSP `connect-src` allows exactly the four
-  service hosts. The key is kept in the browser (`lib/ai/keys.ts`), per
-  account (`notecom.ai:<user id>`), for the page only unless the reader ticks
-  "Remember on this device", and wiped on sign-out — in this tab or another.
-  Provider errors shown in the log are scrubbed of it (`cleanMessage`). The
-  model list comes from the service with the same key, which is also the key
-  check, so a rejected key is never kept.
+### Keys: a server vault, sent once
+
+- **Sent once, never returned.** The reader types a key once; `PUT
+  /api/ai/keys` checks it against its service (the model list — a rejected
+  key is never stored), encrypts it and stores it in `notes_ai_keys`
+  (migration 0034). No route ever returns it: `GET /api/ai/keys` lists which
+  services have one, the last four characters and the chosen model. After
+  that first request the key appears in no request or response the browser
+  makes, and the browser keeps no copy (a page loaded from an earlier version
+  removes the old `notecom.ai*` localStorage entries).
+- **Encryption** (`lib/ai/vault.ts`): AES-256-GCM under a key derived (HKDF)
+  from `AI_KEYS_SECRET`, an env secret only the server has — never in the
+  database, never in the browser. The row's owner and service are the
+  authenticated data, so a ciphertext copied to another row or account fails
+  to decrypt. Without `AI_KEYS_SECRET` (32+ random bytes, base64) the picker
+  says web services aren't set up. Rotating it makes every saved key
+  unreadable; readers then save theirs again.
+- **Decrypted only for a call.** A job step decrypts the key for its own AI
+  call; `GET /api/ai/models` decrypts it to list models. Provider error text
+  is scrubbed of the key before it reaches a log (`cleanMessage`).
+- **RLS, owner only.** `notes_ai_keys` is readable and writable only by its
+  owner; even the ciphertext never leaves the server's own queries.
 - **Fixed endpoints.** `lib/ai/services.ts` names four services, each with its
-  host fixed in its adapter (the Anthropic client sets `baseURL` explicitly
-  and runs with `dangerouslyAllowBrowser`, which here is the point: the key is
-  the reader's own, in their own tab) (`anthropic.ts` via the official SDK; `openai.ts`
-  for OpenAI and OpenRouter's shared Chat Completions API; `gemini.ts`). The
-  request picks a service, never a URL, so the server can't be pointed at an
-  internal address.
-- **The same template.** `lib/generate/template.ts` builds the system prompt
-  from the docs `/lect` and `/quiz` load (`teaching-guidelines.md`,
-  `html-output-contract.md`, `lesson-template.md`; `quiz-guidelines.md`),
-  read at run time and served by `GET /api/ai/template` — the Docker image
-  copies `docs/`, and `next.config.mjs` traces them into the serverless
-  bundle. The
-  command files are not sent: they describe the CLI's tools and file
-  workflow, which a web run doesn't have.
-- **The upload never leaves the browser except to the service.**
-  `lib/ai/source.ts` sends a PDF or a picture as-is (every service reads
-  both), Markdown as text, and a `.pptx` / `.docx` as the text pulled out of
-  its zip (the browser's `DecompressionStream`), bounded like the server's
-  zip reader: capped entries, no shared or out-of-file entries, inflation
-  capped per entry and per archive, one linear pass for the text. Up to 20 MB
-  — no platform request limit applies, since it never goes to the app. No slide pictures, so no picture
-  mode: that stays CLI-only.
-- **Same checks, same save, same job UI.** The run streams the reply, runs
-  the contract check (`lib/generate/validate.ts`, shared with the server) with
-  up to two fix rounds, sending the violations back in the conversation, and
-  posts only the finished HTML to `POST /api/generate/save`, which runs the
-  check again — the browser's verdict is never trusted — and saves through
-  `saveGenerated` under RLS. In the UI it is an ordinary job
-  (`GenerateJobsProvider`): log, token counter, Stop, sidebar row. It lives in
-  the page, so a reload ends it; the page asks before leaving while one runs.
+  host fixed in its adapter (`anthropic.ts` via the official SDK with an
+  explicit `baseURL`; `openai.ts` for OpenAI and OpenRouter's shared Chat
+  Completions API; `gemini.ts`). A request picks a service, never a URL, and
+  `lib/ai/chat.ts` re-checks the model id (it goes into a request path) right
+  before every call.
+- **Rate limits** (middleware): saving a key or listing models, 10 per user
+  and 30 per address per 10 minutes — enough to enter a key, too few to test
+  a list of stolen ones through this server.
+
+### Jobs: a transactional outbox
+
+A web run is a row in `notes_jobs` (migrations 0034, 0035), filed in the
+same transaction that checks the reader has fewer than three going and fewer
+than 30 filed in the last hour (`notes_enqueue_job`), and worked on by
+whichever request holds its lease.
+
+- **No job row is written directly.** The worker acts as the reader (there
+  is no service key), so anything it may do the reader could do through the
+  database API too. Readers therefore have no INSERT or UPDATE on
+  `notes_jobs`; four `SECURITY DEFINER` functions are the only writers, each
+  checking the caller and the row's state: `notes_enqueue_job` (writable
+  folder, the limits above), `notes_claim_job` (hands out a fresh worker
+  token), `notes_job_progress` (only the token's holder, only while the job
+  runs — a finished job can't be revived) and `notes_cancel_job`. A job is
+  given up on six hours after it was filed, whatever its row says.
+- **Params are untrusted.** `notes_enqueue_job` can be called with any
+  params, so the worker re-checks them on every claim (`lib/jobs/params.ts`:
+  folder slug, upload paths in the reader's own folder, document ids, sheet
+  spec and added sources) and refuses a job whose folder slug doesn't resolve
+  to the writable folder it was filed against. Nothing from a row reaches a
+  file name: a sheet's added sources are written as `added-<n>.html`, and
+  `notes_documents.kind` must be a short lowercase word.
+- **Errors shown are written for the reader.** A step's unexpected failure is
+  logged on the server; the job log says only that it failed.
+
+- **Filing.** The browser uploads the job's files straight to the private
+  `notes-job-uploads` bucket, under `<user id>/<batch>/` (storage policies
+  allow a reader only their own folder; 20 MB a file), then `POST /api/jobs`
+  with the paths. No app request carries the file, so the platform's body
+  limit doesn't apply. The route checks the kind, folder (writable, by RLS),
+  paths (the caller's own) and that a key and model are saved, files the
+  job, and starts working on it after answering (`after()`).
+- **Working.** `lib/jobs/run.ts` claims the job (`notes_claim_job`: a queued
+  job, or a running one whose lease has lapsed — atomic, so two workers never
+  hold one; a worker whose lease lapsed finds its token no longer accepted
+  and stops) and runs its steps, **one AI call per step**. After each step it
+  saves the log, tokens and a small `state` (which chapter, which fix round,
+  the last reply and the fix request); while a call streams it saves every
+  15 seconds, which also renews the 90-second lease and keeps the reply so
+  far. Every request that works on a job carries the reader's own session, so
+  each step reads and saves as the reader, under RLS, like the reader's own
+  edits — the server has no service key.
+- **Pausing and resuming.** A step starts only with at least 200 seconds left
+  in the request; otherwise the job goes back to `queued`. The page polls
+  `GET /api/jobs/[id]` every 3 seconds and, when a job is queued or its row
+  hasn't moved for 100 seconds (its worker died), calls `POST
+  /api/jobs/[id]/run` to continue it. A reply cut off by a worker stopping is
+  continued from the saved text ("continue exactly where it stops"), not
+  started again. Five worker deaths in a row on one step end the job with an
+  error, so a model too slow for the platform can't spend the reader's money
+  forever. A reload, another tab or another device finds the reader's jobs
+  with `GET /api/jobs` and follows them the same way.
+- **Idempotent saves.** A lesson or quiz records its title before saving and,
+  if its worker dies after the save, finds the saved document instead of
+  writing it twice; a cheatsheet chapter replaces its own section, so writing
+  it again changes nothing.
+- **Stop.** `DELETE /api/jobs/[id]` marks the job cancelled; the worker sees
+  it at its next save (`writeProgress` refuses a cancelled row) and aborts its
+  call.
+- **Uploads go when the job ends** — done, failed, given up on or stopped
+  (`endUploads`). The page removes them itself when the queue refuses the
+  job, and listing jobs (`GET /api/jobs`) sweeps the reader's day-old batches
+  no going job names.
+- **Kinds** (`lib/jobs/kinds/`): `lesson` / `quiz` (write → contract check →
+  up to two fix rounds → `saveGenerated`); `pictures` (the slides' pictures
+  from a `.pptx`/`.docx`, or a PDF where poppler exists, placed by the model
+  and saved with `savePictures`); `sheet-write` (one chapter per step, the
+  same checks and saves as the CLI's `/sheet` loop), `sheet-edit` (the chat
+  box, "Fix these", "Fix findings", Add sources) and `sheet-review` (one
+  chapter per step). A sheet takes one web step at a time.
+- **The same template.** `lib/generate/template.ts` builds each system prompt
+  from the docs and command files the CLI loads (`/lect` with
+  `teaching-guidelines.md`, `html-output-contract.md`, `lesson-template.md`;
+  `/quiz` with `quiz-guidelines.md`; `/sheet` with
+  `cheatsheet-guidelines.md`), read at run time — the Docker image copies
+  `docs/` and `.claude/commands/`, and `next.config.mjs` traces them into the
+  job routes' serverless bundles — with a preamble saying the model has no
+  tools: the files it would read are in the message.
+- **Readers' uploads** become message parts in `lib/ai/source.ts`: a PDF or a
+  picture as-is (every service reads both), Markdown as text, and a `.pptx` /
+  `.docx` as the text pulled out of its zip, bounded like the CLI path's zip
+  reader (capped entries and inflation, one linear pass for the text).
 - **CLI runs** queue by folder id, not slug — slugs repeat across owners — and
   a caller may have at most three going, checked before the upload is read.
 - **Claude defaults.** `claude-opus-5-5` is preselected for the Claude API,

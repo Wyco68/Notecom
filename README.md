@@ -96,7 +96,8 @@ npm run install:desktop  # builds and opens your own installer
 
 Requires `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` in
 `.env.local` — there is no local-only mode, Supabase is the store from the
-first request. Full setup with prerequisites:
+first request. Web generation also needs `AI_KEYS_SECRET`, the server-only
+secret that encrypts readers' saved AI keys. Full setup with prerequisites:
 [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md).
 
 | Document | What's in it |

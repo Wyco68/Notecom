@@ -63,16 +63,6 @@ function generateNonce(): string {
  * already covered by 'self' regardless; the nonce is what the inline
  * framework scripts actually need).
  */
-// The AI services a reader can generate with from their browser, by their own
-// key (lib/ai/services.ts): the page calls them directly, so the key never
-// passes through this server. Only these hosts — nothing else is reachable.
-const AI_ORIGINS = [
-  "https://api.anthropic.com",
-  "https://api.openai.com",
-  "https://generativelanguage.googleapis.com",
-  "https://openrouter.ai",
-].join(" ");
-
 function buildCsp(nonce: string): string {
   return [
     "default-src 'self'",
@@ -80,7 +70,7 @@ function buildCsp(nonce: string): string {
     "style-src 'self' 'unsafe-inline'",
     `img-src 'self' data: blob:${SUPABASE_ORIGIN ? ` ${SUPABASE_ORIGIN}` : ""}`,
     "font-src 'self' data:",
-    `connect-src 'self'${SUPABASE_ORIGIN ? ` ${SUPABASE_ORIGIN}` : ""} ${AI_ORIGINS}`,
+    `connect-src 'self'${SUPABASE_ORIGIN ? ` ${SUPABASE_ORIGIN}` : ""}`,
     "frame-ancestors 'none'",
     "base-uri 'self'",
     "form-action 'self'",
@@ -189,9 +179,16 @@ const GENERATE_WINDOW_MS = 60 * 60_000;
 // use up the budget for generating.
 const SHEET_EDIT_LIMIT = 30;
 const IMAGES_LIMIT = 30;
-// Saving a lesson a web service wrote in the reader's browser: the tokens are
-// already spent on their own key, so the bucket is about write volume only.
-const WEB_SAVE_LIMIT = 30;
+// Web-service jobs spend the reader's own key, not the server's, but each is
+// still minutes of server work: its own bucket, like the sheet steps.
+const JOBS_LIMIT = 30;
+const JOB_RUN_LIMIT = 240;
+// Saving a key checks it against its service: enough for entering or changing
+// a key, far too few to test a list of leaked keys through this server. Per
+// user and per address, so new accounts don't multiply it.
+const KEY_CHECK_USER_LIMIT = 10;
+const KEY_CHECK_IP_LIMIT = 30;
+const KEY_CHECK_WINDOW_MS = 10 * 60_000;
 const MEDIA_LIMIT = 600;
 
 // The blanket budget for everything else this middleware matches, pages
@@ -301,8 +298,20 @@ export async function middleware(req: NextRequest) {
     if (retryAfter !== null) return withCsp(tooManyRequests(retryAfter));
   }
 
-  if (req.method === "POST" && path === "/api/generate/save") {
-    const retryAfter = rateLimit(`web-save:${userId}`, WEB_SAVE_LIMIT, GENERATE_WINDOW_MS);
+  if (req.method === "POST" && path === "/api/jobs") {
+    const retryAfter = rateLimit(`jobs:${userId}`, JOBS_LIMIT, GENERATE_WINDOW_MS);
+    if (retryAfter !== null) return withCsp(tooManyRequests(retryAfter));
+  }
+  // Continuing a job: the page asks after each pause, so a long cheatsheet
+  // makes dozens of these — but each can hold a function for minutes.
+  if (req.method === "POST" && /^\/api\/jobs\/[^/]+\/run$/.test(path)) {
+    const retryAfter = rateLimit(`job-run:${userId}`, JOB_RUN_LIMIT, GENERATE_WINDOW_MS);
+    if (retryAfter !== null) return withCsp(tooManyRequests(retryAfter));
+  }
+  if ((req.method === "PUT" && path === "/api/ai/keys") || (req.method === "GET" && path === "/api/ai/models")) {
+    const retryAfter =
+      rateLimit(`key-check:${userId}`, KEY_CHECK_USER_LIMIT, KEY_CHECK_WINDOW_MS) ??
+      rateLimit(`key-check-ip:${ip}`, KEY_CHECK_IP_LIMIT, KEY_CHECK_WINDOW_MS);
     if (retryAfter !== null) return withCsp(tooManyRequests(retryAfter));
   }
 

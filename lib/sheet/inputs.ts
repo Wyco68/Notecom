@@ -11,6 +11,8 @@ import { randomUUID } from "crypto";
 import { listFolderDocs, loadDoc, readMedia } from "@/lib/vault/store";
 import type { SourceRef } from "./layout";
 
+const DOC_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,199}$/;
+
 export interface SheetInputs {
   dir: string;
   chapters: Array<{ seq: number; path: string }>;
@@ -48,9 +50,13 @@ export async function writeSheetInputs(
 
   const docs: SheetInputs["docs"] = [];
   for (const [i, ref] of refs.entries()) {
+    // A ref comes from a stored sheet's spec or a job row, both of which the
+    // reader can write: only the two kinds a sheet adds, and a plain id.
+    if ((ref.kind !== "lesson" && ref.kind !== "quiz") || typeof ref.id !== "string" || !DOC_ID.test(ref.id)) continue;
     try {
       const { html, title } = await loadDoc(folder, ref.id, ref.kind);
-      const file = path.join(dir, `added-${i + 1}-${ref.kind}.html`);
+      // Named by position only: nothing from the ref reaches the path.
+      const file = path.join(dir, `added-${i + 1}.html`);
       await writeFile(file, `<!-- ${ref.kind}: ${escapeText(title)} -->\n<h1>${escapeText(title)}</h1>\n${blockPerLine(html)}\n`);
       docs.push({ ref: { ...ref, title }, path: file });
     } catch {

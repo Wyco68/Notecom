@@ -21,11 +21,13 @@ export interface StoredSheet {
 export async function openStoredSheet(
   req: NextRequest,
   folder: string,
-  id: string
+  id: string,
+  /** false for a web-service step (lib/jobs), which needs no local CLI */
+  needsCli = true
 ): Promise<StoredSheet | NextResponse> {
   const userId = req.headers.get(VERIFIED_USER_HEADER);
   if (!userId) return NextResponse.json({ error: "sign in required" }, { status: 401 });
-  if (!cliInstalled()) {
+  if (needsCli && !cliInstalled()) {
     return NextResponse.json(
       { error: "no Claude Code CLI on this server — work on cheatsheets from the desktop app instead" },
       { status: 501 }

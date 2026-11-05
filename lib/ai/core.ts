@@ -22,8 +22,8 @@ export interface ChatRequest {
   system: string;
   turns: Turn[];
   signal: AbortSignal;
-  /** called as text streams in, with the reply's length so far */
-  onProgress?: (chars: number) => void;
+  /** called as text streams in, with the reply so far */
+  onProgress?: (chars: number, text: string) => void;
 }
 
 export interface ChatResult {

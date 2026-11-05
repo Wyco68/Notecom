@@ -2,21 +2,25 @@
 
 import { useEffect, useRef, useState } from "react";
 import { MODEL_RE, WEB_SERVICE_IDS, WEB_SERVICES, isPlausibleKey, isWebService, type WebService } from "@/lib/ai/services";
-import { forgetService, lastRunner, saveService, savedService, setLastRunner } from "@/lib/ai/keys";
-import { createClient } from "@/lib/supabase/client";
+import { preferredRunner, savedServices, setPreferredRunner, clearLegacyKeys, type SavedService } from "@/lib/ai/client";
 
 export interface RunnerChoice {
   /** "claude-code" or a web service */
   runner: string;
-  /** set when a web service is picked and has a key and a model */
-  web: { service: WebService; label: string; key: string; model: string } | null;
+  /** set when a web service is picked and has a saved key and a model */
+  web: { service: WebService; label: string; model: string } | null;
   /** everything the chosen runner needs is in place */
   ready: boolean;
 }
 
+// The model lists this page has loaded, per service: listing calls the
+// service with the saved key, so it is done once, not on every open.
+const modelCache = new Map<WebService, string[]>();
+
 /** Who writes the document, in three kinds: the reader's Claude subscription
  *  (Claude Code on this computer), a service billed per use with their own API
- *  key, or OpenRouter with one key for many model makers. */
+ *  key, or OpenRouter with one key for many model makers. A key is sent to the
+ *  server once, stored there encrypted, and never comes back to the browser. */
 export default function RunnerPicker({
   cli,
   onSignIn,
@@ -28,121 +32,112 @@ export default function RunnerPicker({
   onChange: (choice: RunnerChoice) => void;
 }) {
   const cliAvailable = cli.installed !== false;
-  // Keys are kept per account; null until the session is read.
-  const [owner, setOwner] = useState<string | null>(null);
-  const [runner, setRunner] = useState<string>(cliAvailable ? "claude-code" : "anthropic");
-  const service = owner === null ? null : isWebService(runner) ? runner : null;
+  const [runner, setRunner] = useState<string>(() => preferredRunner() ?? (cliAvailable ? "claude-code" : "anthropic"));
+  const service = isWebService(runner) ? runner : null;
   const info = service ? WEB_SERVICES[service] : null;
 
-  const [key, setKey] = useState<string | null>(null);
+  const [vault, setVault] = useState<{ ready: boolean; keys: SavedService[] } | null>(null);
+  const saved = service ? vault?.keys.find((k) => k.service === service) ?? null : null;
   const [draft, setDraft] = useState("");
   const [model, setModel] = useState("");
   const [models, setModels] = useState<string[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [remember, setRemember] = useState(false);
   const request = useRef(0);
 
   useEffect(() => {
-    let cancelled = false;
-    const done = (id: string) => {
-      if (cancelled) return;
-      setOwner(id);
-      const last = lastRunner(id);
-      if (last && (last !== "claude-code" || cliAvailable)) setRunner(last);
-    };
-    try {
-      createClient()
-        .auth.getSession()
-        .then(({ data }) => done(data.session?.user.id ?? "local"))
-        .catch(() => done("local"));
-    } catch {
-      // No collaboration configured on this build: one local owner.
-      done("local");
-    }
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    clearLegacyKeys();
+    savedServices().then(setVault);
   }, []);
 
-  // The CLI turned out to be missing: the subscription option goes, so move off it.
   useEffect(() => {
     if (cli.installed === false && runner === "claude-code") setRunner("anthropic");
   }, [cli.installed, runner]);
 
-  // Switching service loads what this browser remembers for it, and
-  // discards any answer still on its way for the service left behind.
+  // Switching service: its saved model, and its model list (once per page).
   useEffect(() => {
-    request.current++;
-    setLoading(false);
+    const id = ++request.current;
     setError(null);
-    setModels([]);
     setDraft("");
-    if (!service) {
-      setKey(null);
-      setModel("");
-      return;
-    }
-    const saved = savedService(owner!, service);
-    setKey(saved?.key ?? null);
+    setBusy(false);
     setModel(saved?.model ?? "");
-    setRemember(!!saved?.remember);
-    if (saved?.key) loadModels(service, saved.key, saved.model, !!saved.remember);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [service, owner]);
+    setModels(service ? modelCache.get(service) ?? [] : []);
+    if (!service || !saved || modelCache.has(service)) return;
+    fetch(`/api/ai/models?service=${service}`)
+      .then(async (r) => {
+        const d = await r.json().catch(() => ({}));
+        if (id !== request.current) return;
+        if (!r.ok) {
+          setError(r.status === 401 ? "The saved key was rejected — remove it and add a new one." : d.error || "Couldn't load the models.");
+          return;
+        }
+        modelCache.set(service, d.models ?? []);
+        setModels(d.models ?? []);
+      })
+      .catch(() => id === request.current && setError("Couldn't load the models."));
+  }, [service, saved]);
 
   useEffect(() => {
-    if (service && key) {
-      onChange({ runner, web: { service, label: WEB_SERVICES[service].label, key, model }, ready: MODEL_RE.test(model) });
-    } else if (service) {
-      onChange({ runner, web: null, ready: false });
+    if (service) {
+      onChange({
+        runner,
+        web: saved && MODEL_RE.test(model) ? { service, label: WEB_SERVICES[service].label, model } : null,
+        ready: !!saved && MODEL_RE.test(model) && model === (saved.model ?? ""),
+      });
     } else {
       onChange({ runner, web: null, ready: !!cli.installed && cli.signedIn !== false });
     }
-  }, [runner, service, key, model, cli.installed, cli.signedIn, onChange]);
-
-  // Listing the models doubles as the key check: a key is saved only once
-  // its service has accepted it.
-  async function loadModels(svc: WebService, k: string, keep: string | undefined, keepOnDevice: boolean) {
-    const id = ++request.current;
-    setLoading(true);
-    setError(null);
-    try {
-      // Straight to the service from this tab; loaded on first use.
-      const { listModels, suggestModel } = await import("@/lib/ai/models");
-      let list: string[];
-      try {
-        list = (await listModels(svc, k, AbortSignal.timeout(15_000))).sort();
-      } catch (err: any) {
-        if (id !== request.current) return;
-        if (err?.kind === "auth") {
-          // A saved key that stopped working is no use kept: ask for a new one.
-          forgetService(owner!, svc);
-          setKey(null);
-          setModel("");
-          setError("That key was rejected.");
-        } else {
-          setError(err?.kind === "rate" ? "Rate limited — try again in a minute." : "Couldn't reach the service.");
-        }
-        return;
-      }
-      if (id !== request.current) return;
-      const chosen = keep && list.includes(keep) ? keep : keep || suggestModel(svc, list) || list[0] || "";
-      setModels(list);
-      setKey(k);
-      setModel(chosen);
-      saveService(owner!, svc, { key: k, model: chosen, remember: keepOnDevice });
-    } catch {
-      if (id === request.current) setError("Couldn't load the models.");
-    } finally {
-      if (id === request.current) setLoading(false);
-    }
-  }
+  }, [runner, service, saved, model, cli.installed, cli.signedIn, onChange]);
 
   function pick(value: string) {
     setRunner(value);
-    if (owner !== null) setLastRunner(owner, value);
+    setPreferredRunner(value);
+  }
+
+  async function saveKey() {
+    const key = draft.trim();
+    if (!service) return;
+    if (!isPlausibleKey(key)) {
+      setError("That doesn't look like an API key.");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/ai/keys", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ service, key }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(res.status === 401 ? "That key was rejected." : d.error || "Couldn't save the key.");
+        return;
+      }
+      setDraft("");
+      modelCache.set(service, d.models ?? []);
+      setVault(await savedServices(true));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function chooseModel(value: string) {
+    if (!service || !MODEL_RE.test(value) || value === saved?.model) return;
+    const res = await fetch("/api/ai/keys", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ service, model: value }),
+    }).catch(() => null);
+    if (res?.ok) setVault(await savedServices(true));
+    else setError("Couldn't save the model.");
+  }
+
+  async function removeKey() {
+    if (!service) return;
+    await fetch(`/api/ai/keys?service=${service}`, { method: "DELETE" }).catch(() => {});
+    modelCache.delete(service);
+    setVault(await savedServices(true));
   }
 
   return (
@@ -188,22 +183,18 @@ export default function RunnerPicker({
         </p>
       )}
 
-      {service && info && (
+      {service && info && vault && !vault.ready && (
+        <p className="text-sm text-warn">Web services aren&apos;t set up on this server yet.</p>
+      )}
+
+      {service && info && vault?.ready && (
         <>
-          {key ? (
+          {saved ? (
             <div className="flex items-center justify-between gap-3 text-sm">
               <span className="text-muted">API key</span>
               <span className="flex min-w-0 items-center gap-2">
-                <span className="truncate font-mono text-xs text-ink-2">{`${key.slice(0, 6)}…${key.slice(-4)}`}</span>
-                <button
-                  onClick={() => {
-                    forgetService(owner!, service);
-                    setKey(null);
-                    setModel("");
-                    setModels([]);
-                  }}
-                  className="ui-btn ui-btn-xs ui-btn-text"
-                >
+                <span className="truncate font-mono text-xs text-ink-2">••••{saved.hint}</span>
+                <button onClick={removeKey} className="ui-btn ui-btn-xs ui-btn-text">
                   Remove
                 </button>
               </span>
@@ -212,9 +203,7 @@ export default function RunnerPicker({
             <form
               onSubmit={(e) => {
                 e.preventDefault();
-                const k = draft.trim();
-                if (isPlausibleKey(k)) loadModels(service, k, undefined, remember);
-                else setError("That doesn't look like an API key.");
+                saveKey();
               }}
             >
               <label htmlFor="gen-key" className="mb-1.5 block text-sm font-medium text-ink">
@@ -231,21 +220,12 @@ export default function RunnerPicker({
                   placeholder={info.keyHint}
                   className="ui-field min-w-0 flex-1 font-mono"
                 />
-                <button type="submit" disabled={!draft.trim() || loading} className="ui-btn ui-btn-sm ui-btn-secondary shrink-0">
-                  {loading ? "Checking…" : "Use key"}
+                <button type="submit" disabled={!draft.trim() || busy} className="ui-btn ui-btn-sm ui-btn-secondary shrink-0">
+                  {busy ? "Checking…" : "Save key"}
                 </button>
               </div>
-              <label className="mt-2 flex items-center gap-2 text-sm text-ink-2">
-                <input
-                  type="checkbox"
-                  checked={remember}
-                  onChange={(e) => setRemember(e.target.checked)}
-                  className="ui-focus h-4 w-4 accent-[rgb(var(--accent))]"
-                />
-                Remember on this device
-              </label>
               <p className="mt-1.5 text-xs text-muted">
-                Goes from this browser straight to {info.label}; Notecom&apos;s server never sees it. Cleared when you sign out.{" "}
+                Sent once, then stored encrypted for your account only; it never comes back to the browser.{" "}
                 <a href={info.keyUrl} target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">
                   Get a key
                 </a>
@@ -253,7 +233,7 @@ export default function RunnerPicker({
             </form>
           )}
 
-          {key && (
+          {saved && (
             <div>
               <label htmlFor="gen-model" className="mb-1.5 block text-sm font-medium text-ink">
                 Model
@@ -262,11 +242,9 @@ export default function RunnerPicker({
                 id="gen-model"
                 list="gen-models"
                 value={model}
-                onChange={(e) => {
-                  setModel(e.target.value);
-                  saveService(owner!, service, { key, model: e.target.value, remember });
-                }}
-                placeholder={loading ? "Loading models…" : "Model id"}
+                onChange={(e) => setModel(e.target.value)}
+                onBlur={(e) => chooseModel(e.target.value.trim())}
+                placeholder="Model id"
                 spellCheck={false}
                 className="ui-field font-mono"
               />
