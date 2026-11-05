@@ -1,6 +1,6 @@
-// The reader's web-service keys and model choices, in this browser only —
-// never sent to the app's database. A key goes to the server with a generate
-// request, is used for that run, and is dropped when the run ends.
+// The reader's web-service keys and model choices, in this browser only. A
+// key goes from this tab straight to its service; the app's server never
+// receives it.
 //
 // Scoped to the signed-in account, so a shared or lab computer never hands one
 // person's key to the next; kept for this page only unless the reader asks to

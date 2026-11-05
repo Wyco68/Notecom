@@ -1,8 +1,6 @@
 // The AI services a reader can generate with from the web, by their own API
-// key. Safe to import on the client: names, links and shape checks only.
-//
-// Every service has a fixed endpoint, chosen here and never by the request, so
-// the server can only ever call these four hosts with a key it was handed.
+// key. The browser calls them directly (lib/ai/run.ts); each adapter's host
+// is fixed, and the page's CSP (middleware.ts) allows only these four.
 
 export type WebService = "anthropic" | "openai" | "gemini" | "openrouter";
 
@@ -40,6 +38,3 @@ export const MODEL_RE = /^[A-Za-z0-9][A-Za-z0-9._:/@-]{0,127}$/;
 export function isPlausibleKey(key: unknown): key is string {
   return typeof key === "string" && key.length >= 8 && key.length <= 512 && /^[\x21-\x7e]+$/.test(key);
 }
-
-/** Uploads sent to a web service: the smallest request limit among them. */
-export const WEB_MAX_UPLOAD_BYTES = 20 * 1024 * 1024;

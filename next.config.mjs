@@ -36,6 +36,11 @@ const nextConfig = {
   // @google-cloud/storage (GCS deployment only) uses dynamic requires the
   // bundler can't trace — keep it external so it's require()d at runtime.
   serverExternalPackages: ["@google-cloud/storage"],
+  // The template route reads the lesson and quiz docs at run time; a
+  // serverless bundle only ships files it can trace, so name them.
+  outputFileTracingIncludes: {
+    "/api/ai/template": ["./docs/*.md"],
+  },
   experimental: {
     optimizePackageImports: ["framer-motion"],
     // With a middleware, Next buffers every request body for it and hands the

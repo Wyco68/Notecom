@@ -1,4 +1,5 @@
-// Claude through the Anthropic API, with the reader's own key.
+// Claude through the Anthropic API, with the reader's own key, called from
+// the reader's browser (the key never passes through the app's server).
 //
 // Streamed, because a lesson is a long reply and a non-streaming request that
 // size can outlive an HTTP timeout. Opus-tier models get server-side refusal
@@ -8,9 +9,12 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { AiError, cleanMessage, type ChatRequest, type ChatResult, type Part } from "./core";
 
-// Set explicitly: the SDK would otherwise honour ANTHROPIC_BASE_URL from the
-// server's environment and send every reader's key to whatever it names.
+// Set explicitly, never from the environment, so a key goes only here.
 const ANTHROPIC_API = "https://api.anthropic.com";
+
+// The key is the reader's own and the page is theirs: calling from the
+// browser is the point, not a leak — it keeps the key off the app's server.
+const BROWSER = { dangerouslyAllowBrowser: true } as const;
 
 /** Models that accept `fallbacks: "default"`. */
 const FALLBACK_MODELS = new Set(["claude-fable-5-1", "claude-opus-5-5", "claude-opus-5", "claude-sonnet-5-5"]);
@@ -37,7 +41,7 @@ function block(p: Part): Anthropic.Beta.BetaContentBlockParam {
 }
 
 export async function chatAnthropic(req: ChatRequest): Promise<ChatResult> {
-  const client = new Anthropic({ apiKey: req.key, baseURL: ANTHROPIC_API, maxRetries: 2 });
+  const client = new Anthropic({ apiKey: req.key, baseURL: ANTHROPIC_API, maxRetries: 2, ...BROWSER });
   const effort = EFFORT.test(req.model);
   const fallback = FALLBACK_MODELS.has(req.model);
 
@@ -91,7 +95,7 @@ export async function chatAnthropic(req: ChatRequest): Promise<ChatResult> {
 
 /** The models this key can use, newest first. */
 export async function listAnthropicModels(key: string, signal: AbortSignal): Promise<string[]> {
-  const client = new Anthropic({ apiKey: key, baseURL: ANTHROPIC_API, maxRetries: 1 });
+  const client = new Anthropic({ apiKey: key, baseURL: ANTHROPIC_API, maxRetries: 1, ...BROWSER });
   const ids: string[] = [];
   try {
     for await (const m of client.models.list({ limit: 100 }, { signal })) ids.push(m.id);

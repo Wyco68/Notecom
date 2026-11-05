@@ -63,6 +63,16 @@ function generateNonce(): string {
  * already covered by 'self' regardless; the nonce is what the inline
  * framework scripts actually need).
  */
+// The AI services a reader can generate with from their browser, by their own
+// key (lib/ai/services.ts): the page calls them directly, so the key never
+// passes through this server. Only these hosts — nothing else is reachable.
+const AI_ORIGINS = [
+  "https://api.anthropic.com",
+  "https://api.openai.com",
+  "https://generativelanguage.googleapis.com",
+  "https://openrouter.ai",
+].join(" ");
+
 function buildCsp(nonce: string): string {
   return [
     "default-src 'self'",
@@ -70,7 +80,7 @@ function buildCsp(nonce: string): string {
     "style-src 'self' 'unsafe-inline'",
     `img-src 'self' data: blob:${SUPABASE_ORIGIN ? ` ${SUPABASE_ORIGIN}` : ""}`,
     "font-src 'self' data:",
-    `connect-src 'self'${SUPABASE_ORIGIN ? ` ${SUPABASE_ORIGIN}` : ""}`,
+    `connect-src 'self'${SUPABASE_ORIGIN ? ` ${SUPABASE_ORIGIN}` : ""} ${AI_ORIGINS}`,
     "frame-ancestors 'none'",
     "base-uri 'self'",
     "form-action 'self'",
@@ -179,13 +189,9 @@ const GENERATE_WINDOW_MS = 60 * 60_000;
 // use up the budget for generating.
 const SHEET_EDIT_LIMIT = 30;
 const IMAGES_LIMIT = 30;
-// Listing a web service's models is also a key check against that service:
-// enough for a reader entering or changing a key, far too few to test a list
-// of leaked keys through this server. Per user and per address, so new
-// accounts don't multiply it.
-const AI_MODELS_USER_LIMIT = 10;
-const AI_MODELS_IP_LIMIT = 30;
-const AI_MODELS_WINDOW_MS = 10 * 60_000;
+// Saving a lesson a web service wrote in the reader's browser: the tokens are
+// already spent on their own key, so the bucket is about write volume only.
+const WEB_SAVE_LIMIT = 30;
 const MEDIA_LIMIT = 600;
 
 // The blanket budget for everything else this middleware matches, pages
@@ -295,10 +301,8 @@ export async function middleware(req: NextRequest) {
     if (retryAfter !== null) return withCsp(tooManyRequests(retryAfter));
   }
 
-  if (req.method === "POST" && path === "/api/ai/models") {
-    const retryAfter =
-      rateLimit(`ai-models:${userId}`, AI_MODELS_USER_LIMIT, AI_MODELS_WINDOW_MS) ??
-      rateLimit(`ai-models-ip:${ip}`, AI_MODELS_IP_LIMIT, AI_MODELS_WINDOW_MS);
+  if (req.method === "POST" && path === "/api/generate/save") {
+    const retryAfter = rateLimit(`web-save:${userId}`, WEB_SAVE_LIMIT, GENERATE_WINDOW_MS);
     if (retryAfter !== null) return withCsp(tooManyRequests(retryAfter));
   }
 

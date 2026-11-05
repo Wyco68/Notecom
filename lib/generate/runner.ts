@@ -55,10 +55,6 @@ export interface Job {
   needsAuth?: boolean;
   /** live process handle — undefined once the job has finished */
   child?: ChildProcess;
-  /** a web-service run's request, cancelled by stopJob */
-  abort?: AbortController;
-  /** who writes it: "Claude Code" for a CLI run, else the web service's name */
-  service?: string;
   /** the folder's id: slugs repeat across owners, so runs queue by this */
   folderId?: string;
   /** the signed-in user who started this job. The CLI itself has no notion of
@@ -143,15 +139,15 @@ export function getJob(id: string, userId: string): Job | undefined {
 export function listJobs(
   userId: string
 ): Array<
-  Pick<Job, "id" | "status" | "folder" | "kind" | "sheet" | "step" | "edit" | "startedAt" | "tokens" | "needsAuth" | "saved" | "service">
+  Pick<Job, "id" | "status" | "folder" | "kind" | "sheet" | "step" | "edit" | "startedAt" | "tokens" | "needsAuth" | "saved">
 > {
   // Picked, not spread: a job carries server-side state (temp paths, source
   // text, the CLI session) that has no business leaving this process.
   return [...jobs.values()]
     .filter((j) => j.startedBy === userId)
     .sort((a, b) => b.startedAt - a.startedAt)
-    .map(({ id, status, folder, kind, sheet, step, edit, startedAt, tokens, needsAuth, saved, service }) => ({
-      id, status, folder, kind, sheet, step, edit, startedAt, tokens, needsAuth, saved, service,
+    .map(({ id, status, folder, kind, sheet, step, edit, startedAt, tokens, needsAuth, saved }) => ({
+      id, status, folder, kind, sheet, step, edit, startedAt, tokens, needsAuth, saved,
     }));
 }
 
@@ -273,7 +269,7 @@ export function startJob(
  * promise) so one run's rejection can never wedge the folder's queue for
  * whatever comes after it. A job stopped while it waited never runs.
  */
-export function queueInFolder(job: Job, run: () => Promise<void>): void {
+function queueInFolder(job: Job, run: () => Promise<void>): void {
   // By id: two owners can each have a folder with the same slug, and one
   // must never wait on — or learn about — the other's runs.
   const key = job.folderId ?? `${job.startedBy}/${job.folder}`;
@@ -682,7 +678,6 @@ export function stopJob(id: string, userId: string): boolean {
   if (!job || job.status !== "running") return false;
   job.status = "aborted";
   job.log.push("Stopped.");
-  job.abort?.abort();
   if (job.child?.pid) {
     if (process.platform === "win32") {
       spawn("taskkill", ["/pid", String(job.child.pid), "/T", "/F"], { windowsHide: true });

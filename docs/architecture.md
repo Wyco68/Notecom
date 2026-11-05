@@ -94,51 +94,55 @@ LibreOffice the upload is refused before the run, saying to save it as
 ## Web generation: any service, the reader's own key (2026-11)
 
 A lesson or quiz can also be written by a web service instead of the local
-CLI, so generating works on the hosted app too. The Generate dialog's "Runs
+CLI, so generating works on the hosted app too — including Vercel, where a
+function can't run for minutes after it answers or keep jobs in memory
+between requests. So a web run happens **in the reader's browser**
+(`lib/ai/run.ts`), not on the server. The Generate dialog's "Runs
 with" picker offers three kinds: **Subscription** (Claude Code on this
 computer — the CLI path above), **Pay per use** (Claude, OpenAI or Gemini API
 with the reader's key) and **OpenRouter** (one key, most other model makers).
 
-- **Keys stay with the reader.** A key is kept in the browser
-  (`lib/ai/keys.ts`), per account (`notecom.ai:<user id>`), for the page only
-  unless the reader ticks "Remember on this device", and wiped on sign-out —
-  in this tab or another. It is sent with the generate request, held in the
-  run's closure while it runs, and dropped when it ends — never on the job, in
-  the log, in Supabase or on disk; provider errors are scrubbed of it
-  (`cleanMessage`). `POST /api/ai/models` lists the models a key can use; that
-  list is also the key check, so a rejected key is never kept, and it has its
-  own small rate budget (10 per 10 minutes per user, 30 per address) so the
-  server can't be used to test leaked keys.
+- **Keys never reach the server.** The browser calls the service directly
+  with the reader's key; the page's CSP `connect-src` allows exactly the four
+  service hosts. The key is kept in the browser (`lib/ai/keys.ts`), per
+  account (`notecom.ai:<user id>`), for the page only unless the reader ticks
+  "Remember on this device", and wiped on sign-out — in this tab or another.
+  Provider errors shown in the log are scrubbed of it (`cleanMessage`). The
+  model list comes from the service with the same key, which is also the key
+  check, so a rejected key is never kept.
 - **Fixed endpoints.** `lib/ai/services.ts` names four services, each with its
-  host fixed in its adapter (the Anthropic client sets `baseURL` explicitly, so
-  an `ANTHROPIC_BASE_URL` in the server's environment can't redirect readers'
-  keys) (`anthropic.ts` via the official SDK; `openai.ts`
+  host fixed in its adapter (the Anthropic client sets `baseURL` explicitly
+  and runs with `dangerouslyAllowBrowser`, which here is the point: the key is
+  the reader's own, in their own tab) (`anthropic.ts` via the official SDK; `openai.ts`
   for OpenAI and OpenRouter's shared Chat Completions API; `gemini.ts`). The
   request picks a service, never a URL, so the server can't be pointed at an
   internal address.
 - **The same template.** `lib/generate/template.ts` builds the system prompt
   from the docs `/lect` and `/quiz` load (`teaching-guidelines.md`,
   `html-output-contract.md`, `lesson-template.md`; `quiz-guidelines.md`),
-  read from the checkout at run time — the Docker image copies `docs/`. The
+  read at run time and served by `GET /api/ai/template` — the Docker image
+  copies `docs/`, and `next.config.mjs` traces them into the serverless
+  bundle. The
   command files are not sent: they describe the CLI's tools and file
   workflow, which a web run doesn't have.
-- **The upload stays in memory.** `lib/generate/source.ts` sends a PDF or a
-  picture as-is (every service reads both), Markdown as text, and a `.pptx` /
-  `.docx` as the text pulled out of its zip. That path reads anyone's upload,
-  so it is bounded: `readZip` caps entries, refuses entries that share data
-  or point outside the file, inflates each to its declared size and the whole
-  archive to 100 MB; the text is read in one linear pass, with caps on slides,
-  XML size and total text. A hostile file is refused in milliseconds. No slide pictures, so no picture
+- **The upload never leaves the browser except to the service.**
+  `lib/ai/source.ts` sends a PDF or a picture as-is (every service reads
+  both), Markdown as text, and a `.pptx` / `.docx` as the text pulled out of
+  its zip (the browser's `DecompressionStream`), bounded like the server's
+  zip reader: capped entries, no shared or out-of-file entries, inflation
+  capped per entry and per archive, one linear pass for the text. Up to 20 MB
+  — no platform request limit applies, since it never goes to the app. No slide pictures, so no picture
   mode: that stays CLI-only.
-- **Same job, same checks, same save.** `lib/generate/web.ts` registers a
-  normal `Job`, queues behind the folder's other runs (`queueInFolder`),
-  streams the reply, and runs the contract check with up to two fix rounds,
-  sending the violations back in the conversation. A passing document goes
-  `ready` and saves through `POST /api/generate/[id]` like a CLI run.
-  `stopJob` cancels the request through the job's `AbortController`; a whole
-  run is cut off at 15 minutes. Runs queue by folder id, not slug — slugs
-  repeat across owners — and a caller may have at most three going, checked
-  on the server before the upload is read.
+- **Same checks, same save, same job UI.** The run streams the reply, runs
+  the contract check (`lib/generate/validate.ts`, shared with the server) with
+  up to two fix rounds, sending the violations back in the conversation, and
+  posts only the finished HTML to `POST /api/generate/save`, which runs the
+  check again — the browser's verdict is never trusted — and saves through
+  `saveGenerated` under RLS. In the UI it is an ordinary job
+  (`GenerateJobsProvider`): log, token counter, Stop, sidebar row. It lives in
+  the page, so a reload ends it; the page asks before leaving while one runs.
+- **CLI runs** queue by folder id, not slug — slugs repeat across owners — and
+  a caller may have at most three going, checked before the upload is read.
 - **Claude defaults.** `claude-opus-5-5` is preselected for the Claude API,
   streamed at effort `high` with up to 64K output tokens; Opus-tier models
   send `fallbacks: "default"` (beta `server-side-fallback-2026-07-01`), so a

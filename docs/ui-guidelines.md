@@ -275,8 +275,9 @@ appearing.
   ([components/generate/RunnerPicker.tsx](../components/generate/RunnerPicker.tsx)):
   one `<select>` in three groups — Subscription (Claude Code · this computer,
   only where the CLI exists), Pay per use (Claude, OpenAI, Gemini API) and
-  OpenRouter. A web service asks for its key once (a password field, with the
-  one line saying it stays in this browser), then shows the key masked with
+  OpenRouter. A web service asks for its key once (a password field, a
+  "Remember on this device" box, and the one line saying it goes straight to
+  the service and never to Notecom's server), then shows the key masked with
   Remove, and a model field whose suggestions come from the key's own model
   list. Pictures is disabled for web services. Then one primary button. The run's log is a quiet cover-tinted box,
   not a terminal costume.

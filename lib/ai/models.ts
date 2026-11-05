@@ -1,6 +1,7 @@
-// Lists the models a key can use, so the reader picks from what their account
-// really has instead of a list that goes stale here. Listing doubles as the
-// key check: a rejected key fails here, before any upload.
+// Lists the models a key can use, from the browser, so the reader picks from
+// what their account really has instead of a list that goes stale here.
+// Listing doubles as the key check: a rejected key fails here, before any
+// upload.
 
 import { listAnthropicModels } from "./anthropic";
 import { listOpenAICompatibleModels } from "./openai";

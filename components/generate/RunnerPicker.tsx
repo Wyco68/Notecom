@@ -109,33 +109,32 @@ export default function RunnerPicker({
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/ai/models", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ service: svc, key: k }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (id !== request.current) return;
-      if (!res.ok) {
-        if (res.status === 401) {
+      // Straight to the service from this tab; loaded on first use.
+      const { listModels, suggestModel } = await import("@/lib/ai/models");
+      let list: string[];
+      try {
+        list = (await listModels(svc, k, AbortSignal.timeout(15_000))).sort();
+      } catch (err: any) {
+        if (id !== request.current) return;
+        if (err?.kind === "auth") {
           // A saved key that stopped working is no use kept: ask for a new one.
           forgetService(owner!, svc);
           setKey(null);
           setModel("");
           setError("That key was rejected.");
         } else {
-          setError(data.error || "Couldn't load the models.");
+          setError(err?.kind === "rate" ? "Rate limited — try again in a minute." : "Couldn't reach the service.");
         }
         return;
       }
-      const list: string[] = data.models ?? [];
-      const chosen = keep && list.includes(keep) ? keep : keep || data.suggested || list[0] || "";
+      if (id !== request.current) return;
+      const chosen = keep && list.includes(keep) ? keep : keep || suggestModel(svc, list) || list[0] || "";
       setModels(list);
       setKey(k);
       setModel(chosen);
       saveService(owner!, svc, { key: k, model: chosen, remember: keepOnDevice });
     } catch {
-      if (id === request.current) setError("Couldn't reach the server.");
+      if (id === request.current) setError("Couldn't load the models.");
     } finally {
       if (id === request.current) setLoading(false);
     }
@@ -246,7 +245,7 @@ export default function RunnerPicker({
                 Remember on this device
               </label>
               <p className="mt-1.5 text-xs text-muted">
-                Sent to {info.label} only when you generate; never stored by Notecom. Cleared when you sign out.{" "}
+                Goes from this browser straight to {info.label}; Notecom&apos;s server never sees it. Cleared when you sign out.{" "}
                 <a href={info.keyUrl} target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">
                   Get a key
                 </a>
