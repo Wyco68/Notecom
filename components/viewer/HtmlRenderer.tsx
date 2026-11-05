@@ -114,43 +114,26 @@ function nodeToReact(node: Node, key: number): ReactNode {
     return <blockquote key={key}>{childrenToReact(el)}</blockquote>;
   }
 
-  // "Concept: <Name>" headings start a new major section — set them apart
-  // from the plain repeated sub-headings (How it Works, Example, etc.) with
-  // distinct size/color instead of identical h2 styling.
-  if (tag === "h2" && /^Concept:/.test(el.textContent ?? "")) {
+  // Major sections — Overview, every "Concept: …", Summary — get the section
+  // size. A Concept drops the word "Concept" on screen (it stays in the DOM,
+  // visually hidden, so a search hit still finds the heading by its full text).
+  if (tag === "h2") {
+    const text = (el.textContent ?? "").trim();
+    const concept = /^Concept:/.test(text);
+    const major = concept || /^(Overview|Summary)$/i.test(text);
+    if (concept) {
+      const rest = text.replace(/^Concept:\s*/, "");
+      return (
+        <h2 key={key} className="lesson-major">
+          <span className="sr-only">Concept: </span>
+          {rest}
+        </h2>
+      );
+    }
     return (
-      <h2
-        key={key}
-        className="!mt-14 !text-4xl !font-bold !text-blue-700 dark:!text-blue-300"
-      >
+      <h2 key={key} className={major ? "lesson-major" : undefined}>
         {childrenToReact(el)}
       </h2>
-    );
-  }
-
-  // "Overview" is the lesson's opening section — set apart with its own
-  // color, same treatment as Concept headings.
-  if (tag === "h2" && (el.textContent ?? "").trim() === "Overview") {
-    return (
-      <h2
-        key={key}
-        className="!mt-2 !text-4xl !font-bold !text-purple-700 dark:!text-purple-300"
-      >
-        {childrenToReact(el)}
-      </h2>
-    );
-  }
-
-  // Code blocks get the project's blue accent instead of Tailwind
-  // Typography's default near-black — same palette as Callout/Mermaid.
-  if (tag === "pre") {
-    return (
-      <pre
-        key={key}
-        className="!border !border-blue-200 !bg-blue-50 !text-blue-900 dark:!border-blue-800/50 dark:!bg-blue-950/20 dark:!text-blue-100"
-      >
-        {childrenToReact(el)}
-      </pre>
     );
   }
 
@@ -178,11 +161,11 @@ function nodeToReact(node: Node, key: number): ReactNode {
             height={size("height")}
             loading="lazy"
             decoding="async"
-            className="!my-0 mx-auto h-auto max-h-[70vh] w-auto max-w-full rounded-lg border border-gray-200 bg-white object-contain dark:border-gray-700"
+            className="mx-auto h-auto max-h-[70vh] w-auto max-w-full rounded-md border border-line bg-white object-contain"
           />
         </a>
         {caption && (
-          <figcaption className="!mt-2 text-center text-sm text-gray-500 dark:text-gray-400">
+          <figcaption className="mt-2 text-center text-sm text-muted">
             {childrenToReact(caption)}
           </figcaption>
         )}
@@ -228,7 +211,7 @@ export default function HtmlRenderer({ html }: { html: string }) {
       : null;
 
   return (
-    <div className="prose prose-base sm:prose-lg dark:prose-invert max-w-none prose-headings:font-semibold prose-h1:text-3xl sm:prose-h1:text-5xl prose-h2:text-2xl prose-h3:text-xl prose-p:text-base sm:prose-p:text-lg prose-li:text-base sm:prose-li:text-lg prose-table:text-sm sm:prose-table:text-base">
+    <div className="lesson">
       {doc ? childrenToReact(doc.body) : null}
     </div>
   );

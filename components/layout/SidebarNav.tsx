@@ -1,8 +1,8 @@
 "use client";
 
 import BellIcon from "@/components/icons/BellIcon";
-import StarIcon from "@/components/icons/StarIcon";
-import SearchIcon from "@/components/icons/SearchIcon";
+import HomeIcon from "@/components/icons/HomeIcon";
+import CompassIcon from "@/components/icons/CompassIcon";
 import UserIcon from "@/components/icons/UserIcon";
 import { useNotifications } from "@/components/collab/NotificationsProvider";
 
@@ -33,9 +33,9 @@ export default function SidebarNav({
   if (!notifications) return null;
 
   return (
-    <nav aria-label="Workspace" className="border-b border-black/10 px-2 py-2 dark:border-white/10">
+    <nav aria-label="Workspace" className="px-2 pb-2 pt-3">
       <NavRow
-        icon={<StarIcon className="h-4 w-4" />}
+        icon={<HomeIcon className="h-4 w-4" />}
         label="Home"
         active={active === "home"}
         onClick={() => onOpen("home")}
@@ -48,7 +48,7 @@ export default function SidebarNav({
         count={notifications.count}
       />
       <NavRow
-        icon={<SearchIcon className="h-4 w-4" />}
+        icon={<CompassIcon className="h-4 w-4" />}
         label="Discover"
         active={active === "discover"}
         onClick={() => onOpen("discover")}
@@ -81,21 +81,14 @@ function NavRow({
     <button
       onClick={onClick}
       aria-current={active ? "page" : undefined}
-      className={`ui-row flex w-full items-center gap-2.5 px-1.5 py-1.5 text-left text-sm ${
-        active
-          ? "bg-blue-600/10 text-blue-700 dark:bg-blue-600/20 dark:text-blue-300"
-          : "text-gray-700 dark:text-gray-300"
+      className={`ui-row flex w-full items-center gap-2.5 px-2 py-1.5 text-left text-sm ${
+        active ? "ui-row-on" : "text-ink-2"
       }`}
     >
-      <span className={`shrink-0 ${active ? "" : "text-gray-500 dark:text-gray-400"}`}>
-        {icon}
-      </span>
+      <span className={`shrink-0 ${active ? "" : "text-muted"}`}>{icon}</span>
       <span className="min-w-0 flex-1 truncate">{label}</span>
       {!!count && (
-        <span
-          data-numeric
-          className="ui-badge shrink-0 border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-300"
-        >
+        <span data-numeric className="ui-badge shrink-0 border-transparent bg-accent-grad text-white">
           {count > 99 ? "99+" : count}
         </span>
       )}

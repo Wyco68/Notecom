@@ -64,29 +64,27 @@ function SignInForm() {
     <AuthShell
       title="Sign in"
       subtitle={
-        step === "password"
-          ? "To share folders and join other people's."
-          : `Enter the 8-digit code we emailed to ${email}.`
+        step === "password" ? undefined : `Enter the 8-digit code sent to ${email}.`
       }
       footer={
         <>
           {step === "password" && (
-            <div className="flex justify-between">
+            <div className="flex justify-between border-t border-line pt-5">
               <a
                 href={`/auth/sign-up?next=${encodeURIComponent(next)}`}
-                className="ui-focus rounded text-blue-600 transition-colors duration-150 ease-out hover:text-blue-500 dark:text-blue-400"
+                className="ui-focus rounded text-accent transition-colors duration-150 ease-out hover:text-accent/80"
               >
                 Create account
               </a>
               <a
                 href={`/auth/reset?next=${encodeURIComponent(next)}`}
-                className="ui-focus rounded text-blue-600 transition-colors duration-150 ease-out hover:text-blue-500 dark:text-blue-400"
+                className="ui-focus rounded text-accent transition-colors duration-150 ease-out hover:text-accent/80"
               >
                 Forgot password?
               </a>
             </div>
           )}
-          <AuthFootLink href="/vault">Back to vault</AuthFootLink>
+          <AuthFootLink href="/vault">Back to notes</AuthFootLink>
         </>
       }
     >
@@ -119,7 +117,7 @@ function SignInForm() {
             className="ui-field mb-3"
           />
           {error && (
-            <p role="alert" className="mb-3 text-xs text-red-600 dark:text-red-400">
+            <p role="alert" className="mb-3 text-xs text-danger">
               {error}
             </p>
           )}
@@ -150,7 +148,7 @@ function SignInForm() {
             className="ui-field mb-3 text-center font-mono text-lg tracking-[0.3em]"
           />
           {error && (
-            <p role="alert" className="mb-3 text-xs text-red-600 dark:text-red-400">
+            <p role="alert" className="mb-3 text-xs text-danger">
               {error}
             </p>
           )}
@@ -168,7 +166,7 @@ function SignInForm() {
               setCode("");
               setError(null);
             }}
-            className="ui-focus mt-4 w-full rounded text-center text-sm text-blue-600 transition-colors duration-150 ease-out hover:text-blue-500 dark:text-blue-400"
+            className="ui-focus mt-4 w-full rounded text-center text-sm text-accent transition-colors duration-150 ease-out hover:text-accent/80"
           >
             Back
           </button>

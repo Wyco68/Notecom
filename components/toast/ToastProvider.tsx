@@ -54,12 +54,13 @@ export function ToastProvider({ children }: { children: ReactNode }) {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 4, scale: 0.98 }}
               transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
-              className={`pointer-events-auto max-w-sm rounded-md border px-4 py-2.5 text-sm shadow-lg ${
-                t.kind === "success"
-                  ? "border-emerald-500/30 bg-emerald-50 text-emerald-800 dark:border-emerald-800/60 dark:bg-emerald-950/90 dark:text-emerald-200"
-                  : "border-red-500/30 bg-red-50 text-red-800 dark:border-red-800/60 dark:bg-red-950/90 dark:text-red-200"
-              }`}
+              role={t.kind === "success" ? "status" : "alert"}
+              className="pointer-events-auto flex max-w-sm items-start gap-2.5 rounded-lg border border-line bg-raised px-3.5 py-2.5 text-sm text-ink shadow-panel"
             >
+              <span
+                aria-hidden
+                className={`mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full ${t.kind === "success" ? "bg-ok" : "bg-danger"}`}
+              />
               {t.message}
             </motion.div>
           ))}

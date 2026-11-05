@@ -1,29 +1,49 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
+import CloseIcon from "../icons/CloseIcon";
 
-// Small shared modal shell: dimmed backdrop + centered panel.
+// The one dialog shell: a dimmed page, a raised sheet, a title and the way out.
 export default function Modal({
   title,
   onClose,
   children,
+  size = "sm",
 }: {
   title: string;
   onClose: () => void;
   children: ReactNode;
+  /** sm for confirmations and one-field forms, md for the generation dialogs. */
+  size?: "sm" | "md";
 }) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
   return (
     <div
-      className="fixed inset-0 z-modal flex items-center justify-center bg-black/60 p-4"
+      className="fixed inset-0 z-modal flex items-center justify-center bg-[rgb(var(--shadow)/0.45)] p-4"
       onClick={onClose}
     >
       <div
-        className="w-full max-w-sm rounded-lg border border-black/10 bg-white p-5 shadow-xl dark:border-white/10 dark:bg-[#161b22]"
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        className={`ui-rise max-h-[calc(100dvh-2rem)] w-full overflow-y-auto rounded-xl border border-line bg-raised p-5 shadow-panel sm:p-6 ${
+          size === "md" ? "max-w-md" : "max-w-sm"
+        }`}
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="mb-4 text-sm font-semibold tracking-tight text-gray-900 dark:text-gray-100">
-          {title}
-        </h2>
+        <div className="mb-5 flex items-center justify-between gap-3">
+          <h2 className="text-base font-bold tracking-tight text-ink">{title}</h2>
+          <button onClick={onClose} title="Close" aria-label="Close" className="ui-icon-btn -mr-1.5 h-7 w-7">
+            <CloseIcon className="h-4 w-4" />
+          </button>
+        </div>
         {children}
       </div>
     </div>

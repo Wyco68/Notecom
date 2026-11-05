@@ -25,12 +25,12 @@ export default function MemberRow({
   const editable = canManage && member.role !== "owner";
 
   return (
-    <div className="group flex items-center gap-3 rounded px-2 py-2 transition-colors duration-150 ease-out hover:bg-black/[0.04] dark:hover:bg-white/[0.06]">
+    <div className="group flex items-center gap-3 rounded px-2 py-2 transition-colors duration-150 ease-out hover:bg-ink/[0.04]">
       <Avatar username={member.username} avatarUrl={member.avatarUrl} />
       <div className="min-w-0 flex-1">
-        <div className="truncate text-sm text-gray-900 dark:text-gray-100">
+        <div className="truncate text-sm text-ink">
           {member.username}
-          {isSelf && <span className="ml-1 text-xs text-gray-400">(you)</span>}
+          {isSelf && <span className="ml-1 text-xs text-muted">(you)</span>}
         </div>
       </div>
 

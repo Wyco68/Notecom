@@ -2,21 +2,72 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── Tokens ────────────────────────────────────────────────────────────────
+   Light is white with blue: a white page, a sidebar that fades from white to
+   pale blue, and one blue gradient for the primary action. Dark is neutral
+   graphite — no blue in the surfaces, only in the accent. Values are RGB
+   triplets so Tailwind's opacity modifiers work (`bg-ink/5`). Named in
+   tailwind.config.ts; documented in docs/ui-guidelines.md. */
+:root {
+  --paper: 255 255 255;
+  --cover: 241 245 253;
+  --raised: 255 255 255;
+  --line: 228 233 242;
+  --cover-line: 214 224 242;
+  --ink: 17 24 39;
+  --ink-2: 55 65 81;
+  --muted: 88 96 112;
+  --accent: 37 99 235;
+  --accent-strong: 29 78 216;
+  --accent-ink: 255 255 255;
+  --danger: 200 40 50;
+  --ok: 22 128 72;
+  --warn: 160 90 8;
+  --shadow: 30 50 100;
+
+  --grad-chrome: linear-gradient(180deg, #f8faff 0%, #dfe9fd 100%);
+  --grad-accent: linear-gradient(180deg, #3478f6 0%, #1d4ed8 100%);
+  --grad-wash: linear-gradient(180deg, #e6eefd 0%, rgb(255 255 255 / 0) 26rem);
+  color-scheme: light;
+}
+
+.dark {
+  --paper: 14 14 16;
+  --cover: 26 26 29;
+  --raised: 24 24 27;
+  --line: 39 39 43;
+  --cover-line: 44 44 49;
+  --ink: 237 237 240;
+  --ink-2: 205 205 211;
+  --muted: 154 154 163;
+  --accent: 110 165 255;
+  --accent-strong: 110 165 255;
+  --accent-ink: 14 14 16;
+  --danger: 248 113 113;
+  --ok: 94 200 140;
+  --warn: 236 178 90;
+  --shadow: 0 0 0;
+
+  --grad-chrome: linear-gradient(180deg, #1d1d21 0%, #111113 100%);
+  --grad-accent: linear-gradient(180deg, #3478f6 0%, #1d4ed8 100%);
+  --grad-wash: linear-gradient(180deg, #1c1c20 0%, rgb(14 14 16 / 0) 26rem);
+  color-scheme: dark;
+}
+
 html,
 body {
   height: 100%;
 }
 
-/* ── Type ──────────────────────────────────────────────────────────────────
-   Geist ships a real Medium and SemiBold, so hierarchy comes from weight
-   rather than from size alone. The two rules below are the ones worth having
-   app-wide: headings lose the tracking that display sizes don't need, and
-   prose stops leaving a single word alone on its last line. */
 @layer base {
+  body {
+    @apply bg-paper text-ink;
+  }
+
   h1,
   h2,
   h3 {
-    letter-spacing: -0.018em;
+    letter-spacing: -0.015em;
     text-wrap: balance;
   }
 
@@ -24,183 +75,174 @@ body {
     text-wrap: pretty;
   }
 
-  /* Counts, dates, byte sizes and sequence numbers line up column-wise
-     instead of jittering as digits change. */
+  /* Counts and dates line up column-wise. */
   time,
   [data-numeric] {
     font-variant-numeric: tabular-nums;
   }
+
+  ::selection {
+    background: rgb(var(--accent) / 0.22);
+  }
+
+  input,
+  textarea {
+    caret-color: rgb(var(--accent));
+  }
+
+  a {
+    text-underline-offset: 3px;
+  }
 }
 
-/* ── Shared control conventions ────────────────────────────────────────────
-   One look for every text input, select, textarea and button in the app.
-   These exist because the same control was being spelled eight slightly
-   different ways across auth, account, the folder console and the modals.
-   Documented in docs/ui-guidelines.md — extend there, not ad hoc. */
+/* ── Shared controls ───────────────────────────────────────────────────────
+   One spelling for every field, button and row. Text is the control; only the
+   primary action is filled, with the blue gradient. Documented in
+   docs/ui-guidelines.md. */
 @layer components {
-  /* Keyboard focus, always visible. Most controls were `outline-none` with
-     nothing put back; this is what replaces it. */
   .ui-focus {
-    @apply outline-none focus-visible:ring-2 focus-visible:ring-blue-600/70 dark:focus-visible:ring-blue-500/70;
+    @apply outline-none focus-visible:ring-2 focus-visible:ring-accent/60;
   }
 
-  /* Text inputs, selects, textareas. */
   .ui-field {
-    @apply w-full rounded-md border border-black/10 bg-white px-3 py-2 text-sm text-gray-900 outline-none transition-colors duration-150 ease-out;
-    @apply placeholder:text-gray-400 hover:border-black/20;
-    @apply focus-visible:border-blue-600 focus-visible:ring-2 focus-visible:ring-blue-600/25;
+    @apply w-full rounded-lg border border-line bg-paper px-3 py-2 text-sm text-ink outline-none;
+    @apply transition-colors duration-150 ease-out;
+    @apply placeholder:text-muted hover:border-ink/25;
+    @apply focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/20;
     @apply disabled:cursor-not-allowed disabled:opacity-50;
-    @apply dark:border-white/10 dark:bg-white/[0.04] dark:text-gray-100 dark:placeholder:text-gray-500;
-    @apply dark:hover:border-white/20 dark:focus-visible:border-blue-500 dark:focus-visible:ring-blue-500/25;
   }
 
-  /* A denser field for rows and inline controls. */
   .ui-field-sm {
     @apply px-2.5 py-1.5 text-sm;
   }
 
   .ui-btn {
-    @apply inline-flex items-center justify-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium;
-    @apply transition-colors duration-150 ease-out outline-none;
-    @apply focus-visible:ring-2 focus-visible:ring-blue-600/70;
+    @apply inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium;
+    @apply transition-[color,background-color,border-color,filter,box-shadow] duration-150 ease-out outline-none;
+    @apply focus-visible:ring-2 focus-visible:ring-accent/60;
     @apply disabled:cursor-not-allowed disabled:opacity-50;
   }
 
-  /* Inline button: the same shape at row height. */
   .ui-btn-sm {
     @apply px-3 py-1.5 text-sm;
   }
 
-  /* Dense button: pagination, inbox actions, chips. */
   .ui-btn-xs {
-    @apply gap-1 px-2.5 py-1 text-xs;
+    @apply gap-1 px-2 py-1 text-xs;
   }
 
+  /* The one filled control: the blue gradient, white text in both themes. */
   .ui-btn-primary {
-    @apply bg-blue-600 text-white hover:bg-blue-500 disabled:hover:bg-blue-600;
+    @apply bg-accent-grad text-white shadow-[0_1px_2px_rgb(29_78_216/0.25),inset_0_1px_0_rgb(255_255_255/0.15)];
+    @apply hover:brightness-110 disabled:hover:brightness-100;
   }
 
   .ui-btn-secondary {
-    @apply border border-black/10 text-gray-700 hover:bg-black/[0.04];
-    @apply dark:border-white/10 dark:text-gray-300 dark:hover:bg-white/[0.06];
+    @apply border border-line bg-paper text-ink hover:border-ink/25 hover:bg-ink/[0.03];
   }
 
   .ui-btn-ghost {
-    @apply text-gray-700 hover:bg-black/[0.04] dark:text-gray-300 dark:hover:bg-white/[0.06];
+    @apply text-ink-2 hover:bg-ink/[0.05] hover:text-ink;
+  }
+
+  /* A link-weight action: blue text, no box. */
+  .ui-btn-text {
+    @apply px-1 text-accent hover:bg-accent/[0.08];
   }
 
   .ui-btn-danger {
-    @apply bg-red-600 text-white hover:bg-red-500 disabled:hover:bg-red-600;
-    @apply focus-visible:ring-red-600/70 dark:focus-visible:ring-red-500/70;
+    @apply bg-danger text-white hover:bg-danger/90 disabled:hover:bg-danger dark:text-paper;
+    @apply focus-visible:ring-danger/60;
   }
 
   .ui-btn-danger-outline {
-    @apply border border-red-500/40 text-red-600 hover:bg-red-500/10 dark:text-red-400;
-    @apply focus-visible:ring-red-600/70 dark:focus-visible:ring-red-500/70;
+    @apply border border-danger/40 text-danger hover:bg-danger/[0.08];
+    @apply focus-visible:ring-danger/60;
   }
 
-  /* Square icon-only control (sidebar chrome, row actions). */
   .ui-icon-btn {
-    @apply inline-flex shrink-0 items-center justify-center rounded text-gray-500;
+    @apply inline-flex shrink-0 items-center justify-center rounded-md text-muted;
     @apply transition-colors duration-150 ease-out outline-none;
-    @apply hover:bg-black/5 hover:text-gray-700 focus-visible:ring-2 focus-visible:ring-blue-600/70;
+    @apply hover:bg-ink/[0.06] hover:text-ink focus-visible:ring-2 focus-visible:ring-accent/60;
     @apply disabled:cursor-not-allowed disabled:opacity-50;
-    @apply dark:text-gray-400 dark:hover:bg-white/10 dark:hover:text-gray-200;
   }
 
   .ui-icon-btn-danger {
-    @apply hover:bg-red-500/10 hover:text-red-500 dark:hover:bg-red-500/10 dark:hover:text-red-400;
-    @apply focus-visible:ring-red-600/70 dark:focus-visible:ring-red-500/70;
+    @apply hover:bg-danger/10 hover:text-danger focus-visible:ring-danger/60;
   }
 
-  /* A row that tints on hover, and nudges a hair toward the reader. Colour and
-     transform only — never size, never layout, so the fixed-width sidebar can't
-     reflow on hover. */
+  /* A list or tree row. Colour only, so the fixed sidebar never reflows. */
   .ui-row {
-    @apply rounded outline-none;
-    @apply transition-[color,background-color,transform] duration-150 ease-out;
-    @apply hover:translate-x-0.5 hover:bg-black/[0.04];
-    @apply focus-visible:ring-2 focus-visible:ring-blue-600/70;
-    @apply dark:hover:bg-white/[0.06];
+    @apply rounded-md outline-none;
+    @apply transition-colors duration-150 ease-out;
+    @apply hover:bg-ink/[0.05] focus-visible:ring-2 focus-visible:ring-accent/60;
   }
 
-  /* Hover-revealed row action. It stays in the layout at all times and only
-     fades, so revealing it can never resize a row or the fixed sidebar —
-     `hidden group-hover:flex` reflowed the row on every hover. */
+  /* The row that is open: a blue tint and blue text, the text one step
+     darker than the accent so it holds AA on the tint. */
+  .ui-row-on {
+    @apply bg-accent/10 font-medium text-accent-strong hover:bg-accent/[0.14];
+  }
+
+  /* Hover-revealed row action: always in the layout, only fades. */
   .ui-reveal {
     @apply pointer-events-none opacity-0;
     @apply group-hover:pointer-events-auto group-hover:opacity-100;
     @apply group-focus-within:pointer-events-auto group-focus-within:opacity-100;
-    /* Spelled out rather than `transition-opacity` so it composes with
-       .ui-icon-btn's colour transition instead of overriding it. */
     transition-property: opacity, color, background-color, border-color;
     transition-duration: 150ms;
     transition-timing-function: cubic-bezier(0, 0, 0.2, 1);
   }
 
-  /* A list or pane that scrolls. Momentum-free smooth scrolling so a jump to a
-     row or a heading glides instead of teleporting; the reduced-motion block
-     below turns it back into an instant jump. */
   .ui-scroll {
     @apply overflow-y-auto;
     scroll-behavior: smooth;
     overscroll-behavior: contain;
   }
 
-  /* Enter animation for a row or card arriving in a list. Pair it with an
-     inline `animationDelay` to stagger a short list — never a long one, since
-     the last item would wait for its turn to become readable. */
   .ui-rise {
-    animation: ui-rise 240ms cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation: ui-rise 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
   }
 
-  /* A raised surface inside a panel: an inbox item, a folder card, a settings
-     section. The same three declarations were being respelled per component,
-     which is how four slightly different cards ended up on four pages. */
+  /* A bounded region inside a panel: a hairline, no fill. */
   .ui-card {
-    @apply rounded-lg border border-black/10 bg-black/[0.02];
-    @apply dark:border-white/10 dark:bg-white/[0.03];
+    @apply rounded-xl border border-line;
   }
 
-  /* The interactive version: it lifts a hair and its border warms, on colour
-     and transform only, so a hovered card never resizes the grid around it. */
   .ui-card-hover {
-    @apply transition-[border-color,background-color,box-shadow,transform] duration-150 ease-out;
-    @apply hover:-translate-y-px hover:border-black/20 hover:shadow-panel;
-    @apply dark:hover:border-white/20 dark:hover:shadow-panel-dark;
+    @apply transition-colors duration-150 ease-out;
+    @apply hover:border-accent/30 hover:bg-accent/[0.02];
   }
 
-  /* A small count or status label. Square-ish, not a pill — a pill badge on
-     every noun is the look this app is trying not to have. */
   .ui-badge {
-    @apply inline-flex items-center justify-center rounded border px-1.5 py-0.5;
-    @apply text-[11px] font-medium leading-none;
+    @apply inline-flex items-center justify-center rounded-md border border-line px-1.5 py-0.5;
+    @apply text-[11px] font-semibold leading-none text-ink-2;
     font-variant-numeric: tabular-nums;
   }
 
-  /* The sidebar's section headings: FAVORITES, FOLDERS, RECENT, QUIZZES, the
-     tag groups, the generation list. Spelled with `dark:text-gray-500` because
-     that is what those six call sites already rendered — the point is to stop
-     the seventh slightly-different copy, not to restyle the six. */
   .ui-section-title {
-    @apply text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-500;
+    @apply text-[11px] font-semibold uppercase tracking-[0.08em] text-muted;
   }
 
-  /* The single muted line that stands in for an empty list. Deliberately a
-     line and not an illustration — empty is the normal early state here, and
-     a drawing every time would make it feel like a failure. */
+  /* A grid of whole cells sharing hairlines: cells repack by whole columns
+     and never float apart as separate cards. */
+  .ui-cells {
+    @apply grid overflow-hidden rounded-xl border-l border-t border-line;
+  }
+
+  .ui-cells > * {
+    @apply border-b border-r border-line;
+  }
+
   .ui-empty {
-    @apply text-sm text-gray-500 dark:text-gray-400;
+    @apply text-sm text-muted;
   }
 
-  /* Off-screen until focused. The first thing in the tab order on every page
-     (app/layout.tsx), so a keyboard reader can jump the sidebar tree. */
   .ui-skip-link {
     @apply sr-only;
     @apply focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-modal;
-    @apply focus:rounded-md focus:border focus:border-blue-600/40 focus:bg-white focus:px-3 focus:py-2;
-    @apply focus:text-sm focus:font-medium focus:text-blue-700 focus:shadow-panel;
-    @apply dark:focus:border-blue-500/40 dark:focus:bg-[#161b22] dark:focus:text-blue-300;
+    @apply focus:rounded-md focus:border focus:border-accent/40 focus:bg-raised focus:px-3 focus:py-2;
+    @apply focus:text-sm focus:font-medium focus:text-accent focus:shadow-panel;
   }
 }
 
@@ -215,8 +257,6 @@ body {
   }
 }
 
-/* One rule for the whole app: someone who asked their OS for less motion gets
-   the same interface without the transitions and animations. */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -229,46 +269,17 @@ body {
   }
 }
 
-/* ── Native controls follow the theme ───────────────────────────────────────
-   A <select>'s drop-down list is painted by the OS, not by the page, so it
-   ignores `.ui-field`'s translucent `dark:bg-white/[0.04]` and used the
-   system's default (white) popup — while still inheriting the near-white
-   `dark:text-gray-100`. That left every folder/role/member dropdown as white
-   text on white in dark mode.
-
-   `color-scheme` is the real fix: it tells the browser to draw native widgets
-   (select popups, scrollbars, checkboxes, focus rings) in the matching scheme.
-   It has to be declared per theme rather than once, because the theme is a
-   class on <html> that can be toggled at runtime. */
-:root {
-  color-scheme: light;
-}
-
-.dark {
-  color-scheme: dark;
-}
-
-/* And the options themselves, explicitly: not every engine derives an option's
-   colours from `color-scheme` alone, and a translucent background is never a
-   safe thing for one to inherit. `#161b22` is the panel background from
-   docs/ui-guidelines.md, so an open dropdown matches the modal it sits in. */
+/* Native <option>s don't always follow color-scheme. */
 .dark .ui-field option,
 .dark .ui-field optgroup {
-  background-color: #161b22;
-  color: #e6edf3;
+  background-color: rgb(var(--raised));
+  color: rgb(var(--ink));
 }
 
-/* Custom scrollbars (horizontal + vertical), app-wide. Colors swap with the
-   `dark` class on <html> — see components/theme/ThemeProvider.tsx. Scrollbar
-   pseudo-elements aren't real DOM nodes, so this can't use Tailwind's
-   `dark:` variant and has to live here instead. */
+/* ── Scrollbars ────────────────────────────────────────────────────────── */
 * {
   scrollbar-width: thin;
-  scrollbar-color: #c8ccd1 transparent;
-}
-
-.dark * {
-  scrollbar-color: #30363d transparent;
+  scrollbar-color: rgb(var(--ink) / 0.18) transparent;
 }
 
 *::-webkit-scrollbar {
@@ -276,76 +287,181 @@ body {
   width: 10px;
 }
 
-*::-webkit-scrollbar-track {
+*::-webkit-scrollbar-track,
+*::-webkit-scrollbar-corner {
   background: transparent;
 }
 
 *::-webkit-scrollbar-thumb {
-  background-color: #c8ccd1;
+  background-color: rgb(var(--ink) / 0.18);
   border-radius: 9999px;
   border: 2px solid transparent;
   background-clip: content-box;
 }
 
-.dark *::-webkit-scrollbar-thumb {
-  background-color: #30363d;
-}
-
 *::-webkit-scrollbar-thumb:hover {
-  background-color: #a8adb5;
+  background-color: rgb(var(--ink) / 0.32);
 }
 
-.dark *::-webkit-scrollbar-thumb:hover {
-  background-color: #484f58;
+/* ── The lesson ────────────────────────────────────────────────────────────
+   One centred reading column on a fixed measure. Hierarchy comes from size
+   and weight; no numbers, no rules in the margin. */
+.lesson {
+  font-size: 1rem;
+  line-height: 1.7;
+  color: rgb(var(--ink-2));
 }
 
-*::-webkit-scrollbar-corner {
-  background: transparent;
+@media (min-width: 640px) {
+  .lesson {
+    font-size: 1.0625rem;
+  }
 }
 
-/* ── Mermaid diagram theme ─────────────────────────────────────────────── */
+.lesson > * + * {
+  margin-top: 1em;
+}
+
+.lesson h1 {
+  margin: 0 0 1.75rem;
+  font-size: 2rem;
+  line-height: 1.12;
+  font-weight: 700;
+  letter-spacing: -0.022em;
+  color: rgb(var(--ink));
+}
+
+@media (min-width: 640px) {
+  .lesson h1 {
+    font-size: 2.5rem;
+  }
+}
+
+.lesson h2,
+.lesson h3 {
+  color: rgb(var(--ink));
+  scroll-margin-top: 4rem;
+}
+
+/* A major section: Overview, Summary, and every "Concept:". */
+.lesson h2.lesson-major {
+  margin-top: 3rem;
+  font-size: 1.375rem;
+  line-height: 1.3;
+  font-weight: 700;
+}
+
+.lesson h2.lesson-major:first-of-type {
+  margin-top: 0;
+}
+
+/* The repeated sub-sections inside a concept: How it Works, Example. */
+.lesson h2:not(.lesson-major),
+.lesson h3 {
+  margin-top: 1.75rem;
+  font-size: 1em;
+  line-height: 1.5;
+  font-weight: 650;
+}
+
+.lesson h2 + *,
+.lesson h3 + * {
+  margin-top: 0.5em;
+}
+
+.lesson strong {
+  font-weight: 650;
+  color: rgb(var(--ink));
+}
+
+.lesson a {
+  color: rgb(var(--accent));
+  text-decoration: underline;
+}
+
+.lesson ul,
+.lesson ol {
+  padding-left: 1.25em;
+}
+
+.lesson ul {
+  list-style: disc;
+}
+
+.lesson ol {
+  list-style: decimal;
+}
+
+.lesson li + li {
+  margin-top: 0.35em;
+}
+
+.lesson li::marker {
+  color: rgb(var(--muted));
+}
+
+.lesson code {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.875em;
+  padding: 0.1em 0.3em;
+  border-radius: 4px;
+  background: rgb(var(--ink) / 0.06);
+  color: rgb(var(--ink));
+}
+
+.lesson pre {
+  overflow-x: auto;
+  padding: 0.9rem 1rem;
+  border-radius: 10px;
+  background: rgb(var(--cover));
+  font-size: 0.875rem;
+  line-height: 1.6;
+}
+
+.lesson pre code {
+  padding: 0;
+  background: none;
+  font-size: inherit;
+}
+
+.lesson blockquote {
+  padding-left: 1rem;
+  border-left: 1px solid rgb(var(--line));
+  color: rgb(var(--muted));
+}
+
+.lesson table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.lesson th {
+  text-align: left;
+  font-weight: 650;
+  color: rgb(var(--ink));
+  border-bottom: 1px solid rgb(var(--ink) / 0.35);
+  padding: 0.5rem 0.75rem 0.5rem 0;
+}
+
+.lesson td {
+  border-bottom: 1px solid rgb(var(--line));
+  padding: 0.5rem 0.75rem 0.5rem 0;
+  vertical-align: top;
+}
+
+/* ── Mermaid diagrams ──────────────────────────────────────────────────── */
 .mermaid-diagram svg {
   overflow: visible;
 }
 
-/* Node shape transitions for hover effect */
-.mermaid-diagram .node rect,
-.mermaid-diagram .node circle,
-.mermaid-diagram .node ellipse,
-.mermaid-diagram .node polygon,
-.mermaid-diagram .node path {
-  transition: filter 0.2s ease;
-}
-
-/* Subtle glow on hover */
-.mermaid-diagram .node:hover rect,
-.mermaid-diagram .node:hover circle,
-.mermaid-diagram .node:hover ellipse,
-.mermaid-diagram .node:hover polygon,
-.mermaid-diagram .node:hover path {
-  filter: brightness(1.2) drop-shadow(0 0 8px rgba(59, 130, 246, 0.55));
-}
-
-/* Decision nodes (diamond/polygon) — cyan accent distinct from the main blue nodes */
-.mermaid-diagram .node polygon {
-  fill: #0e7490;
-  stroke: #67e8f9;
-}
-
-/* Start/End nodes (circles) — stronger emphasis */
-.mermaid-diagram .node circle {
-  stroke-width: 2.5px;
-  stroke: #93c5fd;
-}
-
-/* Edge paths — slightly thicker */
 .mermaid-diagram .edgePath path,
 .mermaid-diagram path.path {
-  stroke-width: 2px !important;
+  stroke-width: 1.5px !important;
 }
 
-/* Subgraph (cluster) container — rounded, dark-blue tint */
 .mermaid-diagram .cluster rect {
-  rx: 8px;
-  ry: 8px;
+  rx: 6px;
+  ry: 6px;
 }

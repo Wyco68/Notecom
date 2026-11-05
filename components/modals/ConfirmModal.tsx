@@ -19,7 +19,7 @@ export default function ConfirmModal({
 }) {
   return (
     <Modal title={title} onClose={onCancel}>
-      <p className="mb-5 text-sm leading-relaxed text-gray-700 dark:text-gray-300">{message}</p>
+      <p className="mb-6 text-sm leading-relaxed text-ink-2">{message}</p>
       <div className="flex justify-end gap-2">
         <button onClick={onCancel} disabled={busy} className="ui-btn ui-btn-sm ui-btn-ghost">
           Cancel

@@ -2,6 +2,10 @@
 
 import { useGenerateJobs } from "./GenerateJobsProvider";
 import SpinnerIcon from "../icons/SpinnerIcon";
+import CheckIcon from "../icons/CheckIcon";
+import StopIcon from "../icons/StopIcon";
+import AlertIcon from "../icons/AlertIcon";
+import CloseIcon from "../icons/CloseIcon";
 
 // Live generation runs, in the sidebar.
 //
@@ -21,7 +25,7 @@ export default function GenerateJobList({
   if (!jobs.length) return null;
 
   return (
-    <div className="border-b border-black/10 px-2 py-2 dark:border-white/10">
+    <div className="px-2 py-2">
       <p className="px-2 pb-1 ui-section-title">
         Generating
       </p>
@@ -48,27 +52,23 @@ export default function GenerateJobList({
               className="ui-row flex min-w-0 flex-1 items-center gap-1.5 px-2 py-1 text-left text-sm"
             >
               {running ? (
-                <SpinnerIcon className="h-3.5 w-3.5 shrink-0 text-blue-600 dark:text-blue-400" />
+                <SpinnerIcon className="h-3.5 w-3.5 shrink-0 text-accent" />
               ) : (
-                <span
-                  className={`shrink-0 text-xs ${
-                    job.status === "done"
-                      ? "text-emerald-600 dark:text-emerald-400"
-                      : job.status === "aborted"
-                        ? "text-gray-500"
-                        : "text-red-600 dark:text-red-400"
-                  }`}
-                >
-                  {job.status === "done" ? "✓" : job.status === "aborted" ? "^C" : "✗"}
-                </span>
+                job.status === "done" ? (
+                  <CheckIcon className="h-3.5 w-3.5 shrink-0 text-ok" />
+                ) : job.status === "aborted" ? (
+                  <StopIcon className="h-3.5 w-3.5 shrink-0 text-muted" />
+                ) : (
+                  <AlertIcon className="h-3.5 w-3.5 shrink-0 text-danger" />
+                )
               )}
               {/* One line always: this row has a fixed height budget, so a long
                   folder name clips and the title attribute carries the rest. */}
-              <span className="min-w-0 flex-1 truncate text-gray-700 dark:text-gray-300">
+              <span className="min-w-0 flex-1 truncate text-ink-2">
                 {job.kind === "sheet" ? `Cheatsheet · ${folderLabel}` : folderLabel}
               </span>
               {running && (
-                <span className="shrink-0 font-mono text-xs tabular-nums text-gray-500">
+                <span className="shrink-0 text-xs tabular-nums text-muted">
                   {clock}
                 </span>
               )}
@@ -78,18 +78,18 @@ export default function GenerateJobList({
                 onClick={() => abort(job.id)}
                 title="Abort this run"
                 aria-label={`Abort generating in ${folderLabel}`}
-                className="ui-icon-btn ui-icon-btn-danger ui-reveal mr-1 h-5 w-5 text-xs"
+                className="ui-icon-btn ui-icon-btn-danger ui-reveal mr-1 h-5 w-5"
               >
-                ✕
+                <CloseIcon className="h-3.5 w-3.5" />
               </button>
             ) : (
               <button
                 onClick={() => dismiss(job.id)}
                 title="Dismiss"
                 aria-label={`Dismiss the finished run in ${folderLabel}`}
-                className="ui-icon-btn ui-reveal mr-1 h-5 w-5 text-xs"
+                className="ui-icon-btn ui-reveal mr-1 h-5 w-5"
               >
-                ✕
+                <CloseIcon className="h-3.5 w-3.5" />
               </button>
             )}
           </div>

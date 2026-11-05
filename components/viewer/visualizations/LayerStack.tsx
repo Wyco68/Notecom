@@ -13,7 +13,7 @@ function layerDetail(l: Layer): string | undefined {
 }
 
 const LAYER_COLOR =
-  "border-blue-400/60 bg-white text-blue-900 dark:border-blue-600/40 dark:bg-blue-900/20 dark:text-blue-100";
+  "border-line bg-cover/60 text-ink";
 
 export default function LayerStack({ data }: { data: LayerStackData }) {
   const { title, layers } = data;
@@ -23,10 +23,10 @@ export default function LayerStack({ data }: { data: LayerStackData }) {
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3, ease: "easeOut" }}
-      className="not-prose my-6 rounded-lg border border-blue-300 bg-blue-50 p-4 dark:border-blue-800/50 dark:bg-blue-950/20"
+      className="not-prose my-6 rounded-md border border-line p-4"
     >
       {title && (
-        <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
+        <p className="mb-3 ui-section-title">
           {title}
         </p>
       )}

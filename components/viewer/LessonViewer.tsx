@@ -75,15 +75,15 @@ export default function LessonViewer({ lesson }: { lesson: LessonRef | null }) {
     const el = matches[lesson.headingIndex ?? 0] ?? matches[0];
     if (!el) return;
     el.scrollIntoView({ behavior: "smooth", block: "start" });
-    el.classList.add("bg-blue-600/20", "rounded", "transition-colors", "duration-700");
-    const t = setTimeout(() => el.classList.remove("bg-blue-600/20"), 1600);
+    el.classList.add("bg-accent/10", "rounded", "transition-colors", "duration-700");
+    const t = setTimeout(() => el.classList.remove("bg-accent/10"), 1600);
     return () => clearTimeout(t);
   }, [html, lesson]);
 
   if (!lesson) {
     return (
-      <div className="flex h-full items-center justify-center text-gray-500">
-        Select a lesson from the sidebar
+      <div className="flex h-full items-center justify-center text-sm text-muted">
+        Pick a lesson from the sidebar.
       </div>
     );
   }
@@ -95,11 +95,11 @@ export default function LessonViewer({ lesson }: { lesson: LessonRef | null }) {
       <motion.div
         key={key}
         ref={containerRef}
-        initial={{ opacity: 0, y: 12 }}
+        initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, y: -8 }}
-        transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
-        className="mx-auto max-w-3xl px-4 py-6 sm:px-8 sm:py-10"
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+        className="mx-auto max-w-[44rem] px-5 py-10 sm:px-8 sm:py-14"
       >
         {html === null ? (
           // The skeleton mirrors a lesson's real shape — a title, an opening
@@ -107,7 +107,7 @@ export default function LessonViewer({ lesson }: { lesson: LessonRef | null }) {
           // nothing jumps when the content lands.
           <div className="animate-pulse" role="status" aria-label="Loading lesson">
             <div
-              className="mb-7 h-7 w-2/3 rounded bg-black/[0.08] dark:bg-white/[0.09]"
+              className="mb-8 h-9 w-2/3 rounded-lg bg-ink/[0.07]"
               aria-hidden
             />
             <div className="mb-9 space-y-2.5">
@@ -118,7 +118,7 @@ export default function LessonViewer({ lesson }: { lesson: LessonRef | null }) {
             {[0, 1].map((i) => (
               <div key={i} className="mb-9">
                 <div
-                  className="mb-4 h-4 w-1/3 rounded bg-black/[0.07] dark:bg-white/[0.08]"
+                  className="mb-4 h-5 w-1/3 rounded bg-ink/[0.07]"
                   aria-hidden
                 />
                 <div className="space-y-2.5">

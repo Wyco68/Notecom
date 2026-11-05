@@ -3,6 +3,11 @@
 import { useEffect, useRef, useState } from "react";
 import type { Folder } from "@/lib/vault/types";
 import Modal from "./Modal";
+import FileDrop from "../generate/FileDrop";
+import SpinnerIcon from "../icons/SpinnerIcon";
+import CheckIcon from "../icons/CheckIcon";
+import StopIcon from "../icons/StopIcon";
+import AlertIcon from "../icons/AlertIcon";
 import {
   MAX_CONCURRENT_JOBS,
   useGenerateJobs,
@@ -103,111 +108,106 @@ export default function GenerateModal({
 
   if (job) {
     return (
-      <Modal title="Generate from file" onClose={onClose}>
+      <Modal title={job.status === "running" ? "Generating" : "Generation"} onClose={onClose} size="md">
         <JobLog job={job} onAbort={() => abort(job.id)} onSignIn={onSignIn} />
-        <div className="mt-3 flex gap-2">
+        <div className="mt-5 flex gap-2">
           <button onClick={onClose} className="ui-btn ui-btn-sm ui-btn-secondary flex-1">
-            {job.status === "running" ? "Run in background" : "Close"}
+            {job.status === "running" ? "Keep running in background" : "Close"}
           </button>
           {job.status === "running" && (
-            <button
-              onClick={() => abort(job.id)}
-              className="ui-btn ui-btn-sm ui-btn-danger-outline shrink-0"
-            >
-              Abort
+            <button onClick={() => abort(job.id)} className="ui-btn ui-btn-sm ui-btn-danger-outline shrink-0">
+              Stop
             </button>
           )}
         </div>
-        {job.status === "running" && (
-          <p className="mt-2 text-center text-xs leading-snug text-gray-500">
-            Closing this keeps the run going — follow it from the sidebar.
-          </p>
-        )}
       </Modal>
     );
   }
 
+  const types = [
+    ["lect", "Lesson"],
+    ["quiz", "Quiz"],
+    ["pictures", "Pictures"],
+  ] as const;
+
   return (
-    <Modal title="Generate from file" onClose={onClose}>
-      <label className="mb-1.5 block text-xs font-medium text-gray-500 dark:text-gray-400">
-        Subject
-      </label>
-      <select
-        value={folder}
-        onChange={(e) => setFolder(e.target.value)}
-        className="ui-field mb-4"
-      >
-        {folders.map((f) => (
-          <option key={f.name} value={f.name}>
-            {f.displayName}
-          </option>
-        ))}
-      </select>
-
-      <label className="mb-1.5 block text-xs font-medium text-gray-500 dark:text-gray-400">
-        Type
-      </label>
-      <div className="mb-4 flex gap-2">
-        {(["lect", "quiz", "pictures"] as const).map((k) => (
-          <button
-            key={k}
-            onClick={() => setKind(k)}
-            className={`ui-btn flex-1 border transition-transform duration-150 ease-out active:scale-[0.98] ${
-              kind === k
-                ? "border-blue-600/50 bg-blue-600/10 text-blue-700 dark:bg-blue-600/20 dark:text-blue-300"
-                : "ui-btn-secondary font-normal"
-            }`}
-          >
-            {k === "lect" ? "Lesson" : k === "quiz" ? "Quiz" : "Pictures"}
-          </button>
-        ))}
-      </div>
-
-      {kind === "pictures" && (
-        <>
-          <label className="mb-1.5 block text-xs font-medium text-gray-500 dark:text-gray-400">
-            Lesson to add slide pictures to
+    <Modal title="Generate" onClose={onClose} size="md">
+      <div className="space-y-5">
+        <div>
+          <label htmlFor="gen-folder" className="mb-1.5 block text-sm font-medium text-ink">
+            Folder
           </label>
-          <select
-            value={lesson}
-            onChange={(e) => setLesson(e.target.value)}
-            disabled={!lessons?.length}
-            className="ui-field mb-1.5"
-          >
-            <option value="">{lessons === null ? "Loading lessons…" : lessons.length ? "Choose a lesson" : "No lessons in this subject"}</option>
-            {lessons?.map((l) => (
-              <option key={l.id} value={l.id}>
-                {l.seq}. {l.title}
+          <select id="gen-folder" value={folder} onChange={(e) => setFolder(e.target.value)} className="ui-field">
+            {folders.map((f) => (
+              <option key={f.name} value={f.name}>
+                {f.displayName}
               </option>
             ))}
           </select>
-          <p className="mb-4 text-xs leading-snug text-gray-500">
-            Upload the slides that lesson was made from. Only pictures are added where they help; the text stays as it is.
-          </p>
-        </>
-      )}
+        </div>
 
-      <label className="mb-1.5 block text-xs font-medium text-gray-500 dark:text-gray-400">
-        Lecture file (PDF, slides, image, markdown)
-      </label>
-      <input
-        type="file"
-        onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-        className="ui-focus mb-5 w-full rounded-md text-sm text-gray-600 file:mr-3 file:cursor-pointer file:rounded-md file:border-0 file:bg-blue-600 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-white file:transition-colors hover:file:bg-blue-500 dark:text-gray-400"
-      />
+        <div role="radiogroup" aria-label="Type" className="grid grid-cols-3 gap-0.5 rounded-lg bg-ink/[0.05] p-0.5">
+          {types.map(([k, label]) => (
+            <button
+              key={k}
+              role="radio"
+              aria-checked={kind === k}
+              onClick={() => setKind(k)}
+              className={`ui-focus rounded-md py-1.5 text-sm transition-colors duration-150 ease-out ${
+                kind === k ? "bg-raised font-semibold text-ink shadow-[0_1px_2px_rgb(var(--shadow)/0.12)]" : "text-ink-2 hover:text-ink"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
 
-      <button
-        onClick={begin}
-        disabled={!file || !folder || starting || atCapacity || (kind === "pictures" && !lesson)}
-        className="ui-btn ui-btn-primary w-full"
-      >
-        {starting ? "Starting..." : kind === "pictures" ? "Add pictures with Claude Code" : "Generate with Claude Code"}
-      </button>
-      <p className="mt-2.5 text-xs leading-snug text-gray-500">
-        {atCapacity
-          ? `Already generating ${activeCount} files — wait for one to finish.`
-          : `Runs your local Claude Code CLI on your existing subscription — same as /${kind === "quiz" ? "quiz" : "lect"} in a terminal. Takes a few minutes, and runs in the background so you can keep reading.`}
-      </p>
+        {kind === "pictures" && (
+          <div>
+            <label htmlFor="gen-lesson" className="mb-1.5 block text-sm font-medium text-ink">
+              Lesson
+            </label>
+            <select
+              id="gen-lesson"
+              value={lesson}
+              onChange={(e) => setLesson(e.target.value)}
+              disabled={!lessons?.length}
+              className="ui-field"
+            >
+              <option value="">{lessons === null ? "Loading…" : lessons.length ? "Choose a lesson" : "No lessons in this folder"}</option>
+              {lessons?.map((l) => (
+                <option key={l.id} value={l.id}>
+                  {String(l.seq).padStart(2, "0")} {l.title}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        <FileDrop
+          files={file ? [file] : []}
+          onChange={(fs) => setFile(fs[0] ?? null)}
+          label={kind === "pictures" ? "Drop the lesson's slides" : "Drop lecture slides or browse"}
+        />
+
+        <div className="flex items-center justify-between border-t border-line pt-4 text-sm">
+          <span className="text-muted">Runs with</span>
+          <span className="font-medium text-ink">Claude Code · this computer</span>
+        </div>
+
+        <div>
+          <button
+            onClick={begin}
+            disabled={!file || !folder || starting || atCapacity || (kind === "pictures" && !lesson)}
+            className="ui-btn ui-btn-primary w-full"
+          >
+            {starting ? "Starting…" : kind === "pictures" ? "Add pictures" : `Generate ${kind === "quiz" ? "quiz" : "lesson"}`}
+          </button>
+          {atCapacity && (
+            <p className="mt-2 text-center text-xs text-warn">{activeCount} runs going. Wait for one to finish.</p>
+          )}
+        </div>
+      </div>
     </Modal>
   );
 }
@@ -250,13 +250,7 @@ export function JobLog({
   }, [running, onAbort]);
 
   const elapsed = Math.max(0, Math.floor((now - job.startedAt) / 1000));
-  const statusLine = running
-    ? `● running ${String(Math.floor(elapsed / 60)).padStart(2, "0")}:${String(elapsed % 60).padStart(2, "0")}`
-    : job.status === "done"
-      ? "✓ finished"
-      : job.status === "aborted"
-        ? "^C aborted"
-        : "✗ failed";
+  const clock = `${String(Math.floor(elapsed / 60)).padStart(2, "0")}:${String(elapsed % 60).padStart(2, "0")}`;
 
   // Seconds since the last log line. Writing a lesson is one long quiet step, so
   // surface the wait rather than let the panel look hung.
@@ -264,45 +258,47 @@ export function JobLog({
 
   return (
     <>
-      <div className="mb-2 flex items-center justify-between font-mono text-xs text-emerald-600 dark:text-emerald-400">
-        <span>{statusLine}</span>
-        <span>
-          tokens in {job.tokens.input.toLocaleString()} · out{" "}
-          {job.tokens.output.toLocaleString()}
+      <div className="mb-3 flex items-center justify-between gap-3 text-sm">
+        <span className="flex items-center gap-2 font-semibold text-ink">
+          {running ? (
+            <SpinnerIcon className="h-4 w-4 text-accent" />
+          ) : job.status === "done" ? (
+            <CheckIcon className="h-4 w-4 text-ok" />
+          ) : job.status === "aborted" ? (
+            <StopIcon className="h-4 w-4 text-muted" />
+          ) : (
+            <AlertIcon className="h-4 w-4 text-danger" />
+          )}
+          {running ? "Running" : job.status === "done" ? "Done" : job.status === "aborted" ? "Stopped" : "Failed"}
+          {running && (
+            <span data-numeric className="font-normal text-muted">
+              {clock}
+            </span>
+          )}
+        </span>
+        <span data-numeric className="text-xs text-muted" title="Tokens in / out">
+          {job.tokens.input.toLocaleString()} in · {job.tokens.output.toLocaleString()} out
         </span>
       </div>
       <div
         ref={logRef}
-        className="h-56 overflow-y-auto rounded-md border border-black/10 bg-[#0a0e14] p-3 font-mono text-xs leading-relaxed text-emerald-400 dark:border-white/10"
+        className="h-56 overflow-y-auto rounded-lg bg-cover/70 p-3 font-mono text-xs leading-relaxed text-ink-2"
       >
         {job.log.map((l, i) => (
           // Cap any single line so a stray verbose block can't turn the log into
-          // a wall of text (the model's closing summary is also discouraged in
-          // the prompt).
+          // a wall of text.
           <div key={i}>{l.length > 500 ? l.slice(0, 500) + " …" : l}</div>
         ))}
         {running && (
-          <div className="flex items-center gap-1 pt-1 text-emerald-400">
-            <span>generating</span>
-            <span className="inline-flex gap-0.5">
-              <span className="animate-pulse [animation-delay:0ms]">.</span>
-              <span className="animate-pulse [animation-delay:200ms]">.</span>
-              <span className="animate-pulse [animation-delay:400ms]">.</span>
-            </span>
-            {idleSec >= 5 && (
-              <span className="text-emerald-600/70">
-                (still working — {idleSec}s since last step)
-              </span>
-            )}
+          <div className="animate-pulse pt-1 text-muted">
+            {idleSec >= 5 ? `Working · ${idleSec}s since last step` : "Working"}
           </div>
         )}
       </div>
 
       {job.status === "error" && (
-        <p className="mt-3 rounded-md border border-red-500/30 bg-red-500/[0.06] px-3 py-2 text-xs leading-relaxed text-red-700 dark:text-red-300">
-          {job.needsAuth
-            ? "Claude Code isn't signed in — nothing was saved. Sign in, then generate again."
-            : "Generation failed — nothing was saved. See the log above for the reason; if it was a network or usage-limit error, just generate again."}
+        <p className="mt-3 text-sm text-danger">
+          {job.needsAuth ? "Claude Code isn't signed in. Nothing was saved." : "Failed. Nothing was saved. The log shows why."}
         </p>
       )}
       {job.needsAuth && (

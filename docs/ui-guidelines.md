@@ -3,47 +3,72 @@
 Loaded by `/feat` only. Conventions already in use — match them.
 
 ## Theme
-Dark, code-editor look. Tailwind utility classes only, no separate CSS
-files beyond [app/globals.css](../app/globals.css) (custom scrollbar +
-base body color).
+**White with blue.** Light is a white page, a sidebar that fades from white to
+pale blue, a soft blue wash at the top of the content column, and one blue
+gradient for the primary action. Dark is neutral graphite — no blue in the
+surfaces, blue only in the accent and the active row. Both themes are real and
+follow the OS until the reader picks one. Tailwind utility classes only, no
+separate CSS files beyond [app/globals.css](../app/globals.css).
 
-**Type is Geist and Geist Mono**, loaded by `next/font` in
-[app/layout.tsx](../app/layout.tsx) and self-hosted at build time — no
-request ever leaves the page for a font file, which is what keeps them inside
-the CSP's `font-src 'self'` without widening it to Google's origins. The two
-variables it sets (`--font-sans`, `--font-mono`) are wired to Tailwind's
-`font-sans` / `font-mono` in `tailwind.config.ts`, so use those utilities
-rather than naming the family anywhere.
+**Colours are tokens, never hex or palette classes.** `globals.css` defines
+each role as an RGB triplet on `:root` and again on `.dark`;
+`tailwind.config.ts` names them, so opacity modifiers work (`bg-ink/5`). A
+`dark:` colour class is never needed — the token already switches.
 
-Three base rules come with it, in `globals.css`'s `@layer base`: `h1`–`h3`
-lose the tracking display sizes don't need and get `text-wrap: balance`, `p`
-gets `text-wrap: pretty` so prose stops orphaning its last word, and anything
-marked `data-numeric` (plus every `<time>`) gets tabular figures so counts
-don't jitter as digits change.
+| Token | Role |
+|---|---|
+| `paper` | the page: content column, fields |
+| `cover` | quiet tinted surfaces: code blocks, logs, picked-file rows |
+| `raised` | dialogs, toasts — anything floating over the page |
+| `line` / `cover-line` | hairlines on the page / on the sidebar |
+| `ink` / `ink-2` / `muted` | primary text / body text / secondary text (≥4.5:1 in both themes) |
+| `accent` (+ `accent-ink`) | blue: links, the active row, focus rings (+ text on a flat accent fill) |
+| `danger` | destructive buttons and error text only — never decoration |
+| `ok` / `warn` | success / caution state only |
+
+**Gradients are tokens too**, used through Tailwind's `bg-chrome`,
+`bg-accent-grad` and `bg-wash`:
+
+| Gradient | Where |
+|---|---|
+| `--grad-chrome` | the sidebar and the auth cover (white→pale blue; graphite in dark) |
+| `--grad-accent` | the primary button, the notification count, the brand mark (the same blue in both themes, white text) |
+| `--grad-wash` | the top of the content column, fading into the page |
+
+No gradient text, and no gradient on anything else — the three above are the
+whole set.
+
+**Type is Public Sans and JetBrains Mono**, loaded by `next/font` in
+[app/layout.tsx](../app/layout.tsx) and self-hosted at build time, which keeps
+them inside the CSP's `font-src 'self'`. Use `font-sans` / `font-mono`; mono is
+for code and logs only, never as decoration. Chrome stays at one size
+(`text-sm`); rank comes from weight and colour, not from size steps. Panel
+titles are `text-2xl font-bold`, lesson titles 2–2.5rem.
+
+**No decorative numbers or red.** No circled numbers, no section numbers hung
+in a margin, no red accents. The open row is a blue tint (`ui-row-on`); red is
+reserved for destructive actions and errors.
+
+**Text is the control.** Only the primary action is filled
+(`ui-btn-primary`, the blue gradient); secondary actions are outlined or plain
+blue text (`ui-btn-text`). No boxes where a hairline or whitespace does the
+job: settings sections are ruled rows with the title in a left column, lists
+are rows, grids are hairline cells.
+
+Three base rules come with the type, in `globals.css`'s `@layer base`: `h1`–`h3`
+get `text-wrap: balance`, `p` gets `text-wrap: pretty`, and anything marked
+`data-numeric` (plus every `<time>`) gets tabular figures.
 
 **Named z-index layers**, not bare numbers: `z-backdrop` (30), `z-sidebar`
-(40), `z-modal` (50), `z-toast` (60), defined in `tailwind.config.ts`. The
-order is the only thing that matters and it should be readable.
+(40), `z-modal` (50), `z-toast` (60), defined in `tailwind.config.ts`.
 
-**Shadows are tinted**, never neutral black: `shadow-panel` and
-`shadow-panel-dark` carry the surface's own hue, so a raised panel in dark
-mode reads as depth rather than soot.
+**One shadow**, `shadow-panel`, for anything that floats (dialogs, toasts),
+tinted from the `--shadow` token rather than neutral black.
 
-| Surface | Color |
-|---|---|
-| Sidebar background | `#0a0e14` |
-| Main pane background | `#0d1117` |
-| Modal panel background | `#161b22` |
-| Borders | `border-white/10` |
-| Primary text | `text-gray-200` / `text-gray-100` |
-| Muted text | `text-gray-400` / `text-gray-500` |
-
-| Action | Color |
-|---|---|
-| Primary action (Create) | `bg-blue-600` / hover `bg-blue-500` |
-| Destructive action (Delete) | `bg-red-600` / hover `bg-red-500` |
-| Success toast | `border-emerald-800/60 bg-emerald-950/90 text-emerald-200` |
-| Error toast | `border-red-800/60 bg-red-950/90 text-red-200` |
+**Copy is labels.** A control names its action; an empty list is one muted
+line. A sentence of explanation appears only where an action has a consequence
+the reader must know first — sharing, access, deleting — and then it is one
+short line.
 
 ## Layout and breakpoints
 The shell ([components/layout/AppShell.tsx](../components/layout/AppShell.tsx))
@@ -55,13 +80,13 @@ the layout when closed. One sidebar, two behaviours, not two components. It
 opens by default only on wide screens, decided after mount since the server
 render doesn't know the viewport.
 
-Its width is **fixed** (`w-80`, capped at `85vw` while it is a drawer): it never
+Its width is **fixed** (`w-[18.5rem]`, capped at `85vw` while it is a drawer): it never
 reflows with its contents, because a sidebar that resizes as rows open or hover
 drags the reader sideways for nothing. Folder and file names **wrap** onto as
 many lines as they need rather than truncating — the sidebar must never scroll
 sideways to read a name.
 
-Content follows the same rule: reader padding and prose sizes step up at `sm`,
+Content follows the same rule: the reader's padding and text sizes step up at `sm`,
 and anything that can be wider than the column (tables) scrolls inside its own
 `overflow-x-auto` box rather than pushing the page sideways.
 
@@ -73,7 +98,8 @@ Top to bottom: header, search, the **nav group**, Favorites, **Folders**,
 Placement carries meaning here, so it follows one rule: **a control sits with
 what it acts on.**
 
-- **Header** — the brand and the control that closes the panel. Nothing else.
+- **Header** — the brand (`BrandMark`, a page on the blue gradient) and the
+  control that closes the panel. Nothing else.
   It previously held the notification bell, a `✕` text glyph, refresh and the
   theme toggle: four unrelated concerns filed together because there was room.
 - **Nav group** ([components/layout/SidebarNav.tsx](../components/layout/SidebarNav.tsx))
@@ -97,9 +123,9 @@ what it acts on.**
 the whole icon policy. Destinations get text; actions (new folder, generate,
 refresh, theme, collapse) stay icon-only with a `title` *and* an `aria-label`.
 
-Folders takes whatever height is left and scrolls; **Recent sits under it at
-`h-56`, capped at `max-h-[28vh]` and hidden entirely below 600px of viewport
-height**. Recent is history, not navigation: when the column cannot hold both,
+Folders takes whatever height is left and scrolls; **Recent sits under it,
+at most `max-h-[min(14rem,28vh)]`, shrinking to its rows, and hidden entirely
+below 600px of viewport height**. Recent is history, not navigation: when the column cannot hold both,
 the tree wins. Without that give, the fixed 224px squeezed the tree — the only
 `flex-1` child — to zero on a landscape phone, the sections overlapped, and no
 folder was reachable at all. The plain figure is exactly the eight rows
@@ -117,12 +143,12 @@ screen is never also listed above as history.
 ### The content column's top bar
 
 [components/layout/ContentTopBar.tsx](../components/layout/ContentTopBar.tsx)
-is a 48px sticky strip at the top of `<main>`. It holds two things:
+is a 52px sticky strip at the top of `<main>`, level with the sidebar header. It holds two things:
 
 - **The sidebar toggle, only while the sidebar is hidden.** Open, the sidebar
   carries its own collapse control in its header; rendering both put two
   buttons for one job on either side of the divider, which reads as an accident.
-- **The open document's `folder › title`.** Blank while a panel has taken the
+- **The open document's `folder / title`.** Blank while a panel has taken the
   column — the panels render their own `PanelHeader` h1, and naming them here
   too would put every panel's title on screen twice.
 
@@ -172,16 +198,18 @@ under `@layer components`. Compose these instead of re-deriving a control:
 | Class | Use |
 |---|---|
 | `ui-field` (+ `ui-field-sm`) | every text input, select and textarea |
-| `ui-btn` + `ui-btn-primary` / `-secondary` / `-ghost` / `-danger` / `-danger-outline` | buttons; add `ui-btn-sm` or `ui-btn-xs` for row-height and dense variants |
+| `ui-btn` + `ui-btn-primary` / `-secondary` / `-ghost` / `-text` / `-danger` / `-danger-outline` | buttons; add `ui-btn-sm` or `ui-btn-xs` for row-height and dense variants. `-text` is a link-weight blue action with no box |
 | `ui-icon-btn` (+ `ui-icon-btn-danger`) | square icon-only controls |
-| `ui-row` | a list/tree row that tints and nudges 2px on hover |
+| `ui-row` | a list/tree row that tints on hover (colour only, never moves) |
+| `ui-row-on` | the open row or active destination: blue tint, blue text |
 | `ui-reveal` | a row action that appears on `group-hover` |
 | `ui-focus` | a visible focus ring on anything not covered above |
 | `ui-scroll` | a pane that scrolls: smooth `scroll-behavior` + contained overscroll |
 | `ui-rise` | enter animation (fade + 4px lift) for a row or card arriving in a list |
-| `ui-card` (+ `ui-card-hover`) | a raised surface inside a panel — inbox item, folder card, settings section; the hover variant lifts 1px and warms its border |
-| `ui-badge` | a small count or status label. Square-ish, **not** a pill — a pill on every noun is the look this app is avoiding |
-| `ui-section-title` | a section heading inside a panel or the sidebar |
+| `ui-card` (+ `ui-card-hover`) | a hairline-bounded region, no fill — only where a boundary carries meaning |
+| `ui-cells` | a grid of whole cells sharing hairlines (Discover, profile folders). Add the column count (`sm:grid-cols-2 lg:grid-cols-3`) |
+| `ui-badge` | a small count or status label. Square, hairline, **not** a pill |
+| `ui-section-title` | an 11px uppercase section label inside the sidebar or a diagram |
 | `ui-empty` | the single muted line that stands in for an empty list |
 | `ui-skip-link` | off-screen until focused; first in the tab order on every page |
 
@@ -214,32 +242,43 @@ Lists animate in with `ui-rise` plus an inline `animationDelay` to stagger them:
 Past the first handful the delay stops reading as sequence and starts delaying
 readability, which is why every call site clamps. 25ms per row for sidebar
 rows and list items, 40ms per card for settings sections. Two transforms that
-replace a cut: the tree's disclosure arrow is one `▸` that rotates, not two
+replace a cut: the tree's disclosure arrow is one SVG chevron that rotates, not two
 glyphs that swap, and an opened folder's contents fade and lift in rather than
 appearing.
 
 ## Components
 - **Modals**: every modal wraps [components/modals/Modal.tsx](../components/modals/Modal.tsx)
-  (dimmed backdrop, centered panel, click-outside-to-close). Don't build a
-  one-off modal shell.
+  (dimmed backdrop, raised sheet, title with a close button, Escape and
+  click-outside to close; `size="md"` for the generation dialogs). Don't build
+  a one-off modal shell.
 - **Destructive confirmation**: every delete/disconnect action goes through
   [components/modals/ConfirmModal.tsx](../components/modals/ConfirmModal.tsx)
   — never a native `confirm()`, never delete without it.
 - **Toasts**: success/failure feedback after an action goes through
   [components/toast/ToastProvider.tsx](../components/toast/ToastProvider.tsx)'s
   `useToast()` hook (`toast.success(...)` / `toast.error(...)`), mounted
-  once at the root layout. Don't build a second notification mechanism.
+  once at the root layout. A toast is a raised sheet with a small green
+  (success) or red (error) dot, never a coloured box. Don't build a second notification mechanism.
 - **Hover-reveal actions**: row-level destructive icons (folder/lesson
   delete) are hidden by default, shown on `group-hover` — see
   [components/sidebar/FileTreeNode.tsx](../components/sidebar/FileTreeNode.tsx)
-  for the pattern (`group` on the row, `hidden group-hover:flex` on the
-  icon button).
+  for the pattern (`group` on the row, `ui-reveal` on the icon button).
 - **File rows**: lesson/quiz rows in the tree carry the document's sequence
-  number (`seq`, rendered `01`, `02`, …) before the title, so the sidebar
-  reads in generation order.
+  number (`seq`, rendered `01`, `02`, …) as a faint prefix, so the sidebar
+  reads in generation order; the open document's row is `ui-row-on`.
+- **Uploads**: every file input is
+  [components/generate/FileDrop.tsx](../components/generate/FileDrop.tsx) — a
+  dashed drop target that is also a native `<input type="file">`, with the
+  picked files listed under it. Don't style a bare file input.
+- **Generation dialog**: folder, a Lesson / Quiz / Pictures segmented switch,
+  the drop zone, then a "Runs with" row naming where the run happens (today
+  always Claude Code on this computer — the slot a future service picker
+  takes), then one primary button. The run's log is a quiet cover-tinted box,
+  not a terminal costume.
 - **Icons**: hand-rolled inline SVG components under
-  [components/icons/](../components/icons/) (e.g. `TrashIcon`), no icon
-  library dependency.
+  [components/icons/](../components/icons/) (e.g. `TrashIcon`), all on a 24px
+  grid at `strokeWidth="1.75"`, no icon library dependency. Never a Unicode
+  glyph (✕ ▸ ✓) standing in for one.
 - **Notifications**: everything waiting on the reader's answer — folder
   invitations, incoming follow requests, offered tags — is one merged,
   newest-first list in
@@ -256,8 +295,9 @@ appearing.
   exactly when someone went looking for it, and pushed the folder tree down
   the sidebar whenever it wasn't.
 - **Auth pages**: sign-in, sign-up and reset share
-  [components/auth/AuthShell.tsx](../components/auth/AuthShell.tsx) — app
-  mark, one card, one footer slot. Each step is a real `<form>` with a
+  [components/auth/AuthShell.tsx](../components/auth/AuthShell.tsx) — on wide
+  screens the sidebar's gradient field with the mark and one line on what the app does,
+  beside the form on the page; on a phone, just the mark and the form. Each step is a real `<form>` with a
   `type="submit"` button, not a keydown handler: autofill, "save this
   password" and a phone keyboard's Go key all key off the form. Use
   `min-h-dvh`, never `min-h-screen` — iOS Safari's `100vh` is the height with
@@ -277,15 +317,20 @@ Components live in `components/collab/`. Model and permission rules:
 
 | Element | Style |
 |---|---|
-| `owner` badge | `bg-amber-500/15 text-amber-300 border-amber-500/30` |
-| `editor` badge | `bg-blue-500/15 text-blue-300 border-blue-500/30` |
-| `viewer` badge | `bg-gray-500/15 text-gray-400 border-white/10` |
-| Tag chip | `bg-white/5 text-gray-300 border-white/10`, `rounded-full` |
-| Tag chip that grants join | same, plus `border-emerald-500/40 text-emerald-300` |
-| Pending state (invite/request) | `text-amber-300` |
+| `owner` badge | `ui-badge border-accent/40 text-accent` |
+| `editor` badge | `ui-badge text-ink-2` |
+| `viewer` badge | `ui-badge text-muted` |
+| Tag chip | `rounded border border-line text-ink-2`, square — not a pill |
+| Active tag filter | `border-accent/40 bg-accent/10 text-accent` |
+| Pending state (invite/request) | `text-warn` |
 
+- **Folder grids** (Discover, a profile's folders) are `ui-cells`: hairline
+  cells with the name first, owner and note count under it, actions as blue
+  text.
+- **The folder console and Account** are ruled rows: section title in a left
+  column, controls on the right, no cards.
 - **Member rows** reuse the hover-reveal pattern above: `group` on the row,
-  `hidden group-hover:flex` on the remove button.
+  `ui-reveal` on the remove button.
 - **Removing a member, leaving a folder, deleting a folder** all go through
   `ConfirmModal` — no exceptions, same rule as lesson deletion.
 - **A hidden control is not a permission.** Grey out or omit write controls for
@@ -308,6 +353,17 @@ intercepted for richer rendering:
   dispatches to the correct component via the visualization registry.
 - `<div class="viz-{type}">` legacy JSON → legacy dispatch (backward compat;
   existing lessons continue to work without modification).
+
+The reader is not Tailwind Typography. `LessonViewer` centres one 44rem
+column and `HtmlRenderer` wraps the document in `.lesson` (sizes, lists,
+tables, code) in `globals.css`. Overview, Summary and every `Concept: …`
+heading are major sections; a Concept drops the word "Concept" on screen (kept
+in the DOM, visually hidden, so search hits still match it). The repeated
+sub-headings (How it Works, Example, Gotcha) are bold body-size. A callout is a
+faint wash in its kind's colour with a small label above the text — no side
+stripe. Diagrams
+and visualizations sit in a hairline frame with an uppercase label title; Mermaid's
+colours mirror the tokens in `Mermaid.tsx`.
 
 ### Visualization registry
 

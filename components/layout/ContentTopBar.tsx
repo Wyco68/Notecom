@@ -33,7 +33,7 @@ export default function ContentTopBar({
     // bright, undimmed and clickable across the top of an open drawer, and
     // clicking it didn't dismiss the drawer the way the rest of the overlay
     // does. `shrink-0` was inert too; <main> is a block, not a flex container.
-    <div className="sticky top-0 flex h-12 items-center gap-2 border-b border-black/10 bg-white/85 px-2 backdrop-blur-sm dark:border-white/10 dark:bg-[#0d1117]/85">
+    <div className="sticky top-0 z-10 flex h-[52px] items-center gap-2 border-b border-line/70 bg-paper/75 px-3 backdrop-blur-md sm:px-4">
       {/* Only while the sidebar is hidden. Open, the sidebar carries its own
           collapse control in its header — showing both put two buttons for one
           job three centimetres apart, on either side of the divider, which
@@ -52,16 +52,16 @@ export default function ContentTopBar({
       )}
 
       {title && (
-        <p className={`flex min-w-0 items-center gap-1.5 text-sm ${sidebarOpen ? "pl-1.5" : ""}`}>
+        <p className="flex min-w-0 items-center gap-2 text-sm">
           {folder && (
             <>
-              <span className="hidden shrink-0 truncate text-gray-500 sm:inline dark:text-gray-400">
+              <span className="hidden shrink-0 truncate text-muted sm:inline">
                 {folder}
               </span>
-              <span className="hidden shrink-0 text-gray-300 sm:inline dark:text-gray-600">›</span>
+              <span className="hidden shrink-0 text-muted/60 sm:inline" aria-hidden>/</span>
             </>
           )}
-          <span className="min-w-0 truncate font-medium text-gray-800 dark:text-gray-200">
+          <span className="min-w-0 truncate font-semibold text-ink">
             {title}
           </span>
         </p>

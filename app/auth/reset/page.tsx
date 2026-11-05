@@ -59,10 +59,10 @@ function ResetForm() {
       title={openedFromLink ? "Choose a new password" : "Set a password"}
       subtitle={
         openedFromLink
-          ? "This finishes the reset — you'll be signed in with it."
+          ? "You'll be signed in with it."
           : sent
             ? "Check your inbox."
-            : "We'll email you a link to confirm it's you."
+            : "We'll email you a link."
       }
       footer={
         <AuthFootLink href={`/auth/sign-in?next=${encodeURIComponent(next)}`}>
@@ -90,7 +90,7 @@ function ResetForm() {
             className="ui-field mb-3"
           />
           {error && (
-            <p role="alert" className="mb-3 text-xs text-red-600 dark:text-red-400">
+            <p role="alert" className="mb-3 text-xs text-danger">
               {error}
             </p>
           )}
@@ -103,10 +103,8 @@ function ResetForm() {
           </button>
         </form>
       ) : sent ? (
-        <p className="ui-card px-3 py-2.5 text-sm leading-relaxed text-gray-600 dark:text-gray-400">
-          If {email} has an account, a reset link is on its way. Open it in this
-          browser and you&apos;ll come straight back here to choose a new
-          password. The link expires in an hour.
+        <p className="text-sm leading-relaxed text-ink-2">
+          If {email} has an account, a link is on its way. Open it in this browser. It expires in an hour.
         </p>
       ) : (
         <form
@@ -127,7 +125,7 @@ function ResetForm() {
             className="ui-field mb-3"
           />
           {error && (
-            <p role="alert" className="mb-3 text-xs text-red-600 dark:text-red-400">
+            <p role="alert" className="mb-3 text-xs text-danger">
               {error}
             </p>
           )}

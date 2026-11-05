@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import ChevronIcon from "../icons/ChevronIcon";
 
 // A collapsible tag heading in the sidebar. Open state is remembered per tag
 // so the shape of the tree survives a reload — a user who works out of one
@@ -51,15 +52,17 @@ export default function TagGroup({
       <button
         onClick={toggle}
         aria-expanded={open}
-        className="ui-row flex w-full items-center gap-1.5 px-2 py-1 text-left"
+        className="ui-row flex w-full items-center gap-1.5 px-2 py-1.5 text-left"
       >
-        <span className="text-[10px] text-gray-400">{open ? "▾" : "▸"}</span>
+        <ChevronIcon
+          className={`h-3.5 w-3.5 shrink-0 text-muted transition-transform duration-150 ease-out ${open ? "rotate-90" : ""}`}
+        />
         <span className="truncate ui-section-title">
           {tag}
         </span>
-        <span className="ml-auto shrink-0 tabular-nums text-[10px] text-gray-400">{count}</span>
+        <span data-numeric className="ml-auto shrink-0 text-[11px] text-muted">{count}</span>
       </button>
-      {open && <div className="ml-1.5 border-l border-black/10 pl-1 dark:border-white/10">{children}</div>}
+      {open && <div>{children}</div>}
     </div>
   );
 }

@@ -4,7 +4,6 @@ import { useCallback, useState } from "react";
 import FolderCard from "@/components/collab/FolderCard";
 import SearchIcon from "@/components/icons/SearchIcon";
 import PanelHeader from "@/components/layout/PanelHeader";
-import { SkeletonCard } from "@/components/layout/Skeleton";
 import type { FolderSummary } from "@/lib/collab/types";
 
 // Folder discovery. Search covers name, description and owner username — not
@@ -68,13 +67,12 @@ export default function DiscoverPanel({
   return (
     <div className="mx-auto max-w-5xl p-4 sm:p-8">
       <PanelHeader
-        title="Discover folders"
-        subtitle="Search by name, description or owner — public folders and your own."
+        title="Discover"
         onClose={onClose}
       />
 
       <div className="relative mb-6">
-        <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+        <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted">
           <SearchIcon className="h-4 w-4" />
         </span>
         <input
@@ -82,18 +80,17 @@ export default function DiscoverPanel({
           value={q}
           onChange={(e) => setQ(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && submit()}
-          placeholder="Search by name, description or owner — press Enter"
-          className="ui-field py-2.5 pl-10 pr-3"
+          placeholder="Search folders or owners"
+          aria-label="Search folders by name, description or owner, then press Enter"
+          className="ui-field py-2.5 pl-10 pr-3 text-base"
         />
       </div>
 
-      {error && <p className="mb-4 text-sm text-red-600 dark:text-red-400">{error}</p>}
+      {error && <p className="mb-4 text-sm text-danger">{error}</p>}
 
       {needsAuth ? (
-        <div className="py-16 text-center">
-          <p className="mb-3 ui-empty">
-            Sign in to discover and join folders.
-          </p>
+        <div className="py-10">
+          <p className="mb-3 ui-empty">Sign in to find folders.</p>
           <a href="/auth/sign-in?next=/discover" className="ui-btn ui-btn-primary px-4">
             Sign in
           </a>
@@ -101,21 +98,21 @@ export default function DiscoverPanel({
       ) : loading ? (
         // Placeholder cards in the real grid, so results drop into the layout
         // they were already occupying.
-        <div className="grid animate-pulse gap-4 sm:grid-cols-2" role="status" aria-label="Loading">
-          {[0, 1, 2, 3].map((i) => (
-            <SkeletonCard key={i} lines={2} />
+        <div className="ui-cells animate-pulse sm:grid-cols-2 lg:grid-cols-3" role="status" aria-label="Loading">
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="space-y-3 p-5">
+              <div className="h-6 w-12 rounded bg-ink/[0.07]" />
+              <div className="h-4 w-2/3 rounded bg-ink/[0.07]" />
+              <div className="h-3 w-1/2 rounded bg-ink/[0.05]" />
+            </div>
           ))}
         </div>
       ) : !submitted ? (
-        <p className="py-16 text-center ui-empty">
-          Search for a folder by name, description or owner.
-        </p>
+        <p className="py-10 ui-empty">Find public folders by name or owner.</p>
       ) : folders.length === 0 ? (
-        <p className="py-16 text-center ui-empty">
-          No folders match &quot;{submitted}&quot;.
-        </p>
+        <p className="py-10 ui-empty">No folders match &quot;{submitted}&quot;.</p>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="ui-cells sm:grid-cols-2 lg:grid-cols-3">
           {folders.map((f) => (
             <FolderCard
               key={f.id}

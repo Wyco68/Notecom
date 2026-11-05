@@ -38,7 +38,7 @@ function highlight(text: string, query: string) {
     i % 2 === 1 ? (
       <mark
         key={i}
-        className="rounded-sm bg-red-500/20 px-0.5 text-red-700 dark:text-red-300"
+        className="rounded-sm bg-accent/15 px-0.5 text-ink"
       >
         {part}
       </mark>
@@ -84,7 +84,7 @@ export default function SearchResults({
 
   if (state.status === "idle") {
     return (
-      <p className="px-2 py-2 text-sm text-gray-500">
+      <p className="px-2 py-2 text-sm text-muted">
         Type a search term and press Enter.
       </p>
     );
@@ -98,7 +98,7 @@ export default function SearchResults({
 
   if (state.status === "offline") {
     return (
-      <p className="px-2 py-2 text-sm text-gray-500">
+      <p className="px-2 py-2 text-sm text-muted">
         Search is unavailable right now — check your connection and try again.
       </p>
     );
@@ -106,7 +106,7 @@ export default function SearchResults({
 
   if (state.results.length === 0) {
     return (
-      <p className="px-2 py-2 text-sm text-gray-500">
+      <p className="px-2 py-2 text-sm text-muted">
         Nothing in your notes matches &quot;{query}&quot;.
       </p>
     );
@@ -129,13 +129,13 @@ export default function SearchResults({
           style={{ animationDelay: `${Math.min(i, 8) * 25}ms` }}
           className="ui-rise ui-row block w-full px-2 py-1.5 text-left"
         >
-          <span className="block truncate text-sm text-gray-800 dark:text-gray-200">
+          <span className="block truncate text-sm text-ink">
             {highlight(r.heading, query)}
           </span>
-          <span className="block truncate text-xs text-gray-500">
+          <span className="block truncate text-xs text-muted">
             {r.title} · {folderNames?.[r.folder] ?? r.folder.replace(/-/g, " ")}
           </span>
-          <span className="mt-0.5 line-clamp-2 block text-xs leading-snug text-gray-600 dark:text-gray-400">
+          <span className="mt-0.5 line-clamp-2 block text-xs leading-snug text-muted">
             {highlight(r.summary, query)}
           </span>
         </button>

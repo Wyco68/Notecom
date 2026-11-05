@@ -46,7 +46,7 @@ export default function FileTree({
   }
 
   if (folders.length === 0) {
-    return <p className="px-2 py-1 text-sm text-gray-500 dark:text-gray-500">No folders yet.</p>;
+    return <p className="px-2 py-1 text-sm text-muted">No folders yet.</p>;
   }
 
   // Wrapped so the top-level folders can stagger in as the tree arrives. The

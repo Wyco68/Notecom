@@ -112,14 +112,14 @@ export default function AccountPanel({
 
   if (!loaded) {
     // Mirrors the real panel: five cards, the first carrying the avatar row.
-    return <SkeletonPanel cards={5} avatar />;
+    return <SkeletonPanel cards={3} avatar />;
   }
 
   if (!profile) {
     return (
       <div className="mx-auto max-w-2xl p-6">
-        <p className="text-sm text-gray-600 dark:text-gray-300">
-          <a href="/auth/sign-in?next=/account" className="text-blue-600 dark:text-blue-400">
+        <p className="text-sm text-muted">
+          <a href="/auth/sign-in?next=/account" className="text-accent">
             Sign in
           </a>{" "}
           to manage your account.
@@ -139,7 +139,6 @@ export default function AccountPanel({
     <div className="mx-auto max-w-2xl p-4 sm:p-8">
       <PanelHeader
         title="Account"
-        subtitle="Your profile, and who you follow."
         onClose={onClose}
         className="mb-8"
       />
@@ -160,7 +159,7 @@ export default function AccountPanel({
         />
 
         <label className="mb-1.5 block">
-          <span className="mb-1.5 block text-xs font-medium text-gray-500 dark:text-gray-400">
+          <span className="mb-1.5 block text-xs font-medium text-muted">
             Username
           </span>
           <input
@@ -170,11 +169,11 @@ export default function AccountPanel({
             className="ui-field ui-field-sm"
           />
         </label>
-        <p className="mb-4 text-xs leading-relaxed text-gray-500 dark:text-gray-400">
+        <p className="mb-4 text-xs leading-relaxed text-muted">
           {locked ? (
             <>
-              Changed recently — you can change it again on{" "}
-              <span className="font-medium text-gray-700 dark:text-gray-300">
+              Next change on{" "}
+              <span className="font-medium text-ink-2">
                 {changeableAt!.toLocaleDateString(undefined, {
                   year: "numeric",
                   month: "long",
@@ -184,10 +183,7 @@ export default function AccountPanel({
               .
             </>
           ) : (
-            <>
-              Changeable once every {profile.usernameCooldownDays} days. Lowercase letters,
-              numbers, underscore or hyphen; at least 3 characters.
-            </>
+            <>Once every {profile.usernameCooldownDays} days. a–z, 0–9, _ or -, at least 3.</>
           )}
         </p>
         <button
@@ -200,27 +196,19 @@ export default function AccountPanel({
       </Section>
 
       <Section title="Email and password" index={1}>
-        <p className="mb-1 text-sm text-gray-800 dark:text-gray-200">{profile.email}</p>
-        <p className="mb-4 text-xs text-gray-500 dark:text-gray-400">
-          Changing your password sends a code to this address.
-        </p>
+        <p className="mb-1 text-sm text-ink">{profile.email}</p>
         <a href="/auth/reset?next=/account" className="ui-btn ui-btn-sm ui-btn-secondary">
           Change password
         </a>
       </Section>
 
       <Section title="Following" index={2}>
-        <p className="mb-4 max-w-prose text-xs leading-relaxed text-gray-500 dark:text-gray-400">
-          Following someone puts the public folders they publish in your Home feed
-          and lets them invite you to folders, once they accept. Answer requests
-          you receive in Notifications.
-        </p>
         <div className="mb-4 flex gap-2">
           <input
             value={followName}
             onChange={(e) => setFollowName(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && doFollow()}
-            placeholder="username"
+            placeholder="Follow a username"
             className="ui-field ui-field-sm min-w-0 flex-1"
           />
           <button
@@ -232,30 +220,16 @@ export default function AccountPanel({
           </button>
         </div>
         {onOpenPeople ? (
-          <button onClick={onOpenPeople} className="ui-btn ui-btn-sm ui-btn-secondary">
-            Search people you follow
+          <button onClick={onOpenPeople} className="ui-btn ui-btn-sm ui-btn-text -ml-1">
+            People you follow
           </button>
         ) : (
-          <a href="/people" className="ui-btn ui-btn-sm ui-btn-secondary inline-flex">
-            Search people you follow
+          <a href="/people" className="ui-btn ui-btn-sm ui-btn-text -ml-1 inline-flex">
+            People you follow
           </a>
         )}
       </Section>
 
-      <Section title="Connected accounts" index={3}>
-        <p className="ui-empty">
-          Not available yet — this account signs in with email and password only.
-        </p>
-      </Section>
-
-      <Section title="Notifications" index={4}>
-        <p className="ui-empty">
-          Follow requests and folder invitations collect in Notifications,
-          reachable from the sidebar whether or not anything is waiting. Accepting
-          an invitation is what adds its folder, so nothing there takes effect
-          until you answer it.
-        </p>
-      </Section>
     </div>
   );
 }
@@ -314,7 +288,7 @@ function AvatarField({
         onClick={() => inputRef.current?.click()}
         disabled={busy || uploading}
         aria-label="Change profile photo"
-        className="ui-focus group relative h-20 w-20 shrink-0 overflow-hidden rounded-full border border-black/10 bg-black/[0.03] transition-transform duration-150 ease-out hover:scale-[1.03] disabled:cursor-not-allowed disabled:opacity-60 dark:border-white/10 dark:bg-white/[0.04]"
+        className="ui-focus group relative h-20 w-20 shrink-0 overflow-hidden rounded-full border border-line bg-ink/[0.03] disabled:cursor-not-allowed disabled:opacity-60"
       >
         {avatarUrl ? (
           // eslint-disable-next-line @next/next/no-img-element -- a signed
@@ -326,17 +300,15 @@ function AvatarField({
             className="ui-rise h-full w-full object-cover"
           />
         ) : (
-          <UserIcon className="absolute inset-0 m-auto h-9 w-9 text-gray-400 dark:text-gray-500" />
+          <UserIcon className="absolute inset-0 m-auto h-9 w-9 text-muted" />
         )}
-        <span className="absolute inset-0 flex items-end justify-center bg-black/55 pb-1.5 text-[10px] font-medium uppercase tracking-wide text-white opacity-0 transition-opacity duration-150 ease-out group-hover:opacity-100 group-focus-visible:opacity-100">
+        <span className="absolute inset-0 flex items-end justify-center bg-black/55 pb-1.5 text-[10px] font-semibold text-white opacity-0 transition-opacity duration-150 ease-out group-hover:opacity-100 group-focus-visible:opacity-100">
           {uploading ? "…" : "Change"}
         </span>
       </button>
 
       <div className="min-w-0">
-        <p className="mb-1.5 text-xs font-medium text-gray-500 dark:text-gray-400">
-          Profile photo
-        </p>
+        <p className="mb-1.5 text-sm font-medium text-ink">Photo</p>
         <div className="flex flex-wrap items-center gap-1.5">
           <button
             onClick={() => inputRef.current?.click()}
@@ -349,13 +321,13 @@ function AvatarField({
             <button
               onClick={() => setConfirming(true)}
               disabled={busy || uploading}
-              className="ui-btn ui-btn-xs font-normal text-gray-500 hover:bg-red-500/10 hover:text-red-600 dark:hover:text-red-400"
+              className="ui-btn ui-btn-xs font-normal text-muted hover:bg-ink/[0.06] hover:text-ink"
             >
               Remove
             </button>
           )}
         </div>
-        <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+        <p className="mt-1.5 text-xs text-muted">
           JPEG, PNG or WebP, up to {AVATAR_MAX_BYTES / (1024 * 1024)} MB.
         </p>
       </div>
@@ -398,12 +370,10 @@ function Section({
   return (
     <section
       style={{ animationDelay: `${Math.min(index, 6) * 40}ms` }}
-      className="ui-rise mb-4 rounded-lg border border-black/10 bg-black/[0.01] p-5 transition-colors duration-150 ease-out hover:border-black/20 dark:border-white/10 dark:bg-white/[0.02] dark:hover:border-white/20"
+      className="ui-rise grid gap-x-8 gap-y-3 border-t border-line py-7 sm:grid-cols-[10rem_minmax(0,1fr)]"
     >
-      <h2 className="mb-4 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-        {title}
-      </h2>
-      {children}
+      <h2 className="text-sm font-semibold text-ink">{title}</h2>
+      <div className="min-w-0">{children}</div>
     </section>
   );
 }

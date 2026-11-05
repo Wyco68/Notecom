@@ -13,7 +13,7 @@
 export function SkeletonLine({ w = "w-full", className = "" }: { w?: string; className?: string }) {
   return (
     <div
-      className={`h-3.5 rounded bg-black/[0.06] dark:bg-white/[0.07] ${w} ${className}`}
+      className={`h-3.5 rounded bg-ink/[0.06] ${w} ${className}`}
       aria-hidden
     />
   );
@@ -23,7 +23,7 @@ export function SkeletonLine({ w = "w-full", className = "" }: { w?: string; cla
 export function SkeletonCircle({ size = "h-20 w-20" }: { size?: string }) {
   return (
     <div
-      className={`shrink-0 rounded-full bg-black/[0.06] dark:bg-white/[0.07] ${size}`}
+      className={`shrink-0 rounded-full bg-ink/[0.06] ${size}`}
       aria-hidden
     />
   );
@@ -35,8 +35,8 @@ export function SkeletonCircle({ size = "h-20 w-20" }: { size?: string }) {
  */
 export function SkeletonCard({ lines = 3, children }: { lines?: number; children?: React.ReactNode }) {
   return (
-    <div className="mb-4 rounded-lg border border-black/10 bg-black/[0.01] p-5 dark:border-white/10 dark:bg-white/[0.02]">
-      <div className="mb-4 h-2.5 w-24 rounded bg-black/[0.08] dark:bg-white/[0.09]" aria-hidden />
+    <div className="border-t border-line py-6">
+      <div className="mb-4 h-2.5 w-24 rounded bg-ink/[0.08]" aria-hidden />
       {children}
       <div className="space-y-2.5">
         {Array.from({ length: lines }, (_, i) => (
@@ -87,8 +87,8 @@ export function SkeletonPanel({
       aria-label="Loading"
     >
       <div className="mb-8 flex items-baseline justify-between gap-3">
-        <div className="h-5 w-28 rounded bg-black/[0.08] dark:bg-white/[0.09]" aria-hidden />
-        <div className="h-4 w-20 rounded bg-black/[0.05] dark:bg-white/[0.06]" aria-hidden />
+        <div className="h-5 w-28 rounded bg-ink/[0.08]" aria-hidden />
+        <div className="h-4 w-20 rounded bg-ink/[0.05]" aria-hidden />
       </div>
       {Array.from({ length: cards }, (_, i) => (
         <SkeletonCard key={i} lines={i === 0 ? 2 : 3}>

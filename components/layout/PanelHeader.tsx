@@ -1,5 +1,7 @@
 "use client";
 
+import CloseIcon from "@/components/icons/CloseIcon";
+
 // The heading and the way out, for every panel that renders in the workspace's
 // content column: account, discovery, people, notifications, the sharing
 // console.
@@ -22,7 +24,7 @@ export default function PanelHeader({
   onClose,
   /** Where the link form goes. The vault, unless a panel has a nearer parent. */
   backHref = "/vault",
-  className = "mb-6",
+  className = "mb-8",
 }: {
   title: React.ReactNode;
   subtitle?: React.ReactNode;
@@ -35,16 +37,16 @@ export default function PanelHeader({
   className?: string;
 }) {
   return (
-    <div className={`flex items-baseline justify-between gap-4 ${className}`}>
+    <div className={`flex items-start justify-between gap-4 ${className}`}>
       <div className="min-w-0">
         <div className="flex items-baseline gap-2.5">
-          <h1 className="truncate text-xl font-semibold tracking-tight text-gray-900 dark:text-gray-100">
+          <h1 className="truncate text-2xl font-bold tracking-tight text-ink">
             {title}
           </h1>
           {badge}
         </div>
         {subtitle && (
-          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{subtitle}</p>
+          <p className="mt-1 text-sm text-muted">{subtitle}</p>
         )}
       </div>
 
@@ -53,16 +55,18 @@ export default function PanelHeader({
         {onClose ? (
           <button
             onClick={onClose}
-            className="ui-btn ui-btn-sm ui-btn-ghost font-normal text-blue-600 dark:text-blue-400"
+            title="Close"
+            aria-label="Close"
+            className="ui-icon-btn h-8 w-8"
           >
-            Back to notes
+            <CloseIcon className="h-[18px] w-[18px]" />
           </button>
         ) : (
           <a
             href={backHref}
-            className="ui-focus rounded px-1 text-sm text-blue-600 transition-colors duration-150 ease-out hover:text-blue-500 dark:text-blue-400"
+            className="ui-btn ui-btn-sm ui-btn-text"
           >
-            Back to vault
+            Back to notes
           </a>
         )}
       </div>

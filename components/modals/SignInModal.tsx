@@ -116,22 +116,18 @@ export default function SignInModal({
 
   const statusLine =
     phase === "running"
-      ? "● waiting for browser sign-in"
+      ? "Waiting for browser sign-in…"
       : phase === "done"
-      ? "✓ signed in"
+      ? "Signed in"
       : phase === "aborted"
-      ? "cancelled"
-      : "✗ failed";
+      ? "Cancelled"
+      : "Sign-in failed";
 
   return (
     <Modal title="Sign in to Claude Code" onClose={running ? () => {} : onClose}>
       {phase === "idle" ? (
         <>
-          <p className="mb-4 text-sm leading-relaxed text-gray-600 dark:text-gray-400">
-            Generating notes runs the Claude Code CLI on your own account. Your
-            session has expired or was never set up — signing in here runs the
-            same flow as a terminal would.
-          </p>
+          <p className="mb-5 text-sm text-ink-2">Generating needs a Claude Code session.</p>
           <button
             onClick={() => start("claudeai")}
             className="ui-btn ui-btn-primary w-full"
@@ -144,26 +140,22 @@ export default function SignInModal({
           >
             Use Anthropic Console instead
           </button>
-          <p className="mt-2.5 text-xs leading-snug text-gray-500">
-            Opens Anthropic in your browser. The app never sees or stores your
-            credentials — Claude Code keeps them, exactly as it does from a
-            terminal.
-          </p>
+          <p className="mt-3 text-center text-xs text-muted">Opens in your browser. Notecom never sees your credentials.</p>
         </>
       ) : (
         <>
-          <div className="mb-2 font-mono text-xs text-emerald-600 dark:text-emerald-400">
+          <div className="mb-2 text-sm font-semibold text-ink">
             {statusLine}
           </div>
 
           {url && running && (
-            <p className="mb-2 break-all text-xs leading-snug text-gray-600 dark:text-gray-400">
+            <p className="mb-2 break-all text-xs leading-snug text-muted">
               Didn&apos;t open?{" "}
               <a
                 href={url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-blue-600 underline dark:text-blue-400"
+                className="text-accent underline"
               >
                 {url}
               </a>
@@ -172,7 +164,7 @@ export default function SignInModal({
 
           <div
             ref={logRef}
-            className="mb-3 h-40 overflow-y-auto rounded-md border border-black/10 bg-[#0a0e14] p-3 font-mono text-xs leading-relaxed text-emerald-400 dark:border-white/10"
+            className="mb-3 h-40 overflow-y-auto rounded-lg bg-cover/70 p-3 font-mono text-xs leading-relaxed text-ink-2"
           >
             {log.map((l, i) => (
               <div key={i} className="whitespace-pre-wrap">
@@ -183,7 +175,7 @@ export default function SignInModal({
 
           {awaitingCode && running && (
             <div className="mb-3">
-              <label className="mb-1.5 block text-xs font-medium text-gray-500 dark:text-gray-400">
+              <label className="mb-1.5 block text-sm font-medium text-ink">
                 Paste the authorization code from the browser
               </label>
               <div className="flex gap-2">

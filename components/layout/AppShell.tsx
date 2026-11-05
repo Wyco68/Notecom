@@ -39,6 +39,9 @@ import SearchIcon from "../icons/SearchIcon";
 import SidebarIcon from "../icons/SidebarIcon";
 import UploadIcon from "../icons/UploadIcon";
 import SheetIcon from "../icons/SheetIcon";
+import PlusIcon from "../icons/PlusIcon";
+import CloseIcon from "../icons/CloseIcon";
+import BrandMark from "../icons/BrandMark";
 
 /** What the content column is showing instead of the open document. */
 type Overlay =
@@ -470,12 +473,13 @@ export default function AppShell() {
           the reader jumping sideways for no reason. Long names wrap instead. */}
       <aside
         id="sidebar"
-        className={`fixed inset-y-0 left-0 z-sidebar flex w-80 max-w-[85vw] shrink-0 flex-col border-r border-black/10 bg-gray-50 transition-[transform,visibility] duration-200 lg:static lg:z-auto lg:max-w-none lg:visible lg:translate-x-0 dark:border-white/10 dark:bg-[#0a0e14] ${
+        className={`fixed inset-y-0 left-0 z-sidebar flex w-[18.5rem] max-w-[85vw] shrink-0 flex-col border-r border-cover-line bg-chrome transition-[transform,visibility] duration-200 lg:static lg:z-auto lg:max-w-none lg:visible lg:translate-x-0 ${
           sidebarOpen ? "visible translate-x-0" : "invisible -translate-x-full lg:hidden"
         }`}
       >
-        <div className="flex items-center justify-between border-b border-black/10 px-3 py-3 dark:border-white/10">
-          <span className="text-sm font-semibold tracking-tight text-gray-900 dark:text-gray-200">
+        <div className="flex h-[52px] items-center justify-between px-4">
+          <span className="flex items-center gap-2 text-[15px] font-bold tracking-tight text-ink">
+            <BrandMark className="h-[18px] w-[15px]" />
             Notecom
           </span>
           {/* Brand and the control that closes this panel. Nothing else: the
@@ -496,19 +500,20 @@ export default function AppShell() {
           </div>
         </div>
 
-        <div className="px-3 pt-3">
+        <div className="px-3">
           {/* The field is the wrapper, so the whole box takes the focus ring
               rather than the bare input inside it. */}
-          <div className="ui-field flex items-center gap-2 px-2.5 py-1.5 focus-within:border-blue-600 focus-within:ring-2 focus-within:ring-blue-600/25 dark:focus-within:border-blue-500 dark:focus-within:ring-blue-500/25">
-            <SearchIcon className="h-3.5 w-3.5 shrink-0 text-gray-400" />
+          <div className="ui-field flex items-center gap-2 border-cover-line px-2.5 py-1.5 focus-within:border-accent focus-within:ring-2 focus-within:ring-accent/20">
+            <SearchIcon className="h-3.5 w-3.5 shrink-0 text-muted" />
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Enter") setSubmittedQuery(query.trim());
               }}
-              placeholder="Search notes... (press Enter)"
-              className="w-full bg-transparent text-sm text-gray-800 outline-none placeholder:text-gray-400 dark:text-gray-200 dark:placeholder:text-gray-500"
+              placeholder="Search notes"
+              aria-label="Search notes (press Enter)"
+              className="w-full bg-transparent text-sm text-ink outline-none placeholder:text-muted"
             />
             {query && (
               <button
@@ -518,9 +523,9 @@ export default function AppShell() {
                 }}
                 title="Clear search"
                 aria-label="Clear search"
-                className="ui-icon-btn h-5 w-5 text-xs"
+                className="ui-icon-btn h-5 w-5"
               >
-                ✕
+                <CloseIcon className="h-3.5 w-3.5" />
               </button>
             )}
           </div>
@@ -587,7 +592,7 @@ export default function AppShell() {
             results take the whole area, since Recent is hidden then anyway. */}
         <div className="flex min-h-0 flex-1 flex-col">
           <div className="flex min-h-0 flex-1 flex-col">
-            <div className="flex items-center justify-between px-3 pb-1 pt-4">
+            <div className="flex items-center justify-between px-4 pb-1.5 pt-3">
               <span className="ui-section-title">
                 {query.trim() ? "Results" : "Folders"}
               </span>
@@ -601,16 +606,16 @@ export default function AppShell() {
                       auth. */}
                   {cliInstalled === false ? (
                     <span
-                      title="This server has no Claude Code CLI installed — generation runs on your own subscription, so it only works from the desktop app or your own checkout. Reading is unaffected."
-                      className="ui-btn ui-btn-xs cursor-default rounded border border-gray-500/20 bg-gray-500/10 font-medium text-gray-500 dark:text-gray-400"
+                      title="No Claude Code CLI on this server. Generate from the desktop app."
+                      className="px-1.5 text-xs text-muted"
                     >
                       Read-only
                     </span>
                   ) : signedIn === false ? (
                     <button
                       onClick={() => setShowSignIn(true)}
-                      title="Claude Code is signed out — generating notes needs a session"
-                      className="ui-btn ui-btn-xs rounded border border-amber-500/30 bg-amber-500/10 font-medium text-amber-700 hover:bg-amber-500/20 focus-visible:ring-amber-500/70 dark:text-amber-300"
+                      title="Claude Code is signed out"
+                      className="ui-btn ui-btn-xs font-semibold text-warn hover:bg-warn/10 focus-visible:ring-warn/60"
                     >
                       Sign in
                     </button>
@@ -618,7 +623,7 @@ export default function AppShell() {
                     <>
                       <button
                         onClick={() => setShowGenerate(true)}
-                        title="Generate a lesson or quiz from a file (runs local Claude Code)"
+                        title="Generate from a file"
                         aria-label="Generate a lesson or quiz from a file"
                         className="ui-icon-btn h-6 w-6"
                       >
@@ -626,7 +631,7 @@ export default function AppShell() {
                       </button>
                       <button
                         onClick={() => setShowSheet(true)}
-                        title="Make a printable cheatsheet from a folder's lessons (runs local Claude Code)"
+                        title="Make a cheatsheet"
                         aria-label="Make a cheatsheet"
                         className="ui-icon-btn h-6 w-6"
                       >
@@ -640,11 +645,11 @@ export default function AppShell() {
                       relationship to the tree that neither of them has. */}
                   <button
                     onClick={() => setShowNewFolder(true)}
-                    title="New Folder"
+                    title="New folder"
                     aria-label="New folder"
-                    className="ui-icon-btn h-6 w-6 text-base leading-none"
+                    className="ui-icon-btn h-6 w-6"
                   >
-                    +
+                    <PlusIcon className="h-4 w-4" />
                   </button>
                 </div>
               )}
@@ -676,8 +681,8 @@ export default function AppShell() {
             // both, the folder tree wins. It previously kept its fixed 224px
             // and squeezed the tree — the only flex-1 child — to zero, so the
             // sections overlapped and no folder was reachable at all.
-            <div className="flex min-h-0 shrink flex-col border-t border-black/10 pb-2 [@media(max-height:600px)]:hidden dark:border-white/10">
-              <span className="px-3 pb-1 pt-3 ui-section-title">
+            <div className="flex min-h-0 shrink flex-col border-t border-cover-line pb-2 [@media(max-height:600px)]:hidden">
+              <span className="px-4 pb-1.5 pt-3 ui-section-title">
                 Recent
               </span>
               {/* h-56 (14rem) is exactly the eight rows recent.ts caps the list
@@ -689,7 +694,7 @@ export default function AppShell() {
                   of blank space. */}
               {/* `max-h-[28vh]` is the give: 224px is right on a laptop and
                   more than half the column on a short one. */}
-              <div className={`px-2 ${recent.length ? "ui-scroll h-56 max-h-[28vh]" : ""}`}>
+              <div className={`px-2 ${recent.length ? "ui-scroll max-h-[min(14rem,28vh)]" : ""}`}>
                 <RecentFiles
                   entries={recent}
                   selected={selected}
@@ -706,7 +711,7 @@ export default function AppShell() {
             to the app, not to the folder list they used to sit above — and
             because this row renders even on a build with no collaboration,
             where AccountControl itself renders nothing. */}
-        <div className="flex items-center gap-1.5 border-t border-black/10 px-2 py-2 dark:border-white/10">
+        <div className="flex items-center gap-1.5 border-t border-cover-line px-2 py-2">
           <AccountControl
             onOpenProfile={() => openOverlay({ kind: "profile" })}
             active={overlay?.kind === "profile"}
@@ -715,8 +720,8 @@ export default function AppShell() {
             <button
               onClick={handleRefresh}
               disabled={refreshing}
-              title="Refresh or push to database"
-              aria-label="Refresh or push to database"
+              title="Refresh"
+              aria-label="Refresh"
               className="ui-icon-btn h-7 w-7"
             >
               <RefreshIcon className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
@@ -734,7 +739,7 @@ export default function AppShell() {
       <main
         id="main"
         tabIndex={-1}
-        className="ui-scroll relative flex-1 scroll-pt-12 bg-white outline-none dark:bg-[#0d1117]"
+        className="ui-scroll relative flex-1 scroll-pt-14 bg-paper bg-wash bg-no-repeat outline-none"
       >
         {/* The column's own header. It replaced a button that floated over the
             document and the permanent `pt-12` every page carried to dodge it.

@@ -36,8 +36,8 @@ export default function NewFolderModal({
   }
 
   return (
-    <Modal title="New Folder" onClose={onClose}>
-      <label className="mb-1.5 block text-xs font-medium text-gray-500 dark:text-gray-400">
+    <Modal title="New folder" onClose={onClose}>
+      <label className="mb-1.5 block text-sm font-medium text-ink">
         Folder name
       </label>
       <input
@@ -45,10 +45,10 @@ export default function NewFolderModal({
         value={name}
         onChange={(e) => setName(e.target.value)}
         onKeyDown={(e) => e.key === "Enter" && create()}
-        className="ui-field mb-3"
+        className="ui-field mb-4"
         placeholder="e.g. Wireless Network"
       />
-      {error && <p className="mb-3 text-xs text-red-600 dark:text-red-400">{error}</p>}
+      {error && <p className="mb-3 text-xs text-danger">{error}</p>}
       <button
         onClick={create}
         disabled={busy || !name.trim()}

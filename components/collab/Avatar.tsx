@@ -37,7 +37,7 @@ export default function Avatar({
     <span
       // inline-block: a bare inline span ignores h-/w-, so outside a flex row
       // the photo rendered at its natural size instead of this circle.
-      className={`relative inline-block ${dims[size]} shrink-0 overflow-hidden rounded-full border border-black/10 bg-black/[0.06] dark:border-white/10 dark:bg-white/10`}
+      className={`relative inline-block ${dims[size]} shrink-0 overflow-hidden rounded-full border border-line bg-ink/[0.06]`}
     >
       {showImage ? (
         // eslint-disable-next-line @next/next/no-img-element -- a signed
@@ -51,12 +51,12 @@ export default function Avatar({
         />
       ) : username ? (
         <span
-          className={`absolute inset-0 flex items-center justify-center ${textSize} font-medium text-gray-600 dark:text-gray-300`}
+          className={`absolute inset-0 flex items-center justify-center ${textSize} font-medium text-muted`}
         >
           {username.slice(0, 2).toUpperCase()}
         </span>
       ) : (
-        <UserIcon className="absolute inset-0 m-auto h-1/2 w-1/2 text-gray-400 dark:text-gray-500" />
+        <UserIcon className="absolute inset-0 m-auto h-1/2 w-1/2 text-muted" />
       )}
     </span>
   );

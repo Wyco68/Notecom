@@ -133,21 +133,19 @@ function SignUpForm() {
     <AuthShell
       title="Create account"
       subtitle={
-        step === "form"
-          ? "To share folders and join other people's."
-          : `Enter the 8-digit code we emailed to ${email} to confirm your account.`
+        step === "form" ? undefined : `Enter the 8-digit code sent to ${email}.`
       }
       footer={
         <>
           {step === "form" && (
             <a
               href={`/auth/sign-in?next=${encodeURIComponent(next)}`}
-              className="ui-focus rounded text-blue-600 transition-colors duration-150 ease-out hover:text-blue-500 dark:text-blue-400"
+              className="ui-focus rounded text-accent transition-colors duration-150 ease-out hover:text-accent/80"
             >
-              Already have an account? Sign in
+              Have an account? Sign in
             </a>
           )}
-          <AuthFootLink href="/vault">Back to vault</AuthFootLink>
+          <AuthFootLink href="/vault">Back to notes</AuthFootLink>
         </>
       }
     >
@@ -161,7 +159,7 @@ function SignUpForm() {
         >
           <Field
             label="Email"
-            hint="We send an 8-digit confirmation code here, so use an inbox you can open now."
+            hint="We send a confirmation code here."
             error={emailError}
           >
             {(props) => (
@@ -182,7 +180,7 @@ function SignUpForm() {
 
           <Field
             label="Password"
-            hint={`At least ${MIN_PASSWORD} characters. Letters, numbers and symbols all count.`}
+            hint={`At least ${MIN_PASSWORD} characters.`}
             error={passwordError}
           >
             {(props) => (
@@ -216,7 +214,7 @@ function SignUpForm() {
         >
           <Field
             label="Emailed code"
-            hint="Eight digits, from the message just sent. It can take a minute, and it may land in spam."
+            hint="Eight digits. Check spam if it doesn't arrive."
             error={null}
           >
             {(props) => (
@@ -287,17 +285,17 @@ function Field({
     <div className="mb-4">
       <label
         htmlFor={id}
-        className="mb-1 block text-xs font-medium text-gray-700 dark:text-gray-300"
+        className="mb-1 block text-sm font-medium text-ink"
       >
         {label}
       </label>
-      <p id={hintId} className="mb-1.5 text-xs leading-relaxed text-gray-500 dark:text-gray-400">
+      <p id={hintId} className="mb-1.5 text-xs leading-relaxed text-muted">
         {hint}
       </p>
       {children({
         id,
         className: `ui-field${
-          error ? " border-red-500 focus-visible:border-red-500 focus-visible:ring-red-500/25" : ""
+          error ? " border-danger/40 focus-visible:border-danger/40 focus-visible:ring-danger/25" : ""
         }`,
         "aria-describedby": hintId,
         "aria-invalid": !!error,
@@ -307,7 +305,7 @@ function Field({
         <p
           id={errorId}
           role="alert"
-          className="mt-1.5 text-xs leading-relaxed text-red-600 dark:text-red-400"
+          className="mt-1.5 text-xs leading-relaxed text-danger"
         >
           {error}
         </p>
@@ -321,7 +319,7 @@ function FormError({ children }: { children: React.ReactNode }) {
   return (
     <p
       role="alert"
-      className="mb-3 rounded-md border border-red-500/20 bg-red-500/[0.07] px-3 py-2 text-xs leading-relaxed text-red-700 dark:text-red-400"
+      className="mb-3 rounded-md border border-danger/20 bg-danger/[0.07] px-3 py-2 text-xs leading-relaxed text-danger"
     >
       {children}
     </p>

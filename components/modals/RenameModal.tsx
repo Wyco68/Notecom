@@ -34,7 +34,7 @@ export default function RenameModal({
 
   return (
     <Modal title={title} onClose={onCancel}>
-      <label className="mb-1.5 block text-xs font-medium text-gray-500 dark:text-gray-400">
+      <label className="mb-1.5 block text-sm font-medium text-ink">
         {label}
       </label>
       <input
@@ -43,9 +43,9 @@ export default function RenameModal({
         onChange={(e) => setValue(e.target.value)}
         onKeyDown={(e) => e.key === "Enter" && submit()}
         onFocus={(e) => e.currentTarget.select()}
-        className="ui-field mb-3"
+        className="ui-field mb-4"
       />
-      {error && <p className="mb-3 text-xs text-red-600 dark:text-red-400">{error}</p>}
+      {error && <p className="mb-3 text-xs text-danger">{error}</p>}
       <div className="flex justify-end gap-2">
         <button onClick={onCancel} disabled={busy} className="ui-btn ui-btn-sm ui-btn-ghost">
           Cancel
