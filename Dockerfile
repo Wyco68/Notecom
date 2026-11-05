@@ -40,5 +40,8 @@ ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 PORT=3000 HOSTNAME=0.0.0.0
 COPY --from=build /app/.next/standalone ./
 COPY --from=build /app/.next/static ./.next/static
 COPY --from=build /app/public ./public
+# The lesson and quiz template docs: a web-service run reads them as its
+# system prompt (lib/generate/template.ts).
+COPY --from=build /app/docs ./docs
 EXPOSE 3000
 CMD ["node", "server.js"]

@@ -62,6 +62,8 @@ export interface GenerateJob {
   lastActivity: number;
   /** the run failed for lack of a CLI session; the UI offers sign-in */
   needsAuth?: boolean;
+  /** who writes it: "Claude Code" or a web service's name */
+  service?: string;
 }
 
 /**
@@ -81,7 +83,15 @@ interface GenerateJobsValue {
   /** Starts a run and returns its job id, or null when it could not start. */
   /** With `lesson`: picture mode — the slides of that saved lesson, whose
    *  pictures are added to it without rewriting it. */
-  start: (input: { file: File; folder: string; kind: "lect" | "quiz"; lesson?: string }) => Promise<string | null>;
+  /** With `web`: a web service writes it with the reader's own key and model
+   *  instead of the local Claude Code CLI. */
+  start: (input: {
+    file: File;
+    folder: string;
+    kind: "lect" | "quiz";
+    lesson?: string;
+    web?: { service: string; label: string; key: string; model: string };
+  }) => Promise<string | null>;
   /** Starts a cheatsheet run over lessons `from`..`to` of a folder. */
   startSheet: (input: {
     folder: string;
@@ -317,6 +327,7 @@ export default function GenerateJobsProvider({ children }: { children: React.Rea
               tokens: j.tokens ?? { input: 0, output: 0 },
               startedAt: j.startedAt ?? Date.now(),
               lastActivity: Date.now(),
+              service: j.service,
             })),
           ]);
           for (const j of running) follow(j.id);
@@ -333,7 +344,7 @@ export default function GenerateJobsProvider({ children }: { children: React.Rea
   }, [follow]);
 
   const start = useCallback<GenerateJobsValue["start"]>(
-    async ({ file, folder, kind, lesson }) => {
+    async ({ file, folder, kind, lesson, web }) => {
       if (activeCount >= MAX_CONCURRENT_JOBS) {
         toast.error(`Already generating ${activeCount} files — wait for one to finish.`);
         return null;
@@ -344,7 +355,16 @@ export default function GenerateJobsProvider({ children }: { children: React.Rea
         form.set("folder", folder);
         form.set("kind", kind);
         if (lesson) form.set("lesson", lesson);
-        const res = await fetch(lesson ? "/api/generate/images" : "/api/generate", { method: "POST", body: form });
+        if (web) {
+          form.set("key", web.key);
+          form.set("model", web.model);
+        }
+        const url = lesson
+          ? "/api/generate/images"
+          : web
+            ? `/api/generate?service=${encodeURIComponent(web.service)}`
+            : "/api/generate";
+        const res = await fetch(url, { method: "POST", body: form });
         // An error page from in front of the route is not JSON; say what failed
         // instead of the browser's parse error.
         const data = await res.json().catch(() => ({}));
@@ -360,6 +380,7 @@ export default function GenerateJobsProvider({ children }: { children: React.Rea
             tokens: { input: 0, output: 0 },
             startedAt: Date.now(),
             lastActivity: Date.now(),
+            service: web?.label ?? "Claude Code",
           },
         ]);
         follow(data.jobId);
@@ -404,6 +425,7 @@ export default function GenerateJobsProvider({ children }: { children: React.Rea
             tokens: { input: 0, output: 0 },
             startedAt: Date.now(),
             lastActivity: Date.now(),
+            service: "Claude Code",
           },
         ]);
         follow(data.jobId);
@@ -449,6 +471,7 @@ export default function GenerateJobsProvider({ children }: { children: React.Rea
             tokens: { input: 0, output: 0 },
             startedAt: Date.now(),
             lastActivity: Date.now(),
+            service: "Claude Code",
           },
         ]);
         follow(data.jobId);

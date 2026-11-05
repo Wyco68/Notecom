@@ -271,9 +271,14 @@ appearing.
   dashed drop target that is also a native `<input type="file">`, with the
   picked files listed under it. Don't style a bare file input.
 - **Generation dialog**: folder, a Lesson / Quiz / Pictures segmented switch,
-  the drop zone, then a "Runs with" row naming where the run happens (today
-  always Claude Code on this computer — the slot a future service picker
-  takes), then one primary button. The run's log is a quiet cover-tinted box,
+  the drop zone, then the "Runs with" picker
+  ([components/generate/RunnerPicker.tsx](../components/generate/RunnerPicker.tsx)):
+  one `<select>` in three groups — Subscription (Claude Code · this computer,
+  only where the CLI exists), Pay per use (Claude, OpenAI, Gemini API) and
+  OpenRouter. A web service asks for its key once (a password field, with the
+  one line saying it stays in this browser), then shows the key masked with
+  Remove, and a model field whose suggestions come from the key's own model
+  list. Pictures is disabled for web services. Then one primary button. The run's log is a quiet cover-tinted box,
   not a terminal costume.
 - **Icons**: hand-rolled inline SVG components under
   [components/icons/](../components/icons/) (e.g. `TrashIcon`), all on a 24px

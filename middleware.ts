@@ -179,6 +179,13 @@ const GENERATE_WINDOW_MS = 60 * 60_000;
 // use up the budget for generating.
 const SHEET_EDIT_LIMIT = 30;
 const IMAGES_LIMIT = 30;
+// Listing a web service's models is also a key check against that service:
+// enough for a reader entering or changing a key, far too few to test a list
+// of leaked keys through this server. Per user and per address, so new
+// accounts don't multiply it.
+const AI_MODELS_USER_LIMIT = 10;
+const AI_MODELS_IP_LIMIT = 30;
+const AI_MODELS_WINDOW_MS = 10 * 60_000;
 const MEDIA_LIMIT = 600;
 
 // The blanket budget for everything else this middleware matches, pages
@@ -215,6 +222,19 @@ function isProtected(path: string): boolean {
 export async function middleware(req: NextRequest) {
   const path = req.nextUrl.pathname;
   const ip = clientIp(req);
+
+  // A write to the API from another site is never this app's own page. The
+  // session cookie is SameSite=Lax, which already stops cross-site posts;
+  // this also stops one from a sibling subdomain (same-site). Requests
+  // without the header (server-to-server, older browsers) pass as before.
+  const fetchSite = req.headers.get("sec-fetch-site");
+  if (
+    path.startsWith("/api/") &&
+    !["GET", "HEAD", "OPTIONS"].includes(req.method) &&
+    (fetchSite === "cross-site" || fetchSite === "same-site")
+  ) {
+    return NextResponse.json({ error: "cross-site request refused" }, { status: 403 });
+  }
   const nonce = generateNonce();
   const csp = buildCsp(nonce);
 
@@ -272,6 +292,13 @@ export async function middleware(req: NextRequest) {
   }
   if (req.method === "POST" && path.startsWith("/api/sheets/") && /\/(edit|continue|review|sources)$/.test(path)) {
     const retryAfter = rateLimit(`sheet-edit:${userId}`, SHEET_EDIT_LIMIT, GENERATE_WINDOW_MS);
+    if (retryAfter !== null) return withCsp(tooManyRequests(retryAfter));
+  }
+
+  if (req.method === "POST" && path === "/api/ai/models") {
+    const retryAfter =
+      rateLimit(`ai-models:${userId}`, AI_MODELS_USER_LIMIT, AI_MODELS_WINDOW_MS) ??
+      rateLimit(`ai-models-ip:${ip}`, AI_MODELS_IP_LIMIT, AI_MODELS_WINDOW_MS);
     if (retryAfter !== null) return withCsp(tooManyRequests(retryAfter));
   }
 

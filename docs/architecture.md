@@ -91,6 +91,61 @@ folder under the home directory (the snap build cannot see `/tmp`); without
 LibreOffice the upload is refused before the run, saying to save it as
 `.pptx`/`.docx`/`.xlsx` or PDF. Cheatsheet slides go through the same step.
 
+## Web generation: any service, the reader's own key (2026-11)
+
+A lesson or quiz can also be written by a web service instead of the local
+CLI, so generating works on the hosted app too. The Generate dialog's "Runs
+with" picker offers three kinds: **Subscription** (Claude Code on this
+computer — the CLI path above), **Pay per use** (Claude, OpenAI or Gemini API
+with the reader's key) and **OpenRouter** (one key, most other model makers).
+
+- **Keys stay with the reader.** A key is kept in the browser
+  (`lib/ai/keys.ts`), per account (`notecom.ai:<user id>`), for the page only
+  unless the reader ticks "Remember on this device", and wiped on sign-out —
+  in this tab or another. It is sent with the generate request, held in the
+  run's closure while it runs, and dropped when it ends — never on the job, in
+  the log, in Supabase or on disk; provider errors are scrubbed of it
+  (`cleanMessage`). `POST /api/ai/models` lists the models a key can use; that
+  list is also the key check, so a rejected key is never kept, and it has its
+  own small rate budget (10 per 10 minutes per user, 30 per address) so the
+  server can't be used to test leaked keys.
+- **Fixed endpoints.** `lib/ai/services.ts` names four services, each with its
+  host fixed in its adapter (the Anthropic client sets `baseURL` explicitly, so
+  an `ANTHROPIC_BASE_URL` in the server's environment can't redirect readers'
+  keys) (`anthropic.ts` via the official SDK; `openai.ts`
+  for OpenAI and OpenRouter's shared Chat Completions API; `gemini.ts`). The
+  request picks a service, never a URL, so the server can't be pointed at an
+  internal address.
+- **The same template.** `lib/generate/template.ts` builds the system prompt
+  from the docs `/lect` and `/quiz` load (`teaching-guidelines.md`,
+  `html-output-contract.md`, `lesson-template.md`; `quiz-guidelines.md`),
+  read from the checkout at run time — the Docker image copies `docs/`. The
+  command files are not sent: they describe the CLI's tools and file
+  workflow, which a web run doesn't have.
+- **The upload stays in memory.** `lib/generate/source.ts` sends a PDF or a
+  picture as-is (every service reads both), Markdown as text, and a `.pptx` /
+  `.docx` as the text pulled out of its zip. That path reads anyone's upload,
+  so it is bounded: `readZip` caps entries, refuses entries that share data
+  or point outside the file, inflates each to its declared size and the whole
+  archive to 100 MB; the text is read in one linear pass, with caps on slides,
+  XML size and total text. A hostile file is refused in milliseconds. No slide pictures, so no picture
+  mode: that stays CLI-only.
+- **Same job, same checks, same save.** `lib/generate/web.ts` registers a
+  normal `Job`, queues behind the folder's other runs (`queueInFolder`),
+  streams the reply, and runs the contract check with up to two fix rounds,
+  sending the violations back in the conversation. A passing document goes
+  `ready` and saves through `POST /api/generate/[id]` like a CLI run.
+  `stopJob` cancels the request through the job's `AbortController`; a whole
+  run is cut off at 15 minutes. Runs queue by folder id, not slug — slugs
+  repeat across owners — and a caller may have at most three going, checked
+  on the server before the upload is read.
+- **Claude defaults.** `claude-opus-5-5` is preselected for the Claude API,
+  streamed at effort `high` with up to 64K output tokens; Opus-tier models
+  send `fallbacks: "default"` (beta `server-side-fallback-2026-07-01`), so a
+  request their classifiers decline is re-run on Anthropic's recommended
+  fallback instead of coming back empty. Other services preselect their
+  strongest listed general model; the reader can type any model id.
+
 ## Cheatsheets: stored, built in steps that save as they go (2026-10)
 
 `/sheet` is a third generation run, started from the sidebar's Cheatsheet

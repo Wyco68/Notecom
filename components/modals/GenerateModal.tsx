@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import type { Folder } from "@/lib/vault/types";
 import Modal from "./Modal";
 import FileDrop from "../generate/FileDrop";
+import RunnerPicker, { type RunnerChoice } from "../generate/RunnerPicker";
 import SpinnerIcon from "../icons/SpinnerIcon";
 import CheckIcon from "../icons/CheckIcon";
 import StopIcon from "../icons/StopIcon";
@@ -37,11 +38,14 @@ function initialFolder(folders: Folder[]): string {
 // back here on the same job.
 export default function GenerateModal({
   folders,
+  cli,
   onClose,
   onSignIn,
   watchJobId,
 }: {
   folders: Folder[];
+  /** what the local Claude Code CLI can do; undefined while still checking */
+  cli: { installed?: boolean; signedIn?: boolean };
   onClose: () => void;
   /** hand off to the sign-in modal when a run failed for lack of a session */
   onSignIn: () => void;
@@ -60,12 +64,17 @@ export default function GenerateModal({
   // The job this dialog is showing: the one it was opened on, or the one it
   // just started.
   const [watching, setWatching] = useState<string | null>(watchJobId ?? null);
+  // Who writes it — set by RunnerPicker, which owns the choice and the key.
+  const [choice, setChoice] = useState<RunnerChoice | null>(null);
+  const web = choice?.web ?? null;
+  // Placing slide pictures needs the CLI's file access; a web run has none.
+  const picturesAllowed = choice?.runner === "claude-code";
 
   const job = jobs.find((j) => j.id === watching) ?? null;
   const atCapacity = activeCount >= MAX_CONCURRENT_JOBS;
 
   async function begin() {
-    if (!file || !folder || starting) return;
+    if (!file || !folder || starting || !choice?.ready) return;
     setStarting(true);
     try {
       localStorage.setItem(LAST_FOLDER_KEY, folder);
@@ -74,13 +83,19 @@ export default function GenerateModal({
     }
     try {
       const id = await start(
-        kind === "pictures" ? { file, folder, kind: "lect", lesson } : { file, folder, kind }
+        kind === "pictures"
+          ? { file, folder, kind: "lect", lesson }
+          : { file, folder, kind, ...(web ? { web } : {}) }
       );
       if (id) setWatching(id);
     } finally {
       setStarting(false);
     }
   }
+
+  useEffect(() => {
+    if (kind === "pictures" && choice && !picturesAllowed) setKind("lect");
+  }, [kind, choice, picturesAllowed]);
 
   useEffect(() => {
     if (kind !== "pictures" || !folder) return;
@@ -152,8 +167,10 @@ export default function GenerateModal({
               key={k}
               role="radio"
               aria-checked={kind === k}
+              disabled={k === "pictures" && !picturesAllowed}
+              title={k === "pictures" && !picturesAllowed ? "Adding slide pictures needs Claude Code on this computer" : undefined}
               onClick={() => setKind(k)}
-              className={`ui-focus rounded-md py-1.5 text-sm transition-colors duration-150 ease-out ${
+              className={`ui-focus rounded-md py-1.5 text-sm transition-colors duration-150 ease-out disabled:cursor-not-allowed disabled:opacity-40 ${
                 kind === k ? "bg-raised font-semibold text-ink shadow-[0_1px_2px_rgb(var(--shadow)/0.12)]" : "text-ink-2 hover:text-ink"
               }`}
             >
@@ -190,15 +207,12 @@ export default function GenerateModal({
           label={kind === "pictures" ? "Drop the lesson's slides" : "Drop lecture slides or browse"}
         />
 
-        <div className="flex items-center justify-between border-t border-line pt-4 text-sm">
-          <span className="text-muted">Runs with</span>
-          <span className="font-medium text-ink">Claude Code · this computer</span>
-        </div>
+        <RunnerPicker cli={cli} onSignIn={onSignIn} onChange={setChoice} />
 
         <div>
           <button
             onClick={begin}
-            disabled={!file || !folder || starting || atCapacity || (kind === "pictures" && !lesson)}
+            disabled={!file || !folder || starting || atCapacity || !choice?.ready || (kind === "pictures" && !lesson)}
             className="ui-btn ui-btn-primary w-full"
           >
             {starting ? "Starting…" : kind === "pictures" ? "Add pictures" : `Generate ${kind === "quiz" ? "quiz" : "lesson"}`}
@@ -275,6 +289,7 @@ export function JobLog({
               {clock}
             </span>
           )}
+          {job.service && <span className="font-normal text-muted">· {job.service}</span>}
         </span>
         <span data-numeric className="text-xs text-muted" title="Tokens in / out">
           {job.tokens.input.toLocaleString()} in · {job.tokens.output.toLocaleString()} out
