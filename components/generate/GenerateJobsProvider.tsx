@@ -10,7 +10,8 @@ import {
 } from "react";
 import { useToast } from "../toast/ToastProvider";
 import type { SheetSpec } from "@/lib/sheet/layout";
-import type { WebService } from "@/lib/ai/services";
+import { isWebService, WEB_SERVICES, type WebService } from "@/lib/ai/services";
+import { discardUploads, preferredRunner, uploadForJob } from "@/lib/ai/client";
 
 // Generation jobs, tracked above the modal that starts them.
 //
@@ -65,6 +66,9 @@ export interface GenerateJob {
   needsAuth?: boolean;
   /** who writes it: "Claude Code" or a web service's name */
   service?: string;
+  /** a web-service job in the server's queue (lib/jobs), followed by polling
+   *  its row rather than a log stream */
+  queue?: boolean;
 }
 
 /**
@@ -91,7 +95,7 @@ interface GenerateJobsValue {
     folder: string;
     kind: "lect" | "quiz";
     lesson?: string;
-    web?: { service: WebService; label: string; key: string; model: string };
+    web?: { service: WebService; label: string };
   }) => Promise<string | null>;
   /** Starts a cheatsheet run over lessons `from`..`to` of a folder. */
   startSheet: (input: {
@@ -103,6 +107,8 @@ interface GenerateJobsValue {
     /** 2–8; undefined = the page size's own */
     columns?: number;
     files: File[];
+    /** a web service writes it instead of the local CLI */
+    web?: { service: WebService; label: string };
   }) => Promise<string | null>;
   /** Starts a step on a stored sheet: an edit (the chat box, "fix these"),
    *  the rest of its chapters, its review, or new sources (multipart). */
@@ -145,19 +151,6 @@ export default function GenerateJobsProvider({ children }: { children: React.Rea
 
   const patch = useCallback((id: string, fn: (job: GenerateJob) => GenerateJob) => {
     setJobs((prev) => prev.map((j) => (j.id === id ? fn(j) : j)));
-  }, []);
-
-  // Web-service runs happen in this page (lib/ai/run.ts), not on the server:
-  // their stop handles, by job id. A reload ends them, like closing the tab.
-  const webRuns = useRef(new Map<string, AbortController>());
-
-  // Leaving the page ends a web run; let the browser ask first.
-  useEffect(() => {
-    const onBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (webRuns.current.size) e.preventDefault();
-    };
-    window.addEventListener("beforeunload", onBeforeUnload);
-    return () => window.removeEventListener("beforeunload", onBeforeUnload);
   }, []);
 
   // follow() runs long after the render that created it; it reads a job's kind
@@ -303,6 +296,96 @@ export default function GenerateJobsProvider({ children }: { children: React.Rea
     [patch, toast]
   );
 
+  // Web-service jobs live in the server's queue (lib/jobs): their progress is
+  // the job row, read every few seconds. While one is waiting for a worker —
+  // it paused at a time limit, or its worker died — the page asks the server
+  // to continue it. A reload or another device picks it up the same way.
+  const queueFollowing = useRef(new Set<string>());
+  const kicking = useRef(new Set<string>());
+
+  const followQueue = useCallback(
+    (id: string) => {
+      if (queueFollowing.current.has(id)) return;
+      queueFollowing.current.add(id);
+      const tick = async () => {
+        let job: any = null;
+        try {
+          const r = await fetch(`/api/jobs/${id}`, { cache: "no-store" });
+          if (r.status === 404) {
+            queueFollowing.current.delete(id);
+            patch(id, (j) => ({ ...j, status: "error", log: [...j.log, "This run is gone."] }));
+            return;
+          }
+          if (r.ok) job = (await r.json()).job;
+        } catch {
+          // Offline for a moment: try again on the next tick.
+        }
+        if (job) {
+          const status: JobStatus =
+            job.status === "done" ? "done" : job.status === "error" ? "error" : job.status === "cancelled" ? "aborted" : "running";
+          const saves = (job.log as string[]).filter((l) => /^(Saved|Placed) /.test(l)).length;
+          patch(id, (j) => ({
+            ...j,
+            log: job.log,
+            tokens: job.tokens,
+            status,
+            saved: job.result ?? j.saved,
+            saves,
+            edit: j.kind === "sheet" ? { docKey: job.docKey ?? j.edit?.docKey ?? "", request: j.edit?.request ?? job.request ?? "" } : j.edit,
+            lastActivity: Date.parse(job.updatedAt) || Date.now(),
+          }));
+          if (status !== "running") {
+            queueFollowing.current.delete(id);
+            const where = String(job.folder).replace(/-/g, " ");
+            const noun = job.kind === "quiz" ? "quiz" : job.kind === "pictures" ? "pictures" : job.kind.startsWith("sheet") ? "cheatsheet" : "lesson";
+            if (status === "done") {
+              toast.success(noun === "pictures" ? `Pictures added in "${where}".` : noun === "cheatsheet" ? `Cheatsheet updated in "${where}".` : `Generated ${noun} in "${where}".`);
+              setCompletedTick((n) => n + 1);
+            } else if (status === "error") {
+              toast.error(`The ${noun} run failed in "${where}" — see the log.`);
+              if (saves) setCompletedTick((n) => n + 1);
+            }
+            return;
+          }
+          const stale = Date.now() - (Date.parse(job.updatedAt) || 0) > 100_000;
+          if ((job.status === "queued" || stale) && !kicking.current.has(id)) {
+            kicking.current.add(id);
+            fetch(`/api/jobs/${id}/run`, { method: "POST" })
+              .catch(() => {})
+              .finally(() => kicking.current.delete(id));
+          }
+        }
+        setTimeout(tick, 3000);
+      };
+      tick();
+    },
+    [patch, toast]
+  );
+
+  // Files a web-service job and follows it.
+  const enqueue = useCallback(
+    async (body: Record<string, unknown>, job: Omit<GenerateJob, "id" | "status" | "log" | "tokens" | "startedAt" | "lastActivity">) => {
+      const res = await fetch("/api/jobs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        // Not started, so nothing will ever read what was uploaded for it.
+        await discardUploads(Array.isArray(body.uploads) ? (body.uploads as Array<{ path: string }>) : []);
+        throw new Error(data.error || `failed to start (HTTP ${res.status})`);
+      }
+      setJobs((prev) => [
+        ...prev,
+        { ...job, id: data.jobId, status: "running", log: [], tokens: { input: 0, output: 0 }, startedAt: Date.now(), lastActivity: Date.now(), queue: true },
+      ]);
+      followQueue(data.jobId);
+      return data.jobId as string;
+    },
+    [followQueue]
+  );
+
   // A reload drops the SSE reader but not the run behind it. Ask what is still
   // going — or finished but not yet saved — and re-attach, so a refresh
   // mid-generation doesn't orphan a job the user can no longer see. A "ready"
@@ -326,7 +409,9 @@ export default function GenerateJobsProvider({ children }: { children: React.Rea
             (j: any) => j.status === "running" || j.status === "ready"
           );
           if (!running.length) return;
-          setJobs([
+          // Merged, not replaced: the queue's jobs may have arrived first.
+          setJobs((prev) => [
+            ...prev.filter((p) => !running.some((j: any) => j.id === p.id)),
             ...running.map((j: any) => ({
               id: j.id,
               folder: j.folder,
@@ -347,6 +432,35 @@ export default function GenerateJobsProvider({ children }: { children: React.Rea
           for (const j of running) follow(j.id);
         })
         .catch(() => {});
+      fetch("/api/jobs", { cache: "no-store" })
+        .then((r) => (r.ok ? r.json() : { jobs: [] }))
+        .then((data) => {
+          if (cancelled) return;
+          const going = (data.jobs ?? []).filter((j: any) => j.status === "queued" || j.status === "running");
+          if (!going.length) return;
+          setJobs((prev) => [
+            ...prev,
+            ...going
+              .filter((j: any) => !prev.some((p) => p.id === j.id))
+              .map((j: any) => ({
+                id: j.id,
+                folder: j.folder,
+                kind: j.kind.startsWith("sheet") ? ("sheet" as const) : j.kind === "quiz" ? ("quiz" as const) : ("lect" as const),
+                sheet: j.sheet,
+                step: j.kind === "sheet-review" ? ("review" as const) : j.kind === "sheet-edit" ? ("edit" as const) : j.kind === "sheet-write" ? ("write" as const) : undefined,
+                edit: j.kind.startsWith("sheet") ? { docKey: j.docKey ?? "", request: j.request ?? "" } : undefined,
+                status: "running" as JobStatus,
+                log: j.log ?? [],
+                tokens: j.tokens ?? { input: 0, output: 0 },
+                startedAt: Date.parse(j.createdAt) || Date.now(),
+                lastActivity: Date.now(),
+                service: isWebService(j.service) ? WEB_SERVICES[j.service as WebService].label : undefined,
+                queue: true,
+              })),
+          ]);
+          for (const j of going) followQueue(j.id);
+        })
+        .catch(() => {});
     };
     const idle = window.requestIdleCallback ?? ((fn: () => void) => setTimeout(fn, 0));
     const cancelIdle = window.cancelIdleCallback ?? clearTimeout;
@@ -355,7 +469,7 @@ export default function GenerateJobsProvider({ children }: { children: React.Rea
       cancelled = true;
       cancelIdle(handle);
     };
-  }, [follow]);
+  }, [follow, followQueue]);
 
   const start = useCallback<GenerateJobsValue["start"]>(
     async ({ file, folder, kind, lesson, web }) => {
@@ -363,52 +477,17 @@ export default function GenerateJobsProvider({ children }: { children: React.Rea
         toast.error(`Already generating ${activeCount} files — wait for one to finish.`);
         return null;
       }
-      if (web && !lesson) {
-        const id = `web-${crypto.randomUUID()}`;
-        const controller = new AbortController();
-        webRuns.current.set(id, controller);
-        setJobs((prev) => [
-          ...prev,
-          {
-            id,
-            folder,
-            kind,
-            status: "running",
-            log: [],
-            tokens: { input: 0, output: 0 },
-            startedAt: Date.now(),
-            lastActivity: Date.now(),
-            service: web.label,
-          },
-        ]);
-        const where = folder.replace(/-/g, " ");
-        const noun = kind === "quiz" ? "quiz" : "lesson";
-        import("@/lib/ai/run")
-          .then(({ runWebGeneration }) =>
-            runWebGeneration({
-              file,
-              folder,
-              kind,
-              service: web.service,
-              key: web.key,
-              model: web.model,
-              signal: controller.signal,
-              log: (line) => patch(id, (j) => ({ ...j, log: [...j.log, line], lastActivity: Date.now() })),
-              tokens: (tokens) => patch(id, (j) => ({ ...j, tokens, lastActivity: Date.now() })),
-            })
-          )
-          .then((saved) => {
-            patch(id, (j) => ({ ...j, status: "done", saved, saves: 1, log: [...j.log, "Finished."] }));
-            toast.success(`Generated ${noun} in "${where}".`);
-            setCompletedTick((n) => n + 1);
-          })
-          .catch((err: Error) => {
-            const stopped = controller.signal.aborted;
-            patch(id, (j) => ({ ...j, status: stopped ? "aborted" : "error", log: [...j.log, stopped ? "Stopped." : err.message] }));
-            if (!stopped) toast.error(`Generation failed in "${where}" — see the log.`);
-          })
-          .finally(() => webRuns.current.delete(id));
-        return id;
+      if (web) {
+        try {
+          const uploads = await uploadForJob([file]);
+          return await enqueue(
+            { kind: lesson ? "pictures" : kind === "quiz" ? "quiz" : "lesson", folder, service: web.service, uploads, lesson },
+            { folder, kind, service: web.label }
+          );
+        } catch (err: any) {
+          toast.error(err.message);
+          return null;
+        }
       }
       try {
         const form = new FormData();
@@ -432,7 +511,7 @@ export default function GenerateJobsProvider({ children }: { children: React.Rea
             tokens: { input: 0, output: 0 },
             startedAt: Date.now(),
             lastActivity: Date.now(),
-            service: web?.label ?? "Claude Code",
+            service: "Claude Code",
           },
         ]);
         follow(data.jobId);
@@ -442,14 +521,26 @@ export default function GenerateJobsProvider({ children }: { children: React.Rea
         return null;
       }
     },
-    [activeCount, follow, patch, toast]
+    [activeCount, enqueue, follow, toast]
   );
 
   const startSheet = useCallback<GenerateJobsValue["startSheet"]>(
-    async ({ folder, from, to, pages, columns, files }) => {
+    async ({ folder, from, to, pages, columns, files, web }) => {
       if (activeCount >= MAX_CONCURRENT_JOBS) {
         toast.error(`Already running ${activeCount} jobs — wait for one to finish.`);
         return null;
+      }
+      if (web) {
+        try {
+          const uploads = await uploadForJob(files);
+          return await enqueue(
+            { kind: "sheet-new", folder, service: web.service, from, to, pages, columns, uploads },
+            { folder, kind: "sheet", step: "write", edit: { docKey: "", request: "" }, service: web.label }
+          );
+        } catch (err: any) {
+          toast.error(err.message);
+          return null;
+        }
       }
       try {
         const form = new FormData();
@@ -487,7 +578,7 @@ export default function GenerateJobsProvider({ children }: { children: React.Rea
         return null;
       }
     },
-    [activeCount, follow, toast]
+    [activeCount, enqueue, follow, toast]
   );
 
   const sheetStep = useCallback<GenerateJobsValue["sheetStep"]>(
@@ -495,6 +586,36 @@ export default function GenerateJobsProvider({ children }: { children: React.Rea
       if (activeCount >= MAX_CONCURRENT_JOBS) {
         toast.error(`Already running ${activeCount} jobs — wait for one to finish.`);
         return null;
+      }
+      // A step goes to whoever the reader last chose to run with.
+      const runner = preferredRunner();
+      if (isWebService(runner)) {
+        try {
+          let extra: Record<string, unknown> = {};
+          if (body instanceof FormData) {
+            const files = body.getAll("files").filter((f): f is File => f instanceof File && f.size > 0);
+            extra = {
+              refs: JSON.parse(String(body.get("refs") ?? "[]")),
+              note: String(body.get("note") ?? ""),
+              uploads: await uploadForJob(files),
+            };
+          } else if (body) {
+            extra = body;
+          }
+          return await enqueue(
+            { kind: `sheet-${action}`, folder, service: runner, sheet: id, ...extra },
+            {
+              folder,
+              kind: "sheet",
+              step: action === "review" ? "review" : action === "continue" ? "write" : "edit",
+              edit: { docKey: id, request: request ?? "" },
+              service: WEB_SERVICES[runner].label,
+            }
+          );
+        } catch (err: any) {
+          toast.error(err.message);
+          return null;
+        }
       }
       try {
         const multipart = body instanceof FormData;
@@ -533,13 +654,12 @@ export default function GenerateJobsProvider({ children }: { children: React.Rea
         return null;
       }
     },
-    [activeCount, follow, toast]
+    [activeCount, enqueue, follow, toast]
   );
 
   const abort = useCallback((id: string) => {
-    const local = webRuns.current.get(id);
-    if (local) {
-      local.abort();
+    if (jobsRef.current.find((j) => j.id === id)?.queue) {
+      fetch(`/api/jobs/${id}`, { method: "DELETE" }).catch(() => {});
       return;
     }
     // The status change comes back through the stream's `end` event, so this

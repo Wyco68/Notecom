@@ -220,7 +220,12 @@ function cleanup(job: Job, task: Task) {
 // --- checks -------------------------------------------------------------------
 
 /** What the app's own checks say about a whole sheet, saved with it. */
-function sheetChecks(spec: SheetSpec, task: Task, html: string, unwritten: number[] = []): string[] {
+export function sheetChecks(
+  spec: SheetSpec,
+  task: Pick<Task, "chapters" | "docs" | "uploads">,
+  html: string,
+  unwritten: number[] = []
+): string[] {
   const allText = [...task.chapters.map((c) => c.text), ...task.docs.map((d) => d.text)].join(" ");
   const written = task.chapters.filter((c) => !unwritten.includes(c.seq));
   const issues = [
@@ -256,7 +261,7 @@ export function sectionsOf(html: string): Map<number, string> {
   return out;
 }
 
-function withSection(html: string, seq: number, section: string): string {
+export function withSection(html: string, seq: number, section: string): string {
   const parts = sectionsOf(html);
   parts.set(seq, section.trim());
   return [...parts.entries()].sort((a, b) => a[0] - b[0]).map(([, s]) => s).join("\n");
@@ -264,7 +269,7 @@ function withSection(html: string, seq: number, section: string): string {
 
 /** Chapters whose section reads differently — whitespace between tags, which
  *  a writer reflows freely, doesn't count. */
-function changedSections(before: string, after: string): number[] {
+export function changedSections(before: string, after: string): number[] {
   const norm = (s?: string) => (s ?? "").replace(/>\s+</g, "><").replace(/\s+/g, " ").trim();
   const a = sectionsOf(before);
   const b = sectionsOf(after);
@@ -285,7 +290,7 @@ function sourcesLine(task: Task, only?: number): string {
   );
 }
 
-function paperLine(spec: SheetSpec, budget?: number): string {
+export function paperLine(spec: SheetSpec, budget?: number): string {
   const L = LAYOUTS[spec.layout];
   return spec.pages
     ? `Page limit ${pageLimitText(spec.pages)}, ${layoutLabel(spec)}, about ${L.font}pt` +
@@ -293,7 +298,7 @@ function paperLine(spec: SheetSpec, budget?: number): string {
     : `No page limit, ${layoutLabel(spec)}: cover every fact in full, as many pages as it takes, still in the compressed note style and without padding. `;
 }
 
-function sheetNote(reply: string): string | undefined {
+export function sheetNote(reply: string): string | undefined {
   const head = reply.slice(0, Math.max(0, reply.search(/<h2[\s>]/)));
   return /NOTE:\s*([^\n]+)/i.exec(head)?.[1]?.trim().slice(0, 600);
 }

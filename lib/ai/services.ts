@@ -1,6 +1,7 @@
 // The AI services a reader can generate with from the web, by their own API
-// key. The browser calls them directly (lib/ai/run.ts); each adapter's host
-// is fixed, and the page's CSP (middleware.ts) allows only these four.
+// key: saved encrypted on the server (lib/ai/vault.ts) and used only there,
+// by job steps (lib/jobs). Each adapter's host is fixed, so the server can
+// only ever send a key to its own service.
 
 export type WebService = "anthropic" | "openai" | "gemini" | "openrouter";
 

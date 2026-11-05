@@ -30,6 +30,20 @@ NEXT_PUBLIC_SUPABASE_URL=https://YOUR-PROJECT-REF.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=YOUR-PUBLISHABLE-KEY
 ```
 
+For web generation (Claude, OpenAI, Gemini API or OpenRouter with the
+reader's own key) add one more line: a server-only secret that encrypts the
+keys readers save. Any 32 random bytes, base64 — `openssl rand -base64 32`.
+Set the same value in the host's environment (Vercel → Settings →
+Environment Variables) and never change it casually: a new value makes every
+saved key unreadable, and readers have to enter theirs again.
+
+```
+AI_KEYS_SECRET=BASE64-OF-32-RANDOM-BYTES
+```
+
+Without it Claude Code still works; the picker says web services aren't set
+up.
+
 The `NEXT_PUBLIC_` prefix is not decoration: it is the only prefix Next reads
 into the app. A file that names them anything else (`VITE_*`, say) loads
 fine and leaves every sign-in answering "accounts are not configured on this

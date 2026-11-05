@@ -197,6 +197,8 @@ Existing tables are extended in preference to new ones.
 | `notes_follows` | follow edge, `pending` → `accepted` (or deleted on decline); once accepted, feeds public folders and gates inviting |
 | `notes_folder_invitations` | owner → user direction |
 | `notes_folder_join_requests` | user → owner direction |
+| `notes_ai_keys` | a reader's encrypted AI keys, one per service (0034). Owner-only RLS; the server decrypts with a secret the database never sees (`lib/ai/vault.ts`) |
+| `notes_jobs` | the web-generation outbox (0034, 0035). Owner-only read and delete; no direct insert or update — `notes_enqueue_job` (checks `notes_can_write_folder`), `notes_claim_job`, `notes_job_progress` and `notes_cancel_job` are the only writers. Workers act as the owner, so every save still passes the documents' own policies |
 
 ## Security rules (non-negotiable)
 

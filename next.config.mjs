@@ -36,10 +36,12 @@ const nextConfig = {
   // @google-cloud/storage (GCS deployment only) uses dynamic requires the
   // bundler can't trace — keep it external so it's require()d at runtime.
   serverExternalPackages: ["@google-cloud/storage"],
-  // The template route reads the lesson and quiz docs at run time; a
-  // serverless bundle only ships files it can trace, so name them.
+  // Web-service jobs build their prompts from the template docs and command
+  // files at run time; a serverless bundle only ships files it can trace, so
+  // name them for the routes that run jobs.
   outputFileTracingIncludes: {
-    "/api/ai/template": ["./docs/*.md"],
+    "/api/jobs": ["./docs/*.md", "./.claude/commands/*.md"],
+    "/api/jobs/[id]/run": ["./docs/*.md", "./.claude/commands/*.md"],
   },
   experimental: {
     optimizePackageImports: ["framer-motion"],

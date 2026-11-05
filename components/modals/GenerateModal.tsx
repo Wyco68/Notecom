@@ -67,8 +67,6 @@ export default function GenerateModal({
   // Who writes it — set by RunnerPicker, which owns the choice and the key.
   const [choice, setChoice] = useState<RunnerChoice | null>(null);
   const web = choice?.web ?? null;
-  // Placing slide pictures needs the CLI's file access; a web run has none.
-  const picturesAllowed = choice?.runner === "claude-code";
 
   const job = jobs.find((j) => j.id === watching) ?? null;
   const atCapacity = activeCount >= MAX_CONCURRENT_JOBS;
@@ -84,7 +82,7 @@ export default function GenerateModal({
     try {
       const id = await start(
         kind === "pictures"
-          ? { file, folder, kind: "lect", lesson }
+          ? { file, folder, kind: "lect", lesson, ...(web ? { web } : {}) }
           : { file, folder, kind, ...(web ? { web } : {}) }
       );
       if (id) setWatching(id);
@@ -92,10 +90,6 @@ export default function GenerateModal({
       setStarting(false);
     }
   }
-
-  useEffect(() => {
-    if (kind === "pictures" && choice && !picturesAllowed) setKind("lect");
-  }, [kind, choice, picturesAllowed]);
 
   useEffect(() => {
     if (kind !== "pictures" || !folder) return;
@@ -167,10 +161,8 @@ export default function GenerateModal({
               key={k}
               role="radio"
               aria-checked={kind === k}
-              disabled={k === "pictures" && !picturesAllowed}
-              title={k === "pictures" && !picturesAllowed ? "Adding slide pictures needs Claude Code on this computer" : undefined}
               onClick={() => setKind(k)}
-              className={`ui-focus rounded-md py-1.5 text-sm transition-colors duration-150 ease-out disabled:cursor-not-allowed disabled:opacity-40 ${
+              className={`ui-focus rounded-md py-1.5 text-sm transition-colors duration-150 ease-out ${
                 kind === k ? "bg-raised font-semibold text-ink shadow-[0_1px_2px_rgb(var(--shadow)/0.12)]" : "text-ink-2 hover:text-ink"
               }`}
             >

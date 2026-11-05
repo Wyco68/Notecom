@@ -598,10 +598,9 @@ export default function AppShell() {
               </span>
               {!query.trim() && (
                 <div className="flex items-center gap-0.5">
-                  {/* Generate works everywhere: with Claude Code on this
-                      computer, or a web service and the reader's own key. A
-                      cheatsheet still needs the CLI, so it shows only where
-                      that can run. */}
+                  {/* Generate and Cheatsheet work everywhere: with Claude
+                      Code on this computer, or a web service and the reader's
+                      own key. */}
                   <button
                     onClick={() => setShowGenerate(true)}
                     title="Generate from a file"
@@ -619,7 +618,7 @@ export default function AppShell() {
                       Sign in
                     </button>
                   )}
-                  {cliInstalled && signedIn !== false && (
+                  {!(cliInstalled && signedIn === false) && (
                     <button
                       onClick={() => setShowSheet(true)}
                       title="Make a cheatsheet"
@@ -828,6 +827,7 @@ export default function AppShell() {
       {showSheet && (
         <CheatsheetModal
           folders={folders ?? []}
+          cli={{ installed: cliInstalled, signedIn }}
           watchJobId={typeof showSheet === "string" ? showSheet : undefined}
           onClose={() => setShowSheet(false)}
           onSignIn={() => {

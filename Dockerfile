@@ -43,5 +43,6 @@ COPY --from=build /app/public ./public
 # The lesson and quiz template docs: a web-service run reads them as its
 # system prompt (lib/generate/template.ts).
 COPY --from=build /app/docs ./docs
+COPY --from=build /app/.claude/commands ./.claude/commands
 EXPOSE 3000
 CMD ["node", "server.js"]

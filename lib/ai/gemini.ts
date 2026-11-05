@@ -55,7 +55,7 @@ export async function chatGemini(req: ChatRequest): Promise<ChatResult> {
         // A thinking model's reasoning parts are not the reply.
         if (typeof p.text === "string" && !p.thought) {
           text += p.text;
-          req.onProgress?.(text.length);
+          req.onProgress?.(text.length, text);
         }
       }
       if (cand?.finishReason) finish = cand.finishReason;

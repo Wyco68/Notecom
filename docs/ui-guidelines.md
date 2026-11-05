@@ -275,11 +275,14 @@ appearing.
   ([components/generate/RunnerPicker.tsx](../components/generate/RunnerPicker.tsx)):
   one `<select>` in three groups — Subscription (Claude Code · this computer,
   only where the CLI exists), Pay per use (Claude, OpenAI, Gemini API) and
-  OpenRouter. A web service asks for its key once (a password field, a
-  "Remember on this device" box, and the one line saying it goes straight to
-  the service and never to Notecom's server), then shows the key masked with
-  Remove, and a model field whose suggestions come from the key's own model
-  list. Pictures is disabled for web services. Then one primary button. The run's log is a quiet cover-tinted box,
+  OpenRouter. A web service asks for its key once (a password field, "Save
+  key", and the one line saying it is sent once, stored encrypted for the
+  reader only and never comes back to the browser), then shows `••••` and the
+  last four characters with Remove, and a model field whose suggestions come
+  from the key's own model list. The Cheatsheet dialog has the same picker
+  above its button; a sheet's steps card ends with a compact "Runs with"
+  select (Claude Code where it exists, and each saved service with its
+  model) that sets who runs the next step. Then one primary button. The run's log is a quiet cover-tinted box,
   not a terminal costume.
 - **Icons**: hand-rolled inline SVG components under
   [components/icons/](../components/icons/) (e.g. `TrashIcon`), all on a 24px
