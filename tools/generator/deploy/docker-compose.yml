@@ -1,0 +1,79 @@
+# The generator on the shared Azure VPS (~/server/apps/notecom-generator).
+#
+# Two containers on their own private network, nothing published to the host
+# and nothing behind Caddy: the generator only makes outbound connections
+# (Supabase, the AI services, NATS next to it).
+#
+#   nats       NATS with JetStream — the queue the outbox relay publishes to.
+#              File-backed, so queued messages survive a restart.
+#   generator  the relay and the worker in one process (tools/generator).
+#
+# The image is built in CI and pushed to GHCR; this file only pulls it:
+#
+#   IMAGE_TAG=sha-<commit> docker compose pull && IMAGE_TAG=sha-<commit> docker compose up -d
+#
+# (deploy.sh does exactly that.) Config, next to this file, chmod 600, off git:
+#   .env             NATS_TOKEN only — Compose reads it to fill in ${NATS_TOKEN}
+#                    for both services; NATS never sees the other secrets
+#   .env.production  the generator's own settings (copy .env.example)
+#
+# Sized for a 1 GB box that already runs other apps: the limits are real
+# ceilings, not aspirations. A 20 MB PDF costs the worker roughly 80 MB while
+# it is sent, so two jobs at once fit in the generator's limit.
+
+name: notecom-generator
+
+services:
+  nats:
+    image: nats:2.11-alpine
+    container_name: notecom-nats
+    command: ["-c", "/etc/nats/nats.conf"]
+    environment:
+      NATS_TOKEN: ${NATS_TOKEN:?set NATS_TOKEN in .env}
+      GOMEMLIMIT: 48MiB
+    volumes:
+      - ./nats.conf:/etc/nats/nats.conf:ro
+      - nats_data:/data
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8222/healthz?js-enabled-only=true"]
+      interval: 15s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+    restart: unless-stopped
+    mem_limit: 96m
+    cpus: 0.5
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+  generator:
+    image: ${IMAGE_REPO:-ghcr.io/wyco68/notecom-generator}:${IMAGE_TAG:-latest}
+    container_name: notecom-generator
+    env_file:
+      - .env.production
+    environment:
+      NATS_URL: nats://nats:4222
+      NATS_TOKEN: ${NATS_TOKEN:?set NATS_TOKEN in .env}
+      GOMEMLIMIT: ${GENERATOR_GOMEMLIMIT:-220MiB}
+    depends_on:
+      nats:
+        condition: service_healthy
+    restart: unless-stopped
+    # On stop, running jobs save the reply so far and go back in the queue;
+    # give them time to.
+    stop_grace_period: 30s
+    mem_limit: ${GENERATOR_MEM_LIMIT:-320m}
+    cpus: ${GENERATOR_CPUS:-1.0}
+    read_only: true
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+volumes:
+  nats_data:

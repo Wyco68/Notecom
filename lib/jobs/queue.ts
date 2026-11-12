@@ -8,6 +8,21 @@ import type { WebService } from "@/lib/ai/services";
 
 export type JobKind = "lesson" | "quiz" | "pictures" | "sheet-write" | "sheet-edit" | "sheet-review";
 export type JobStatus = "queued" | "running" | "done" | "error" | "cancelled";
+/** Who works the job: this app's own requests, or the Go generator on the
+ *  VPS (tools/generator), which consumes the outbox through JetStream. */
+export type JobRunner = "web" | "vps";
+
+/** Kinds the generator on the VPS can write (migration 0036). */
+const VPS_KINDS: ReadonlySet<JobKind> = new Set(["lesson", "quiz"]);
+
+/**
+ * Where a new job of `kind` runs: on the VPS when this server is set up to
+ * send jobs there (GENERATOR_RUNNER=vps) and the generator writes that kind;
+ * otherwise in this app, as before.
+ */
+export function runnerFor(kind: JobKind): JobRunner {
+  return process.env.GENERATOR_RUNNER === "vps" && VPS_KINDS.has(kind) ? "vps" : "web";
+}
 
 export interface JobRow {
   id: string;
@@ -17,6 +32,7 @@ export interface JobRow {
   service: WebService;
   model: string;
   status: JobStatus;
+  runner: JobRunner;
   params: Record<string, any>;
   state: Record<string, any>;
   log: string[];
@@ -39,6 +55,7 @@ export function publicJob(j: JobRow) {
     service: j.service,
     model: j.model,
     status: j.status,
+    runner: j.runner ?? "web",
     folder: String(j.params.folder ?? ""),
     sheet: j.params.spec ?? undefined,
     docKey: j.result?.id ?? j.params.docKey ?? undefined,
@@ -56,13 +73,17 @@ export class QueueFullError extends Error {}
 /** A failure whose message is written for the reader and safe to show them. */
 export class JobFailure extends Error {}
 
-/** Files a job; one transaction with the three-at-a-time check. */
+/**
+ * Files a job; one transaction with the three-at-a-time check. A VPS job's
+ * outbox message is written in that same transaction (migration 0036).
+ */
 export async function enqueue(
   folderId: string,
   kind: JobKind,
   service: WebService,
   model: string,
-  params: Record<string, unknown>
+  params: Record<string, unknown>,
+  runner: JobRunner = "web"
 ): Promise<string> {
   const supabase = await createClient();
   const { data, error } = await supabase.rpc("notes_enqueue_job", {
@@ -71,6 +92,9 @@ export async function enqueue(
     p_service: service,
     p_model: model,
     p_params: params,
+    // Sent only for the VPS, so this code still files web jobs against a
+    // database that predates migration 0036.
+    ...(runner === "vps" ? { p_runner: runner } : {}),
   });
   if (error) {
     if (error.message.includes("too many jobs this hour")) throw new QueueFullError("30 runs in the last hour — wait a while before starting another");
@@ -170,6 +194,33 @@ const BUCKET = "notes-job-uploads";
 export interface Upload {
   path: string;
   name: string;
+  /** A VPS job's read token for this file (see signUploads). */
+  token?: string;
+}
+
+/** How long the generator may read a job's uploads: a job ends within six hours. */
+const SIGNED_SECONDS = 6 * 60 * 60;
+
+/**
+ * Gives each upload a read token for the generator on the VPS, signed as
+ * the reader — storage's own policies decide, so only the reader's own files
+ * can be signed. The generator has no storage credential; it rebuilds the
+ * URL from the project URL and the path, and uses only the token from here.
+ */
+export async function signUploads(uploads: Upload[]): Promise<Upload[]> {
+  if (!uploads.length) return uploads;
+  const supabase = await createClient();
+  const { data, error } = await supabase.storage.from(BUCKET).createSignedUrls(
+    uploads.map((u) => u.path),
+    SIGNED_SECONDS
+  );
+  if (error || !data) throw new JobFailure("the upload couldn't be prepared — try again");
+  return uploads.map((u) => {
+    const signed = data.find((d) => d.path === u.path);
+    const token = signed?.signedUrl ? new URL(signed.signedUrl, "https://x").searchParams.get("token") : null;
+    if (!token) throw new JobFailure(`the upload "${u.name}" is gone — start again`);
+    return { ...u, token };
+  });
 }
 
 /** A job's upload, read as the reader (the bucket's policies are per reader). */

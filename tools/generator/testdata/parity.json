@@ -1,0 +1,398 @@
+{
+  "media": "/api/media/0d6f2a8e-4c1b-4f7e-9a3d-2b5c8e1f0a11/abababababababababababababababababababababababababababababababab.png",
+  "cases": [
+    {
+      "name": "lesson-valid",
+      "input": "<h1>Routing Basics &amp; Tables</h1>\n<p>A <strong>router</strong> forwards <strong>packets</strong> between networks.</p>\n<h2>Concept: Routing Table</h2>\n<p>Each entry maps a <code>prefix</code> to a next hop. The router picks the longest match. This is called <strong>longest prefix match</strong>.</p>\n<blockquote><strong>Key Idea:</strong> the most specific route wins.</blockquote>\n<h3>How it Works</h3>\n<ul><li>Look up the destination.</li><li>Pick the longest prefix.</li></ul>\n<table><thead><tr><th>Prefix</th><th>Next hop</th></tr></thead><tbody><tr><td>10.0.0.0/8</td><td>R1</td></tr></tbody></table>\n<h3>How it Works</h3>\n<pre><code>show ip route</code></pre>\n<div class=\"mermaid\">graph LR; A--&gt;B</div>\n<h2>Concept: Static vs Dynamic</h2>\n<p>Static routes are typed by hand; dynamic ones are learned with a <strong>routing protocol</strong>.</p>\n<blockquote>Common Mistake: thinking static routes update themselves.</blockquote>\n<figure><img src=\"/api/media/0d6f2a8e-4c1b-4f7e-9a3d-2b5c8e1f0a11/abababababababababababababababababababababababababababababababab.png\" alt=\"A routing table\"><figcaption>The <strong>routing table</strong> on R1.</figcaption></figure>",
+      "checkLesson": [],
+      "checkQuiz": [
+        "disallowed tag <h3> — not in the quiz-guidelines allowlist",
+        "disallowed tag <figure> — not in the quiz-guidelines allowlist",
+        "disallowed tag <img> — not in the quiz-guidelines allowlist",
+        "disallowed tag <figcaption> — not in the quiz-guidelines allowlist",
+        "found h3+ — quiz scheme is flat, one <h2> per question only",
+        "found an <h2> that isn't \"Q<n>. ...\" — every h2 must be a question heading",
+        "\"unknown question\": expected exactly 2 callouts (Reasoning, Answer), found 1",
+        "\"unknown question\": expected exactly 2 callouts (Reasoning, Answer), found 1"
+      ],
+      "extractHtml": "<h1>Routing Basics &amp; Tables</h1>\n<p>A <strong>router</strong> forwards <strong>packets</strong> between networks.</p>\n<h2>Concept: Routing Table</h2>\n<p>Each entry maps a <code>prefix</code> to a next hop. The router picks the longest match. This is called <strong>longest prefix match</strong>.</p>\n<blockquote><strong>Key Idea:</strong> the most specific route wins.</blockquote>\n<h3>How it Works</h3>\n<ul><li>Look up the destination.</li><li>Pick the longest prefix.</li></ul>\n<table><thead><tr><th>Prefix</th><th>Next hop</th></tr></thead><tbody><tr><td>10.0.0.0/8</td><td>R1</td></tr></tbody></table>\n<h3>How it Works</h3>\n<pre><code>show ip route</code></pre>\n<div class=\"mermaid\">graph LR; A--&gt;B</div>\n<h2>Concept: Static vs Dynamic</h2>\n<p>Static routes are typed by hand; dynamic ones are learned with a <strong>routing protocol</strong>.</p>\n<blockquote>Common Mistake: thinking static routes update themselves.</blockquote>\n<figure><img src=\"/api/media/0d6f2a8e-4c1b-4f7e-9a3d-2b5c8e1f0a11/abababababababababababababababababababababababababababababababab.png\" alt=\"A routing table\"><figcaption>The <strong>routing table</strong> on R1.</figcaption></figure>",
+      "titleOf": "Routing Basics & Tables",
+      "chunkTitle": "Routing Basics & Tables",
+      "chunks": [
+        {
+          "idx": 0,
+          "topic": "Overview",
+          "heading": "Overview",
+          "heading_index": 0,
+          "summary": "A router forwards packets between networks.",
+          "keywords": "router, packets",
+          "body": "A router forwards packets between networks.",
+          "html": "<p>A <strong>router</strong> forwards <strong>packets</strong> between networks.</p>"
+        },
+        {
+          "idx": 1,
+          "topic": "Concept: Routing Table",
+          "heading": "Concept: Routing Table",
+          "heading_index": 0,
+          "summary": "Each entry maps a prefix to a next hop. The router picks the longest match. This is called longest prefix match . Key Idea: the most specific route wins.",
+          "keywords": "prefix, longest prefix match, Key Idea:",
+          "body": "Each entry maps a prefix to a next hop. The router picks the longest match. This is called longest prefix match . Key Idea: the most specific route wins.",
+          "html": "<p>Each entry maps a <code>prefix</code> to a next hop. The router picks the longest match. This is called <strong>longest prefix match</strong>.</p>\n<blockquote><strong>Key Idea:</strong> the most specific route wins.</blockquote>"
+        },
+        {
+          "idx": 2,
+          "topic": "Concept: Routing Table",
+          "heading": "How it Works",
+          "heading_index": 0,
+          "summary": "Look up the destination. Pick the longest prefix. Prefix Next hop 10.0.0.0/8 R1",
+          "keywords": "",
+          "body": "Look up the destination. Pick the longest prefix. Prefix Next hop 10.0.0.0/8 R1",
+          "html": "<ul><li>Look up the destination.</li><li>Pick the longest prefix.</li></ul>\n<table><thead><tr><th>Prefix</th><th>Next hop</th></tr></thead><tbody><tr><td>10.0.0.0/8</td><td>R1</td></tr></tbody></table>"
+        },
+        {
+          "idx": 3,
+          "topic": "Concept: Routing Table",
+          "heading": "How it Works",
+          "heading_index": 1,
+          "summary": "show ip route graph LR; A-->B",
+          "keywords": "show ip route",
+          "body": "show ip route graph LR; A-->B",
+          "html": "<pre><code>show ip route</code></pre>\n<div class=\"mermaid\">graph LR; A--&gt;B</div>"
+        },
+        {
+          "idx": 4,
+          "topic": "Concept: Static vs Dynamic",
+          "heading": "Concept: Static vs Dynamic",
+          "heading_index": 0,
+          "summary": "Static routes are typed by hand; dynamic ones are learned with a routing protocol . Common Mistake: thinking static routes update themselves. The routing table on R1.",
+          "keywords": "routing protocol, routing table",
+          "body": "Static routes are typed by hand; dynamic ones are learned with a routing protocol . Common Mistake: thinking static routes update themselves. The routing table on R1.",
+          "html": "<p>Static routes are typed by hand; dynamic ones are learned with a <strong>routing protocol</strong>.</p>\n<blockquote>Common Mistake: thinking static routes update themselves.</blockquote>\n<figure><img src=\"/api/media/0d6f2a8e-4c1b-4f7e-9a3d-2b5c8e1f0a11/abababababababababababababababababababababababababababababababab.png\" alt=\"A routing table\"><figcaption>The <strong>routing table</strong> on R1.</figcaption></figure>"
+        }
+      ]
+    },
+    {
+      "name": "lesson-violations",
+      "input": "<h1>One</h1><h1>Two</h1>\n<h2>Concept</h2><h2>Exam Tips</h2><h2>Remember</h2>\n<h4>Too deep</h4>\n<p>Some <span>span</span> and <script>alert(1)</script> and <SPAN>again</SPAN>.</p>\n<blockquote>Note: this is not a label but goes on and on for quite a while, more than sixty characters 😀 long.</blockquote>\n<blockquote><strong>Exam Tip:</strong> fine.</blockquote>\n<img src=\"https://example.com/x.png\" alt=\"\">\n<figure><img src=\"slide-01-1.png\" alt=\"x\"><figcaption>cap</figcaption><p>extra</p></figure>",
+      "checkLesson": [
+        "disallowed tag <h4> — not in the html-output-contract allowlist",
+        "disallowed tag <span> — not in the html-output-contract allowlist",
+        "disallowed tag <script> — not in the html-output-contract allowlist",
+        "expected exactly one <h1> (lesson title), found 2",
+        "every picture must be exactly <figure><img src=\"...\" alt=\"...\"><figcaption>...</figcaption></figure>, and a <figure> holds nothing else",
+        "<img src=\"https://example.com/x.png\"> is not one of the slide pictures offered (none were offered)",
+        "<img src=\"https://example.com/x.png\"> has no alt text — say what the picture shows",
+        "<img src=\"slide-01-1.png\"> is not one of the slide pictures offered (none were offered)",
+        "found a heading deeper than h3 — contract caps headings at h3",
+        "bare \"Concept\" heading with no name — must be \"Concept: <Specific Name>\"",
+        "standalone \"Exam Tips\" heading — contract says never emit this heading",
+        "standalone \"Remember\" heading — contract says never emit this heading",
+        "callout doesn't start with one of Key Idea, Common Mistake, Exam Tip, Remember: \"Note: this is not a label but goes on and on for quite a whi...\""
+      ],
+      "checkQuiz": [
+        "disallowed tag <h4> — not in the quiz-guidelines allowlist",
+        "disallowed tag <span> — not in the quiz-guidelines allowlist",
+        "disallowed tag <script> — not in the quiz-guidelines allowlist",
+        "disallowed tag <img> — not in the quiz-guidelines allowlist",
+        "disallowed tag <figure> — not in the quiz-guidelines allowlist",
+        "disallowed tag <figcaption> — not in the quiz-guidelines allowlist",
+        "expected exactly one <h1> (quiz title), found 2",
+        "found h3+ — quiz scheme is flat, one <h2> per question only",
+        "found an <h2> that isn't \"Q<n>. ...\" — every h2 must be a question heading",
+        "\"unknown question\": expected exactly 2 callouts (Reasoning, Answer), found 0",
+        "\"unknown question\": expected exactly 2 callouts (Reasoning, Answer), found 0",
+        "\"unknown question\": first callout must start with \"Reasoning:\"",
+        "\"unknown question\": second callout must start with \"Answer:\""
+      ],
+      "extractHtml": "<h1>One</h1><h1>Two</h1>\n<h2>Concept</h2><h2>Exam Tips</h2><h2>Remember</h2>\n<h4>Too deep</h4>\n<p>Some <span>span</span> and <script>alert(1)</script> and <SPAN>again</SPAN>.</p>\n<blockquote>Note: this is not a label but goes on and on for quite a while, more than sixty characters 😀 long.</blockquote>\n<blockquote><strong>Exam Tip:</strong> fine.</blockquote>\n<img src=\"https://example.com/x.png\" alt=\"\">\n<figure><img src=\"slide-01-1.png\" alt=\"x\"><figcaption>cap</figcaption><p>extra</p></figure>",
+      "titleOf": "One",
+      "chunkTitle": "One",
+      "chunks": [
+        {
+          "idx": 0,
+          "topic": "Remember",
+          "heading": "Remember",
+          "heading_index": 0,
+          "summary": "Too deep Some span and alert(1) and again . Note: this is not a label but goes on and on for quite a while, more than sixty characters 😀 long. Exam Tip: fine. cap extra",
+          "keywords": "Exam Tip:",
+          "body": "Too deep Some span and alert(1) and again . Note: this is not a label but goes on and on for quite a while, more than sixty characters 😀 long. Exam Tip: fine. cap extra",
+          "html": "<h4>Too deep</h4>\n<p>Some <span>span</span> and <script>alert(1)</script> and <SPAN>again</SPAN>.</p>\n<blockquote>Note: this is not a label but goes on and on for quite a while, more than sixty characters 😀 long.</blockquote>\n<blockquote><strong>Exam Tip:</strong> fine.</blockquote>\n<img src=\"https://example.com/x.png\" alt=\"\">\n<figure><img src=\"slide-01-1.png\" alt=\"x\"><figcaption>cap</figcaption><p>extra</p></figure>"
+        }
+      ]
+    },
+    {
+      "name": "quiz-valid",
+      "input": "<h1>Routing Quiz</h1>\n<h2>Q1. What does a router do?</h2>\n<ol><li>Forwards packets</li><li>Prints pages</li></ol>\n<blockquote>Reasoning: routers forward between networks.</blockquote>\n<blockquote><strong>Answer:</strong> 1</blockquote>\n<h2>Q2. Which route wins?</h2>\n<blockquote>Reasoning: longest match.</blockquote>\n<blockquote>Answer: the most specific</blockquote>",
+      "checkLesson": [
+        "callout doesn't start with one of Key Idea, Common Mistake, Exam Tip, Remember: \"Reasoning: routers forward between networks....\"",
+        "callout doesn't start with one of Key Idea, Common Mistake, Exam Tip, Remember: \"Answer: 1...\"",
+        "callout doesn't start with one of Key Idea, Common Mistake, Exam Tip, Remember: \"Reasoning: longest match....\"",
+        "callout doesn't start with one of Key Idea, Common Mistake, Exam Tip, Remember: \"Answer: the most specific...\""
+      ],
+      "checkQuiz": [],
+      "extractHtml": "<h1>Routing Quiz</h1>\n<h2>Q1. What does a router do?</h2>\n<ol><li>Forwards packets</li><li>Prints pages</li></ol>\n<blockquote>Reasoning: routers forward between networks.</blockquote>\n<blockquote><strong>Answer:</strong> 1</blockquote>\n<h2>Q2. Which route wins?</h2>\n<blockquote>Reasoning: longest match.</blockquote>\n<blockquote>Answer: the most specific</blockquote>",
+      "titleOf": "Routing Quiz",
+      "chunkTitle": "Routing Quiz",
+      "chunks": [
+        {
+          "idx": 0,
+          "topic": "Q1. What does a router do?",
+          "heading": "Q1. What does a router do?",
+          "heading_index": 0,
+          "summary": "Forwards packets Prints pages Reasoning: routers forward between networks. Answer: 1",
+          "keywords": "Answer:",
+          "body": "Forwards packets Prints pages Reasoning: routers forward between networks. Answer: 1",
+          "html": "<ol><li>Forwards packets</li><li>Prints pages</li></ol>\n<blockquote>Reasoning: routers forward between networks.</blockquote>\n<blockquote><strong>Answer:</strong> 1</blockquote>"
+        },
+        {
+          "idx": 1,
+          "topic": "Q2. Which route wins?",
+          "heading": "Q2. Which route wins?",
+          "heading_index": 0,
+          "summary": "Reasoning: longest match. Answer: the most specific",
+          "keywords": "",
+          "body": "Reasoning: longest match. Answer: the most specific",
+          "html": "<blockquote>Reasoning: longest match.</blockquote>\n<blockquote>Answer: the most specific</blockquote>"
+        }
+      ]
+    },
+    {
+      "name": "quiz-violations",
+      "input": "<h1>Bad Quiz</h1>\n<h2>Q1. First</h2>\n<blockquote>Answer: wrong order</blockquote>\n<blockquote>Reasoning: second</blockquote>\n<h2>Q3. Skipped two</h2>\n<blockquote>Reasoning: only one</blockquote>\n<h2>Summary</h2>\n<h3>Deep</h3>\n<figure><img src=\"/api/media/0d6f2a8e-4c1b-4f7e-9a3d-2b5c8e1f0a11/abababababababababababababababababababababababababababababababab.png\" alt=\"x\"><figcaption>c</figcaption></figure>",
+      "checkLesson": [
+        "callout doesn't start with one of Key Idea, Common Mistake, Exam Tip, Remember: \"Answer: wrong order...\"",
+        "callout doesn't start with one of Key Idea, Common Mistake, Exam Tip, Remember: \"Reasoning: second...\"",
+        "callout doesn't start with one of Key Idea, Common Mistake, Exam Tip, Remember: \"Reasoning: only one...\""
+      ],
+      "checkQuiz": [
+        "disallowed tag <h3> — not in the quiz-guidelines allowlist",
+        "disallowed tag <figure> — not in the quiz-guidelines allowlist",
+        "disallowed tag <img> — not in the quiz-guidelines allowlist",
+        "disallowed tag <figcaption> — not in the quiz-guidelines allowlist",
+        "found h3+ — quiz scheme is flat, one <h2> per question only",
+        "found an <h2> that isn't \"Q<n>. ...\" — every h2 must be a question heading",
+        "question numbering out of order: expected Q2, found Q3",
+        "\"Q1. First\": first callout must start with \"Reasoning:\"",
+        "\"Q1. First\": second callout must start with \"Answer:\"",
+        "\"Q3. Skipped two\": expected exactly 2 callouts (Reasoning, Answer), found 1",
+        "\"unknown question\": expected exactly 2 callouts (Reasoning, Answer), found 0"
+      ],
+      "extractHtml": "<h1>Bad Quiz</h1>\n<h2>Q1. First</h2>\n<blockquote>Answer: wrong order</blockquote>\n<blockquote>Reasoning: second</blockquote>\n<h2>Q3. Skipped two</h2>\n<blockquote>Reasoning: only one</blockquote>\n<h2>Summary</h2>\n<h3>Deep</h3>\n<figure><img src=\"/api/media/0d6f2a8e-4c1b-4f7e-9a3d-2b5c8e1f0a11/abababababababababababababababababababababababababababababababab.png\" alt=\"x\"><figcaption>c</figcaption></figure>",
+      "titleOf": "Bad Quiz",
+      "chunkTitle": "Bad Quiz",
+      "chunks": [
+        {
+          "idx": 0,
+          "topic": "Q1. First",
+          "heading": "Q1. First",
+          "heading_index": 0,
+          "summary": "Answer: wrong order Reasoning: second",
+          "keywords": "",
+          "body": "Answer: wrong order Reasoning: second",
+          "html": "<blockquote>Answer: wrong order</blockquote>\n<blockquote>Reasoning: second</blockquote>"
+        },
+        {
+          "idx": 1,
+          "topic": "Q3. Skipped two",
+          "heading": "Q3. Skipped two",
+          "heading_index": 0,
+          "summary": "Reasoning: only one",
+          "keywords": "",
+          "body": "Reasoning: only one",
+          "html": "<blockquote>Reasoning: only one</blockquote>"
+        },
+        {
+          "idx": 2,
+          "topic": "Summary",
+          "heading": "Deep",
+          "heading_index": 0,
+          "summary": "c",
+          "keywords": "",
+          "body": "c",
+          "html": "<figure><img src=\"/api/media/0d6f2a8e-4c1b-4f7e-9a3d-2b5c8e1f0a11/abababababababababababababababababababababababababababababababab.png\" alt=\"x\"><figcaption>c</figcaption></figure>"
+        }
+      ]
+    },
+    {
+      "name": "reply-fenced",
+      "input": "Here is the lesson you asked for:\n\n```html\n<h1 class=\"t\">Fenced <em>Title</em></h1>\n<p>Body &lt;tag&gt; &quot;quoted&quot; it&#39;s.</p>\n</p>\n```\n\nLet me know if you need changes.",
+      "checkLesson": [
+        "expected exactly one <h1> (lesson title), found 0"
+      ],
+      "checkQuiz": [
+        "expected exactly one <h1> (quiz title), found 0"
+      ],
+      "extractHtml": "<h1 class=\"t\">Fenced <em>Title</em></h1>\n<p>Body &lt;tag&gt; &quot;quoted&quot; it&#39;s.</p>\n</p>",
+      "titleOf": "Fenced Title",
+      "chunkTitle": "Fenced Title",
+      "chunks": [
+        {
+          "idx": 0,
+          "topic": "Overview",
+          "heading": "Overview",
+          "heading_index": 0,
+          "summary": "Here is the lesson you asked for: ```html",
+          "keywords": "",
+          "body": "Here is the lesson you asked for: ```html",
+          "html": "Here is the lesson you asked for:\n\n```html"
+        },
+        {
+          "idx": 1,
+          "topic": "Overview",
+          "heading": "Overview",
+          "heading_index": 1,
+          "summary": "Body <tag> \"quoted\" it's. ``` Let me know if you need changes.",
+          "keywords": "",
+          "body": "Body <tag> \"quoted\" it's. ``` Let me know if you need changes.",
+          "html": "<p>Body &lt;tag&gt; &quot;quoted&quot; it&#39;s.</p>\n</p>\n```\n\nLet me know if you need changes."
+        }
+      ]
+    },
+    {
+      "name": "reply-no-h1",
+      "input": "CANNOT READ SOURCE: the PDF is scanned images only.",
+      "checkLesson": [
+        "expected exactly one <h1> (lesson title), found 0"
+      ],
+      "checkQuiz": [
+        "expected exactly one <h1> (quiz title), found 0"
+      ],
+      "extractHtml": null,
+      "titleOf": "",
+      "chunkTitle": "",
+      "chunks": [
+        {
+          "idx": 0,
+          "topic": "Overview",
+          "heading": "Overview",
+          "heading_index": 0,
+          "summary": "CANNOT READ SOURCE: the PDF is scanned images only.",
+          "keywords": "",
+          "body": "CANNOT READ SOURCE: the PDF is scanned images only.",
+          "html": "CANNOT READ SOURCE: the PDF is scanned images only."
+        }
+      ]
+    },
+    {
+      "name": "reply-h1-no-close",
+      "input": "<h1>Never closed",
+      "checkLesson": [],
+      "checkQuiz": [],
+      "extractHtml": null,
+      "titleOf": "",
+      "chunkTitle": "",
+      "chunks": [
+        {
+          "idx": 0,
+          "topic": "Overview",
+          "heading": "Overview",
+          "heading_index": 0,
+          "summary": "Never closed",
+          "keywords": "",
+          "body": "Never closed",
+          "html": "<h1>Never closed"
+        }
+      ]
+    },
+    {
+      "name": "unicode-long",
+      "input": "Intro text before any heading, with &nbsp;spaces&nbsp; and an &AMP; entity.\n<h1>การกำหนดเส้นทาง — Routing 🚀</h1>\n<p>เราเตอร์ส่งต่อแพ็กเก็ตระหว่างเครือข่าย เราเตอร์ส่งต่อแพ็กเก็ตระหว่างเครือข่าย เราเตอร์ส่งต่อแพ็กเก็ตระหว่างเครือข่าย เราเตอร์ส่งต่อแพ็กเก็ตระหว่างเครือข่าย เราเตอร์ส่งต่อแพ็กเก็ตระหว่างเครือข่าย เราเตอร์ส่งต่อแพ็กเก็ตระหว่างเครือข่าย This sentence ends here. Another clause without an end Another clause without an end Another clause without an end Another clause without an end Another clause without an end </p>\n<H2 ID=\"x\">Upper Case Heading</H2>\n<p>Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Final.</p>\n<h3>Unclosed heading\n<p>Still the same section? <strong>Alpha</strong> <strong>alpha</strong> <code>Beta</code> <strong>xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx</strong> <strong>  </strong></p>\n<h3>Keywords</h3>\n<p><strong>term0</strong> <strong>term1</strong> <strong>term2</strong> <strong>term3</strong> <strong>term4</strong> <strong>term5</strong> <strong>term6</strong> <strong>term7</strong> <strong>term8</strong> <strong>term9</strong> <strong>term10</strong> <strong>term11</strong> <strong>term12</strong> <strong>term13</strong> <strong>term14</strong> <strong>term15</strong> <strong>term16</strong> <strong>term17</strong> <strong>term18</strong> <strong>term19</strong> <code>multi\nline</code> <strong>nested <code>inner</code> outer</strong></p>\n<h2>Empty</h2>\n<h2>Last</h2><p>Done 🎉.</p>",
+      "checkLesson": [],
+      "checkQuiz": [
+        "disallowed tag <h3> — not in the quiz-guidelines allowlist",
+        "found h3+ — quiz scheme is flat, one <h2> per question only",
+        "found an <h2> that isn't \"Q<n>. ...\" — every h2 must be a question heading",
+        "\"unknown question\": expected exactly 2 callouts (Reasoning, Answer), found 0",
+        "\"unknown question\": expected exactly 2 callouts (Reasoning, Answer), found 0"
+      ],
+      "extractHtml": "<h1>การกำหนดเส้นทาง — Routing 🚀</h1>\n<p>เราเตอร์ส่งต่อแพ็กเก็ตระหว่างเครือข่าย เราเตอร์ส่งต่อแพ็กเก็ตระหว่างเครือข่าย เราเตอร์ส่งต่อแพ็กเก็ตระหว่างเครือข่าย เราเตอร์ส่งต่อแพ็กเก็ตระหว่างเครือข่าย เราเตอร์ส่งต่อแพ็กเก็ตระหว่างเครือข่าย เราเตอร์ส่งต่อแพ็กเก็ตระหว่างเครือข่าย This sentence ends here. Another clause without an end Another clause without an end Another clause without an end Another clause without an end Another clause without an end </p>\n<H2 ID=\"x\">Upper Case Heading</H2>\n<p>Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Final.</p>\n<h3>Unclosed heading\n<p>Still the same section? <strong>Alpha</strong> <strong>alpha</strong> <code>Beta</code> <strong>xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx</strong> <strong>  </strong></p>\n<h3>Keywords</h3>\n<p><strong>term0</strong> <strong>term1</strong> <strong>term2</strong> <strong>term3</strong> <strong>term4</strong> <strong>term5</strong> <strong>term6</strong> <strong>term7</strong> <strong>term8</strong> <strong>term9</strong> <strong>term10</strong> <strong>term11</strong> <strong>term12</strong> <strong>term13</strong> <strong>term14</strong> <strong>term15</strong> <strong>term16</strong> <strong>term17</strong> <strong>term18</strong> <strong>term19</strong> <code>multi\nline</code> <strong>nested <code>inner</code> outer</strong></p>\n<h2>Empty</h2>\n<h2>Last</h2><p>Done 🎉.</p>",
+      "titleOf": "การกำหนดเส้นทาง — Routing 🚀",
+      "chunkTitle": "การกำหนดเส้นทาง — Routing 🚀",
+      "chunks": [
+        {
+          "idx": 0,
+          "topic": "Overview",
+          "heading": "Overview",
+          "heading_index": 0,
+          "summary": "Intro text before any heading, with spaces and an & entity.",
+          "keywords": "",
+          "body": "Intro text before any heading, with spaces and an & entity.",
+          "html": "Intro text before any heading, with &nbsp;spaces&nbsp; and an &AMP; entity."
+        },
+        {
+          "idx": 1,
+          "topic": "Overview",
+          "heading": "Overview",
+          "heading_index": 1,
+          "summary": "เราเตอร์ส่งต่อแพ็กเก็ตระหว่างเครือข่าย เราเตอร์ส่งต่อแพ็กเก็ตระหว่างเครือข่าย เราเตอร์ส่งต่อแพ็กเก็ตระหว่างเครือข่าย เราเตอร์ส่งต่อแพ็กเก็ตระหว่างเครือข่าย เราเตอร์ส่งต่อแพ็กเก็ตระหว่างเครือข่าย เราเตอร์ส่งต่อแพ็กเก็ตระหว่างเครือข่าย This sentence ends here.",
+          "keywords": "",
+          "body": "เราเตอร์ส่งต่อแพ็กเก็ตระหว่างเครือข่าย เราเตอร์ส่งต่อแพ็กเก็ตระหว่างเครือข่าย เราเตอร์ส่งต่อแพ็กเก็ตระหว่างเครือข่าย เราเตอร์ส่งต่อแพ็กเก็ตระหว่างเครือข่าย เราเตอร์ส่งต่อแพ็กเก็ตระหว่างเครือข่าย เราเตอร์ส่งต่อแพ็กเก็ตระหว่างเครือข่าย This sentence ends here. Another clause without an end Another clause without an end Another clause without an end Another clause without an end Another clause without an end",
+          "html": "<p>เราเตอร์ส่งต่อแพ็กเก็ตระหว่างเครือข่าย เราเตอร์ส่งต่อแพ็กเก็ตระหว่างเครือข่าย เราเตอร์ส่งต่อแพ็กเก็ตระหว่างเครือข่าย เราเตอร์ส่งต่อแพ็กเก็ตระหว่างเครือข่าย เราเตอร์ส่งต่อแพ็กเก็ตระหว่างเครือข่าย เราเตอร์ส่งต่อแพ็กเก็ตระหว่างเครือข่าย This sentence ends here. Another clause without an end Another clause without an end Another clause without an end Another clause without an end Another clause without an end </p>"
+        },
+        {
+          "idx": 2,
+          "topic": "Upper Case Heading",
+          "heading": "Upper Case Heading",
+          "heading_index": 0,
+          "summary": "Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word…",
+          "keywords": "",
+          "body": "Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Final.",
+          "html": "<p>Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Word Final.</p>"
+        },
+        {
+          "idx": 3,
+          "topic": "Upper Case Heading",
+          "heading": "Unclosed heading Still the same section? Alpha alpha Beta xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx Keywords",
+          "heading_index": 0,
+          "summary": "term0 term1 term2 term3 term4 term5 term6 term7 term8 term9 term10 term11 term12 term13 term14 term15 term16 term17 term18 term19 multi line nested inner outer",
+          "keywords": "term0, term1, term2, term3, term4, term5, term6, term7, term8, term9, term10, term11, term12, term13, term14",
+          "body": "term0 term1 term2 term3 term4 term5 term6 term7 term8 term9 term10 term11 term12 term13 term14 term15 term16 term17 term18 term19 multi line nested inner outer",
+          "html": "<p><strong>term0</strong> <strong>term1</strong> <strong>term2</strong> <strong>term3</strong> <strong>term4</strong> <strong>term5</strong> <strong>term6</strong> <strong>term7</strong> <strong>term8</strong> <strong>term9</strong> <strong>term10</strong> <strong>term11</strong> <strong>term12</strong> <strong>term13</strong> <strong>term14</strong> <strong>term15</strong> <strong>term16</strong> <strong>term17</strong> <strong>term18</strong> <strong>term19</strong> <code>multi\nline</code> <strong>nested <code>inner</code> outer</strong></p>"
+        },
+        {
+          "idx": 4,
+          "topic": "Last",
+          "heading": "Last",
+          "heading_index": 0,
+          "summary": "Done 🎉.",
+          "keywords": "",
+          "body": "Done 🎉.",
+          "html": "<p>Done 🎉.</p>"
+        }
+      ]
+    }
+  ],
+  "slugs": [
+    {
+      "title": "Routing Basics & Tables",
+      "slug": "routing-basics-tables"
+    },
+    {
+      "title": "  --Hello, World!--  ",
+      "slug": "hello-world"
+    },
+    {
+      "title": "การกำหนดเส้นทาง",
+      "slug": "untitled"
+    },
+    {
+      "title": "",
+      "slug": "untitled"
+    },
+    {
+      "title": "TCP/IP: Layer 4 (Transport)",
+      "slug": "tcp-ip-layer-4-transport"
+    },
+    {
+      "title": "aaaaaaaaaa",
+      "slug": "aaaaaaaaaa"
+    }
+  ],
+  "vault": {
+    "secret": "BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc=",
+    "owner": "11111111-2222-3333-4444-555555555555",
+    "service": "anthropic",
+    "stored": "v1:AwMDAwMDAwMDAwMD:vyyoWCgujDQZvGLlu73WQlojTollTg==:sfqdO0GpnuKtsY4G3XN91A==",
+    "plain": "sk-ant-test-0123456789"
+  }
+}
