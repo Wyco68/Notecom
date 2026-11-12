@@ -52,12 +52,14 @@ from a queue fed by a transactional outbox. Why and how it fits the app:
    ```bash
    mkdir -p ~/server/apps/notecom-generator && cd ~/server/apps/notecom-generator
    # copy deploy/docker-compose.yml, deploy/nats.conf, deploy/deploy.sh here
+   echo "NATS_TOKEN=$(openssl rand -hex 32)" > .env && chmod 600 .env
    cp .env.example .env.production && chmod 600 .env.production   # then fill it in
    ./deploy.sh
    ```
 
    `DATABASE_URL` uses the **session** pooler (port 5432) with the user
-   `notes_generator.<project-ref>`; `AI_KEYS_SECRET` is the app's own.
+   `notes_generator.<project-ref>`, in keyword form so the password needs no
+   URL-encoding; `AI_KEYS_SECRET` is the app's own.
    The box is already logged in to `ghcr.io` (its other apps pull from it),
    so the image pulls whether or not the package is public.
 

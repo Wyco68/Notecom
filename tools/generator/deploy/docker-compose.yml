@@ -12,8 +12,10 @@
 #
 #   IMAGE_TAG=sha-<commit> docker compose pull && IMAGE_TAG=sha-<commit> docker compose up -d
 #
-# (deploy.sh does exactly that.) Config: .env.production next to this file —
-# copy .env.example, fill it in, chmod 600, keep it off git.
+# (deploy.sh does exactly that.) Config, next to this file, chmod 600, off git:
+#   .env             NATS_TOKEN only — Compose reads it to fill in ${NATS_TOKEN}
+#                    for both services; NATS never sees the other secrets
+#   .env.production  the generator's own settings (copy .env.example)
 #
 # Sized for a 1 GB box that already runs other apps: the limits are real
 # ceilings, not aspirations. A 20 MB PDF costs the worker roughly 80 MB while
@@ -27,7 +29,7 @@ services:
     container_name: notecom-nats
     command: ["-c", "/etc/nats/nats.conf"]
     environment:
-      NATS_TOKEN: ${NATS_TOKEN:?set NATS_TOKEN in .env.production}
+      NATS_TOKEN: ${NATS_TOKEN:?set NATS_TOKEN in .env}
       GOMEMLIMIT: 48MiB
     volumes:
       - ./nats.conf:/etc/nats/nats.conf:ro
@@ -54,7 +56,7 @@ services:
       - .env.production
     environment:
       NATS_URL: nats://nats:4222
-      NATS_TOKEN: ${NATS_TOKEN:?set NATS_TOKEN in .env.production}
+      NATS_TOKEN: ${NATS_TOKEN:?set NATS_TOKEN in .env}
       GOMEMLIMIT: ${GENERATOR_GOMEMLIMIT:-220MiB}
     depends_on:
       nats:

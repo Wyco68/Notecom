@@ -11,12 +11,12 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 tag="${1:-latest}"
+[ -f .env ] || { echo "missing .env (NATS_TOKEN=\$(openssl rand -hex 32))" >&2; exit 1; }
 [ -f .env.production ] || { echo "missing .env.production (copy .env.example)" >&2; exit 1; }
-# Compose reads NATS_TOKEN for both services from here.
-set -a; . ./.env.production; set +a
 
 export IMAGE_TAG="$tag"
-docker compose pull generator
+# A tag that isn't on GHCR yet (an image loaded by hand) is used as it is.
+docker compose pull --ignore-pull-failures generator
 docker compose up -d --remove-orphans
 
 for _ in $(seq 1 30); do
