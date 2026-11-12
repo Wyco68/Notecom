@@ -2,7 +2,20 @@ import { NextRequest, NextResponse, after } from "next/server";
 import { VERIFIED_USER_HEADER } from "@/middleware";
 import { isWebService, type WebService } from "@/lib/ai/services";
 import { listKeys, vaultReady } from "@/lib/ai/vault";
-import { activeSheetJob, enqueue, ownUploadPath, publicJob, QueueFullError, recentJobs, sweepUploads, type JobKind, type Upload } from "@/lib/jobs/queue";
+import {
+  activeSheetJob,
+  enqueue,
+  JobFailure,
+  ownUploadPath,
+  publicJob,
+  QueueFullError,
+  recentJobs,
+  runnerFor,
+  signUploads,
+  sweepUploads,
+  type JobKind,
+  type Upload,
+} from "@/lib/jobs/queue";
 import { runJob } from "@/lib/jobs/run";
 import { sectionsOf } from "@/lib/generate/sheet";
 import { layoutFor, MAX_COLUMNS, MAX_PAGES, MIN_COLUMNS, type SourceRef } from "@/lib/sheet/layout";
@@ -12,7 +25,10 @@ import { listFolderDocs, loadDoc, resolveWritableFolderId } from "@/lib/vault/st
 // Web-service runs, as jobs in the outbox (lib/jobs). POST files one and
 // starts working on it after answering; GET lists the reader's recent ones.
 // The work itself happens one AI call at a time (lib/jobs/run.ts), so the
-// job survives this request ending, a reload or a closed tab.
+// job survives this request ending, a reload or a closed tab. With
+// GENERATOR_RUNNER=vps, lessons and quizzes go to the Go generator on the
+// VPS instead (tools/generator): filed with their outbox message, worked
+// there start to finish, and never started here.
 
 export const maxDuration = 300;
 
@@ -179,15 +195,30 @@ export async function POST(req: NextRequest) {
       return bad("unknown kind");
   }
 
+  const runner = runnerFor(jobKind);
+  if (runner === "vps") {
+    // The generator has no storage credential: each upload carries a read
+    // token signed here, as the reader.
+    try {
+      params = { ...params, uploads: await signUploads(uploads) };
+    } catch (err) {
+      if (err instanceof JobFailure) return bad(err.message, 409);
+      throw err;
+    }
+  }
+
   let id: string;
   try {
-    id = await enqueue(folderId, jobKind, service as WebService, saved.model, params);
+    id = await enqueue(folderId, jobKind, service as WebService, saved.model, params, runner);
   } catch (err) {
     if (err instanceof QueueFullError) return bad(err.message, 429);
     throw err;
   }
   // Start now, after answering: the reader needn't keep the page open for
-  // this first stretch, and the page continues it if it needs more time.
-  after(() => runJob(id, Date.now() + (maxDuration - 20) * 1000).catch((err) => console.error("[jobs] run failed:", err?.message)));
+  // this first stretch, and the page continues it if it needs more time. A
+  // VPS job needs nothing from here: its message is already in the outbox.
+  if (runner === "web") {
+    after(() => runJob(id, Date.now() + (maxDuration - 20) * 1000).catch((err) => console.error("[jobs] run failed:", err?.message)));
+  }
   return NextResponse.json({ jobId: id });
 }

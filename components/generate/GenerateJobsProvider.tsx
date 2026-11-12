@@ -347,8 +347,10 @@ export default function GenerateJobsProvider({ children }: { children: React.Rea
             }
             return;
           }
+          // A VPS job is the generator's to pick up (tools/generator); only
+          // the app's own jobs need the page to keep them moving.
           const stale = Date.now() - (Date.parse(job.updatedAt) || 0) > 100_000;
-          if ((job.status === "queued" || stale) && !kicking.current.has(id)) {
+          if (job.runner !== "vps" && (job.status === "queued" || stale) && !kicking.current.has(id)) {
             kicking.current.add(id);
             fetch(`/api/jobs/${id}/run`, { method: "POST" })
               .catch(() => {})

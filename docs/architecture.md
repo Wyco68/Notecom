@@ -139,7 +139,8 @@ model makers).
 A web run is a row in `notes_jobs` (migrations 0034, 0035), filed in the
 same transaction that checks the reader has fewer than three going and fewer
 than 30 filed in the last hour (`notes_enqueue_job`), and worked on by
-whichever request holds its lease.
+whichever request holds its lease — or, for a job whose `runner` is `vps`, by
+the Go generator (below, "The generator on the VPS").
 
 - **No job row is written directly.** The worker acts as the reader (there
   is no service key), so anything it may do the reader could do through the
@@ -225,6 +226,62 @@ whichever request holds its lease.
   request their classifiers decline is re-run on Anthropic's recommended
   fallback instead of coming back empty. Other services preselect their
   strongest listed general model; the reader can type any model id.
+
+### The generator on the VPS (2026-11)
+
+Lessons and quizzes can be written by `tools/generator`, a Go service on the
+Azure VPS the project already runs (`carpart`, beside its other apps), instead
+of by the app's own requests. Set `GENERATOR_RUNNER=vps` on the app and new
+lesson and quiz jobs go there (`runnerFor` in `lib/jobs/queue.ts`); without it
+nothing changes. Pictures and cheatsheet steps stay on the app's worker until
+they are ported.
+
+- **Transactional outbox → JetStream.** `notes_enqueue_job` (migration 0036)
+  writes the job and a `filed` row in `notes_job_outbox` in one transaction
+  and `NOTIFY`s on commit. The generator's relay wakes on the notification
+  (and polls every 10 s), publishes each row to NATS JetStream with a message
+  id built from the row, and marks it published — take, publish and mark in
+  one transaction whose row locks keep two relays apart. A job is never filed
+  without its message and no message is sent for a job that rolled back.
+  Once a minute the relay asks the database to file again any VPS job still
+  going whose last message is ten minutes old, so a lost message costs a
+  delay, not the job.
+- **At-least-once, deduplicated by the claim.** The worker pulls one message
+  per free slot (`WORKER_CONCURRENCY`, default 2), then claims the job
+  (`notes_gen_claim`, the web claim's twin). A duplicate, a finished job or one
+  another worker holds is acked and dropped. The message's ack wait and the
+  job's 90-second lease are renewed together every 15 seconds, so a worker
+  that dies has its message redelivered and its job taken over.
+- **Same steps, no time limit.** The worker is a port of the app's: one AI
+  call per step, progress saved after each and while a reply streams, a reply
+  cut short continued rather than restarted, up to two contract-fix rounds.
+  It never pauses for a deadline; on shutdown it saves the reply so far and
+  hands the job back (`queued`, with a new outbox message). The page does not
+  ask the app to continue a VPS job.
+- **Same contract, checked twice over.** `internal/contract` and
+  `internal/search` port `lib/generate/validate.ts` (lessons and quizzes) and
+  `lib/search/chunker.ts`; `tools/generator/testdata/parity.mjs` runs the
+  TypeScript over shared fixtures and CI fails if the Go output differs. The
+  system prompt is built from the same docs, copied into the image.
+- **The generator's own database role, not a service key.** It connects as
+  `notes_generator`, which owns nothing, reads and writes no table and
+  bypasses no RLS: it may only call the `notes_gen_*` functions, each of which
+  acts on one job the caller holds (worker token and live lease) — its row,
+  its owner's encrypted key for its service, and its folder. Saving re-checks,
+  as the owner and with the same `notes_can_write_folder` RLS uses, that the
+  owner may still write there; the document, its search chunks and the job's
+  result are written in one transaction, so a worker that dies after the save
+  finds the result instead of saving twice. Naming stays in the generator.
+- **Keys and uploads.** The generator holds `AI_KEYS_SECRET` (the app's own)
+  to decrypt the key of a job it holds. It has no storage credential: the app
+  signs each upload's read URL as the reader when it files the job, and the
+  generator rebuilds the URL from `SUPABASE_URL` and the upload's own path,
+  using only the token. The reader's poll that sees a VPS job end removes its
+  uploads.
+- **On the box.** Two containers on their own network, nothing published:
+  `nats` (JetStream on disk, token auth) and `generator` (read-only, no
+  capabilities, memory-capped). The image is built in CI and pulled; see
+  `tools/generator/README.md`.
 
 ## Cheatsheets: stored, built in steps that save as they go (2026-10)
 
@@ -383,7 +440,9 @@ Don't move logic across the layers when fixing or extending the app:
   app. One delegation is the sanctioned exception (2026-07): the generation
   job runner (`lib/generate/runner.ts` spawns the local Claude Code CLI to
   run `/lect`/`/quiz`). The app orchestrates; it never implements
-  generation and never stores an API key.
+  generation and never stores an API key. (Web generation with the reader's
+  own key, 2026-11, is the other: `lib/ai` and `lib/jobs`, and its Go
+  counterpart outside the app, `tools/generator`.)
 - Don't add business logic to `desktop/` (the Tauri shell). It only starts and
   stops the Next.js server, shows the splash/main window, and cleans up on exit
   — it has no opinion on content, naming, or UI.

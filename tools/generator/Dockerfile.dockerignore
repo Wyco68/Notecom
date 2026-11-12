@@ -1,0 +1,13 @@
+# Used instead of the root .dockerignore when building tools/generator/Dockerfile.
+# The context is the repository root; only the generator's source and the
+# template docs it reads at run time go in.
+*
+!tools/generator/go.mod
+!tools/generator/go.sum
+!tools/generator/cmd/
+!tools/generator/internal/
+tools/generator/internal/it/
+!docs/teaching-guidelines.md
+!docs/html-output-contract.md
+!docs/lesson-template.md
+!docs/quiz-guidelines.md

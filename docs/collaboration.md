@@ -198,7 +198,8 @@ Existing tables are extended in preference to new ones.
 | `notes_folder_invitations` | owner → user direction |
 | `notes_folder_join_requests` | user → owner direction |
 | `notes_ai_keys` | a reader's encrypted AI keys, one per service (0034). Owner-only RLS; the server decrypts with a secret the database never sees (`lib/ai/vault.ts`) |
-| `notes_jobs` | the web-generation outbox (0034, 0035). Owner-only read and delete; no direct insert or update — `notes_enqueue_job` (checks `notes_can_write_folder`), `notes_claim_job`, `notes_job_progress` and `notes_cancel_job` are the only writers. Workers act as the owner, so every save still passes the documents' own policies |
+| `notes_jobs` | web-generation jobs (0034, 0035, 0036). Owner-only read and delete; no direct insert or update — `notes_enqueue_job` (checks `notes_can_write_folder`), `notes_claim_job`, `notes_job_progress` and `notes_cancel_job` are the only writers for `runner = 'web'` jobs, whose workers act as the owner. A `runner = 'vps'` job is written only by the generator's `notes_gen_*` functions (below) and `notes_cancel_job` |
+| `notes_job_outbox` | the transactional outbox for VPS jobs (0036): one `filed` row per job, written in the job's own transaction. RLS on, no policies, nothing granted to `anon`/`authenticated`; read and marked only through `notes_gen_outbox_*` |
 
 ## Security rules (non-negotiable)
 
@@ -206,6 +207,21 @@ Existing tables are extended in preference to new ones.
    an env file, not in the Docker image. Every read and write carries a user JWT
    and passes through RLS. If a task seems to need the service key, the RLS
    policy is wrong — fix the policy.
+
+   The one database login that is not a user is the generator's
+   (`notes_generator`, migration 0036, `tools/generator`), and it is not a
+   service key either: it bypasses no RLS, owns nothing and has no table
+   privileges. It can only call the `notes_gen_*` `SECURITY DEFINER`
+   functions, each of which acts on one VPS job the caller holds (worker
+   token and live lease): that job's row, its owner's encrypted key for its
+   service, and its folder — and a save first re-checks, as the owner, with
+   `notes_can_write_folder`, that the owner may still write there. The
+   authorization that matters happens when the reader files the job, under
+   RLS, in the same transaction as its outbox message. Every `notes_gen_*`
+   function revokes `EXECUTE` from `public`, `anon`, `authenticated` and
+   `service_role` explicitly (this project's default privileges would grant
+   it). The proof is `tools/generator/internal/it` (`scripts/it.sh`): it
+   checks what each role may not do, on every CI run.
 2. **Deny by default.** Every table has RLS enabled and explicit policies. `anon`
    is granted nothing.
 3. **Frontend checks are cosmetic.** Hiding a button is UX. Assume any client can

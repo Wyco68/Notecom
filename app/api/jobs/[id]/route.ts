@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { VERIFIED_USER_HEADER } from "@/middleware";
 import { cancelJob, getJob, publicJob } from "@/lib/jobs/queue";
+import { endUploads } from "@/lib/jobs/run";
 
 const ID = /^[0-9a-f-]{36}$/;
 
@@ -11,6 +12,11 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   if (!ID.test(id)) return NextResponse.json({ error: "job not found" }, { status: 404 });
   const job = await getJob(id);
   if (!job) return NextResponse.json({ error: "job not found" }, { status: 404 });
+  // The generator on the VPS can't remove what it read (it has no storage
+  // credential): the reader's own poll that sees the job end does.
+  if (job.runner === "vps" && job.status !== "queued" && job.status !== "running") {
+    after(() => endUploads(job));
+  }
   return NextResponse.json({ job: publicJob(job) }, { headers: { "Cache-Control": "no-store" } });
 }
 
