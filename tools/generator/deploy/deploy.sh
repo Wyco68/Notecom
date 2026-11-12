@@ -15,8 +15,14 @@ tag="${1:-latest}"
 [ -f .env.production ] || { echo "missing .env.production (copy .env.example)" >&2; exit 1; }
 
 export IMAGE_TAG="$tag"
-# A tag that isn't on GHCR yet (an image loaded by hand) is used as it is.
-docker compose pull --ignore-pull-failures generator
+image="${IMAGE_REPO:-ghcr.io/wyco68/notecom-generator}:$tag"
+# The image is public. Pull it anonymously: this box's ghcr.io login belongs
+# to the other apps' private packages, and GHCR refuses it for this one
+# rather than falling back to anonymous access. A tag that isn't on GHCR (an
+# image loaded by hand) is used as it is.
+anon=$(mktemp -d)
+trap 'rm -rf "$anon"' EXIT
+DOCKER_CONFIG="$anon" docker pull -q "$image" || echo "pull failed; using the local $image if there is one" >&2
 docker compose up -d --remove-orphans
 
 for _ in $(seq 1 30); do
